@@ -5,7 +5,9 @@ import re
 from terminalai.config import load_config, save_config, DEFAULT_CONFIG
 from terminalai.ai_providers import get_provider
 from terminalai.command_utils import is_shell_command, run_shell_command
-from terminalai.color_utils import colorize_ai, colorize_command, highlight_code_blocks
+from terminalai.color_utils import colorize_ai, colorize_command
+from rich.console import Console
+from rich.syntax import Syntax
 
 def get_system_context(verbose=False):
     system = platform.system()
@@ -18,11 +20,17 @@ def get_system_context(verbose=False):
     else:
         sys_str = "a Unix-like system"
     if verbose:
-        return f"You are answering for a user on {sys_str}. The user may want detailed explanations."
+        return (
+            f"You are answering for a user on {sys_str}. The user may want detailed explanations. "
+            "When you suggest a command, always put it in a code block with triple backticks and specify the language (e.g., ```bash). "
+            "Do not use inline code for commands. Do not include explanations or options in the same code block—only the actual shell command."
+        )
     else:
         return (
             f"Always answer as concisely as possible, providing only the most relevant command for {sys_str} unless the user asks for more detail. "
-            "If multiple commands are possible, enumerate them and keep explanations brief. The user will be viewing the answer in a terminal so format the text for best readability in a terminal environmnent."
+            "If multiple commands are possible, enumerate them and keep explanations brief. The user will be viewing the answer in a terminal so format the text for best readability in a terminal environmnent. "
+            "When you suggest a command, always put it in a code block with triple backticks and specify the language (e.g., ```bash). "
+            "Do not use inline code for commands. Do not include explanations or options in the same code block—only the actual shell command."
         )
 
 def setup_provider(args):
@@ -55,23 +63,13 @@ def setup_provider(args):
     save_config(config)
 
 def extract_commands(ai_response):
-    # Only extract lines that look like real shell commands
+    # Only extract commands from code blocks labeled as bash/sh
     commands = []
-    # 1. Code blocks (triple backticks)
     code_blocks = re.findall(r'```(?:bash|sh)?\n([\s\S]*?)```', ai_response)
     for block in code_blocks:
         for line in block.splitlines():
             if is_likely_command(line):
                 commands.append(line.strip())
-    # 2. Inline code (single backticks)
-    inline_commands = re.findall(r'`([^`]+)`', ai_response)
-    for cmd in inline_commands:
-        if is_likely_command(cmd):
-            commands.append(cmd.strip())
-    # 3. Standalone lines in the answer
-    for line in ai_response.splitlines():
-        if is_likely_command(line):
-            commands.append(line.strip())
     # Deduplicate, preserve order
     seen = set()
     result = []
@@ -82,7 +80,6 @@ def extract_commands(ai_response):
     return result
 
 def is_likely_command(line):
-    # Heuristic: starts with a known command, $ or looks like a pipeline
     # Require at least two words (command + argument), or a pipeline, or a $ prefix
     line = line.strip()
     if not line or line.startswith('#'):
@@ -95,38 +92,29 @@ def is_likely_command(line):
         return True
     for cmd in known_cmds:
         if line.startswith(cmd + ' '):
-            # Require at least two words (command + argument)
             if len(line.split()) >= 2:
                 return True
-    # Looks like a pipeline or chained command
     if '|' in line or '&&' in line:
         return True
     return False
 
-def highlight_code_blocks_and_commands(text):
-    # Highlight triple backtick code blocks and inline code, but only if they look like commands
-    def block_replacer(match):
+def print_ai_answer_with_rich(ai_response):
+    console = Console()
+    # Print everything except code blocks as normal, but render code blocks with rich
+    code_block_pattern = re.compile(r'```(bash|sh)?\n([\s\S]*?)```')
+    last_end = 0
+    for match in code_block_pattern.finditer(ai_response):
+        # Print text before the code block
+        before = ai_response[last_end:match.start()]
+        if before.strip():
+            print(colorize_ai(before.strip()))
         code = match.group(2)
-        lang = match.group(1)
-        lines = code.splitlines()
-        highlighted = []
-        for line in lines:
-            if is_likely_command(line):
-                highlighted.append(colorize_command(line))
-            else:
-                highlighted.append(line)
-        return '\n'.join(highlighted)
-    text = re.sub(r'```(\w+)?\n([\s\S]*?)```', block_replacer, text)
-
-    # Highlight inline code (single backticks) if likely a command
-    def inline_replacer(match):
-        code = match.group(1)
-        if is_likely_command(code):
-            return colorize_command(code)
-        else:
-            return code
-    text = re.sub(r'`([^`]+)`', inline_replacer, text)
-    return text
+        console.print(Syntax(code, "bash", theme="monokai", line_numbers=False))
+        last_end = match.end()
+    # Print any remaining text after the last code block
+    after = ai_response[last_end:]
+    if after.strip():
+        print(colorize_ai(after.strip()))
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'setup':
@@ -162,9 +150,7 @@ def main():
     system_context = get_system_context(verbose=verbose_mode)
     full_prompt = f"{system_context}\n\n{prompt}"
     ai_response = provider.query(full_prompt)
-    # Remove [SYSTEMPROMPT] output
-    ai_colored = colorize_ai(highlight_code_blocks_and_commands(f"[AI] {ai_response}"))
-    print(ai_colored)
+    print_ai_answer_with_rich(f"[AI] {ai_response}")
 
     # Extract commands from the AI response
     commands = extract_commands(ai_response)
