@@ -1,6 +1,7 @@
 import argparse
 import sys
 from config import load_config, save_config, DEFAULT_CONFIG
+from ai_providers import get_provider
 
 
 def setup_provider(args):
@@ -38,9 +39,11 @@ def main():
         print("Please provide a query. Example: ai how do I see the newest file in this folder?")
         return
 
-    # Placeholder for AI logic
-    print(f"[SYSTEMPROMPT] ai {' '.join(args.query)}")
-    print("[AI] (AI response would go here)")
+    provider = get_provider()
+    prompt = ' '.join(args.query)
+    ai_response = provider.query(prompt)
+    print(f"[SYSTEMPROMPT] ai {prompt}")
+    print(f"[AI] {ai_response}")
 
 if __name__ == "__main__":
     main()
