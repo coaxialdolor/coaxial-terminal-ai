@@ -83,22 +83,50 @@ def extract_commands(ai_response):
 
 def is_likely_command(line):
     # Heuristic: starts with a known command, $ or looks like a pipeline
+    # Require at least two words (command + argument), or a pipeline, or a $ prefix
     line = line.strip()
     if not line or line.startswith('#'):
         return False
     known_cmds = [
         'ls', 'cat', 'cd', 'find', 'grep', 'echo', 'touch', 'mv', 'cp', 'rm', 'pwd', 'tree', 'column',
         'head', 'tail', 'sort', 'awk', 'sed', 'chmod', 'chown', 'ps', 'kill', 'du', 'df', 'tar', 'zip', 'unzip',
-        'ssh', 'scp', 'curl', 'wget', 'python', 'pip', 'brew', 'git', 'make', 'docker', 'npm', 'yarn', 'node', 'which', 'where', 'whoami', 'man', 'history', 'clear', 'export', 'env', 'alias', 'sudo', 'open', 'defaults', 'osascript', 'pbcopy', 'pbpaste', 'xargs', 'uniq', 'sort', 'cut', 'tr', 'tee', 'less', 'more', 'printf', 'date', 'cal', 'bc', 'expr', 'seq', 'basename', 'dirname', 'ln', 'readlink', 'stat', 'file', 'diff', 'patch', 'cmp', 'comm', 'uniq', 'wc', 'nl', 'split', 'csplit', 'paste', 'join', 'expand', 'unexpand', 'fmt', 'pr', 'col', 'colrm', 'column', 'rev', 'fold', 'iconv', 'dos2unix', 'unix2dos', 'hexdump', 'xxd', 'strings', 'od', 'base64', 'uuencode', 'uudecode', 'md5', 'sha1sum', 'sha256sum', 'sha512sum', 'openssl', 'gpg', 'pgp', 'cryptsetup', 'mount', 'umount', 'df', 'fdisk', 'mkfs', 'fsck', 'tune2fs', 'e2fsck', 'mke2fs', 'resize2fs', 'badblocks', 'lsblk', 'blkid', 'parted', 'partprobe', 'losetup', 'swapon', 'swapoff', 'free', 'top', 'htop', 'atop', 'iotop', 'dstat', 'vmstat', 'mpstat', 'pidof', 'pgrep', 'pkill', 'jobs', 'bg', 'fg', 'disown', 'wait', 'time', 'watch', 'yes', 'sleep', 'usleep', 'date', 'cal', 'bc', 'expr', 'seq', 'basename', 'dirname', 'ln', 'readlink', 'stat', 'file', 'diff', 'patch', 'cmp', 'comm', 'uniq', 'wc', 'nl', 'split', 'csplit', 'paste', 'join', 'expand', 'unexpand', 'fmt', 'pr', 'col', 'colrm', 'column', 'rev', 'fold', 'iconv', 'dos2unix', 'unix2dos', 'hexdump', 'xxd', 'strings', 'od', 'base64', 'uuencode', 'uudecode', 'md5', 'sha1sum', 'sha256sum', 'sha512sum', 'openssl', 'gpg', 'pgp', 'cryptsetup', 'mount', 'umount', 'df', 'fdisk', 'mkfs', 'fsck', 'tune2fs', 'e2fsck', 'mke2fs', 'resize2fs', 'badblocks', 'lsblk', 'blkid', 'parted', 'partprobe', 'losetup', 'swapon', 'swapoff', 'free', 'top', 'htop', 'atop', 'iotop', 'dstat', 'vmstat', 'mpstat', 'pidof', 'pgrep', 'pkill', 'jobs', 'bg', 'fg', 'disown', 'wait', 'time', 'watch', 'yes', 'sleep', 'usleep', 'date', 'cal', 'bc', 'expr', 'seq', 'basename', 'dirname', 'ln', 'readlink', 'stat', 'file', 'diff', 'patch', 'cmp', 'comm', 'uniq', 'wc', 'nl', 'split', 'csplit', 'paste', 'join', 'expand', 'unexpand', 'fmt', 'pr', 'col', 'colrm', 'column', 'rev', 'fold', 'iconv', 'dos2unix', 'unix2dos', 'hexdump', 'xxd', 'strings', 'od', 'base64', 'uuencode', 'uudecode', 'md5', 'sha1sum', 'sha256sum', 'sha512sum', 'openssl', 'gpg', 'pgp', 'cryptsetup', 'mount', 'umount', 'df', 'fdisk', 'mkfs', 'fsck', 'tune2fs', 'e2fsck', 'mke2fs', 'resize2fs', 'badblocks', 'lsblk', 'blkid', 'parted', 'partprobe', 'losetup', 'swapon', 'swapoff', 'free', 'top', 'htop', 'atop', 'iotop', 'dstat', 'vmstat', 'mpstat', 'pidof', 'pgrep', 'pkill', 'jobs', 'bg', 'fg', 'disown', 'wait', 'time', 'watch', 'yes', 'sleep', 'usleep']
+        'ssh', 'scp', 'curl', 'wget', 'python', 'pip', 'brew', 'git', 'make', 'docker', 'npm', 'yarn', 'node', 'which', 'where', 'whoami', 'man', 'history', 'clear', 'export', 'env', 'alias', 'sudo', 'open', 'defaults', 'osascript', 'pbcopy', 'pbpaste', 'xargs', 'uniq', 'sort', 'cut', 'tr', 'tee', 'less', 'more', 'printf', 'date', 'cal', 'bc', 'expr', 'seq', 'basename', 'dirname', 'ln', 'readlink', 'stat', 'file', 'diff', 'patch', 'cmp', 'comm', 'uniq', 'wc', 'nl', 'split', 'csplit', 'paste', 'join', 'expand', 'unexpand', 'fmt', 'pr', 'col', 'colrm', 'column', 'rev', 'fold', 'iconv', 'dos2unix', 'unix2dos', 'hexdump', 'xxd', 'strings', 'od', 'base64', 'uuencode', 'uudecode', 'md5', 'sha1sum', 'sha256sum', 'sha512sum', 'openssl', 'gpg', 'pgp', 'cryptsetup', 'mount', 'umount', 'df', 'fdisk', 'mkfs', 'fsck', 'tune2fs', 'e2fsck', 'mke2fs', 'resize2fs', 'badblocks', 'lsblk', 'blkid', 'parted', 'partprobe', 'losetup', 'swapon', 'swapoff', 'free', 'top', 'htop', 'atop', 'iotop', 'dstat', 'vmstat', 'mpstat', 'pidof', 'pgrep', 'pkill', 'jobs', 'bg', 'fg', 'disown', 'wait', 'time', 'watch', 'yes', 'sleep', 'usleep']
     if line.startswith('$ '):
         return True
     for cmd in known_cmds:
         if line.startswith(cmd + ' '):
-            return True
+            # Require at least two words (command + argument)
+            if len(line.split()) >= 2:
+                return True
     # Looks like a pipeline or chained command
     if '|' in line or '&&' in line:
         return True
     return False
+
+def highlight_code_blocks_and_commands(text):
+    # Highlight triple backtick code blocks and inline code, but only if they look like commands
+    def block_replacer(match):
+        code = match.group(2)
+        lang = match.group(1)
+        lines = code.splitlines()
+        highlighted = []
+        for line in lines:
+            if is_likely_command(line):
+                highlighted.append(colorize_command(line))
+            else:
+                highlighted.append(line)
+        return '\n'.join(highlighted)
+    text = re.sub(r'```(\w+)?\n([\s\S]*?)```', block_replacer, text)
+
+    # Highlight inline code (single backticks) if likely a command
+    def inline_replacer(match):
+        code = match.group(1)
+        if is_likely_command(code):
+            return colorize_command(code)
+        else:
+            return code
+    text = re.sub(r'`([^`]+)`', inline_replacer, text)
+    return text
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'setup':
@@ -135,7 +163,7 @@ def main():
     full_prompt = f"{system_context}\n\n{prompt}"
     ai_response = provider.query(full_prompt)
     # Remove [SYSTEMPROMPT] output
-    ai_colored = colorize_ai(highlight_code_blocks(f"[AI] {ai_response}"))
+    ai_colored = colorize_ai(highlight_code_blocks_and_commands(f"[AI] {ai_response}"))
     print(ai_colored)
 
     # Extract commands from the AI response
