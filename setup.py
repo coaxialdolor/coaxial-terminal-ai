@@ -7,7 +7,7 @@ setup(
     install_requires=[],
     entry_points={
         'console_scripts': [
-            'ai=terminalai.terminalai:main',
+            'ai=terminalai.terminalai_cli:main',
         ],
     },
     author='Your Name',
