@@ -2,7 +2,7 @@ import argparse
 import sys
 import platform
 import re
-from terminalai.config import load_config, save_config, DEFAULT_CONFIG
+from terminalai.config import load_config, save_config, DEFAULT_CONFIG, get_system_prompt, set_system_prompt, reset_system_prompt
 from terminalai.ai_providers import get_provider
 from terminalai.command_utils import is_shell_command, run_shell_command
 from terminalai.color_utils import colorize_ai, colorize_command
@@ -19,19 +19,8 @@ def get_system_context(verbose=False):
         sys_str = "Windows/PowerShell"
     else:
         sys_str = "a Unix-like system"
-    if verbose:
-        return (
-            f"You are answering for a user on {sys_str}. The user may want detailed explanations. "
-            "When you suggest a command, always put it in a code block with triple backticks and specify the language (e.g., ```bash). "
-            "Do not use inline code for commands. Do not include explanations or options in the same code block—only the actual shell command."
-        )
-    else:
-        return (
-            f"Always answer as concisely as possible, providing only the most relevant command for {sys_str} unless the user asks for more detail. "
-            "If multiple commands are possible, enumerate them and keep explanations brief. The user will be viewing the answer in a terminal so format the text for best readability in a terminal environmnent. "
-            "When you suggest a command, always put it in a code block with triple backticks and specify the language (e.g., ```bash). "
-            "Do not use inline code for commands. Do not include explanations or options in the same code block—only the actual shell command."
-        )
+    prompt = get_system_prompt()
+    return prompt.replace("the user's system", sys_str)
 
 def setup_provider(args):
     config = load_config()
@@ -39,6 +28,35 @@ def setup_provider(args):
     for provider in config['providers']:
         print(f"- {provider}")
     print(f"Current default: {config['default_provider']}")
+
+    # System prompt management
+    while True:
+        print("\nSystem Prompt Management:")
+        print("  1. View current system prompt")
+        print("  2. Edit system prompt")
+        print("  3. Reset system prompt to default")
+        print("  4. Continue setup")
+        choice = input("Choose an option (1-4): ").strip()
+        if choice == '1':
+            print("\nCurrent system prompt:\n")
+            print(get_system_prompt())
+        elif choice == '2':
+            print("\nEnter new system prompt (end with a blank line):")
+            lines = []
+            while True:
+                line = input()
+                if line.strip() == '':
+                    break
+                lines.append(line)
+            set_system_prompt('\n'.join(lines))
+            print("System prompt updated.")
+        elif choice == '3':
+            reset_system_prompt()
+            print("System prompt reset to default.")
+        elif choice == '4':
+            break
+        else:
+            print("Invalid choice.")
 
     # Prompt to change default provider
     if not args.set_default:
