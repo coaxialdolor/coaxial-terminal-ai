@@ -99,10 +99,16 @@ def extract_commands(ai_response):
     return result
 
 def is_likely_command(line):
-    # Require at least two words (command + argument), or a pipeline, or a $ prefix
     line = line.strip()
     if not line or line.startswith('#'):
         return False
+    known_single_word_cmds = [
+        'ls', 'tree', 'pwd', 'clear', 'whoami', 'date', 'cal', 'top', 'htop', 'free', 'exit', 'cd', 'history', 'man', 'help'
+    ]
+    # If the line is a single word and in the known list, treat as command
+    if line in known_single_word_cmds:
+        return True
+    # Require at least two words (command + argument), or a pipeline, or a $ prefix
     known_cmds = [
         'ls', 'cat', 'cd', 'find', 'grep', 'echo', 'touch', 'mv', 'cp', 'rm', 'pwd', 'tree', 'column',
         'head', 'tail', 'sort', 'awk', 'sed', 'chmod', 'chown', 'ps', 'kill', 'du', 'df', 'tar', 'zip', 'unzip',
@@ -127,10 +133,10 @@ def print_ai_answer_with_rich(ai_response):
         if before.strip():
             print(colorize_ai(before.strip()))
         code = match.group(2)
-        # Render each command in its own bordered panel
+        # Render each command in its own bordered panel, with high-contrast color
         for line in code.splitlines():
             if is_likely_command(line):
-                console.print(Panel(Syntax(line, "bash", theme="monokai", line_numbers=False), title="Command", border_style="magenta"))
+                console.print(Panel(Syntax(line, "bash", theme="monokai", line_numbers=False), title="Command", border_style="yellow"))
         last_end = match.end()
     # Print any remaining text after the last code block
     after = ai_response[last_end:]
