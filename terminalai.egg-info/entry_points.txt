@@ -1,0 +1,2 @@
+[console_scripts]
+ai = terminalai.terminalai:main

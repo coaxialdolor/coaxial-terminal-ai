@@ -1,13 +1,13 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='terminalai',
     version='0.1.0',
-    py_modules=['terminalai'],
+    packages=find_packages(),
     install_requires=[],
     entry_points={
         'console_scripts': [
-            'ai=terminalai:main',
+            'ai=terminalai.terminalai:main',
         ],
     },
     author='Your Name',

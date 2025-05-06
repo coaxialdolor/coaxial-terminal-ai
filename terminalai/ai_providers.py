@@ -1,6 +1,6 @@
 import requests
 import os
-from config import load_config
+from terminalai.config import load_config
 
 class AIProvider:
     def query(self, prompt):
@@ -24,8 +24,24 @@ class MistralProvider(AIProvider):
     def __init__(self, api_key):
         self.api_key = api_key
     def query(self, prompt):
-        # Placeholder for Mistral API call
-        return f"[Mistral] {prompt}"
+        # Real Mistral API call
+        url = "https://api.mistral.ai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "mistral-tiny",  # You can change to another model if needed
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
+        try:
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            return f"[Mistral API error] {e}"
 
 class OllamaProvider(AIProvider):
     def __init__(self, host):

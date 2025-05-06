@@ -21,3 +21,14 @@ AI: ls -lt | head -n 1
 newtext.txt
 The newest file in the folder is newtext.txt
 ```
+
+## Installation
+```sh
+pip install .
+```
+
+## Usage
+```sh
+ai how do I see the newest file in this folder?
+ai setup --set-default gemini
+```
