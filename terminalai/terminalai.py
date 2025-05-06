@@ -8,6 +8,7 @@ from terminalai.command_utils import is_shell_command, run_shell_command
 from terminalai.color_utils import colorize_ai, colorize_command
 from rich.console import Console
 from rich.syntax import Syntax
+from rich.panel import Panel
 
 def get_system_context(verbose=False):
     system = platform.system()
@@ -27,11 +28,11 @@ def setup_provider(args):
     print("AI Providers:")
     for provider in config['providers']:
         print(f"- {provider}")
-    print(f"Current default: {config['default_provider']}")
+    print(f"Current default: {config['default_provider']}\n")
 
     # System prompt management
     while True:
-        print("\nSystem Prompt Management:")
+        print("System Prompt Management:")
         print("  1. View current system prompt")
         print("  2. Edit system prompt")
         print("  3. Reset system prompt to default")
@@ -118,7 +119,6 @@ def is_likely_command(line):
 
 def print_ai_answer_with_rich(ai_response):
     console = Console()
-    # Print everything except code blocks as normal, but render code blocks with rich
     code_block_pattern = re.compile(r'```(bash|sh)?\n([\s\S]*?)```')
     last_end = 0
     for match in code_block_pattern.finditer(ai_response):
@@ -127,7 +127,10 @@ def print_ai_answer_with_rich(ai_response):
         if before.strip():
             print(colorize_ai(before.strip()))
         code = match.group(2)
-        console.print(Syntax(code, "bash", theme="monokai", line_numbers=False))
+        # Render each command in its own bordered panel
+        for line in code.splitlines():
+            if is_likely_command(line):
+                console.print(Panel(Syntax(line, "bash", theme="monokai", line_numbers=False), title="Command", border_style="magenta"))
         last_end = match.end()
     # Print any remaining text after the last code block
     after = ai_response[last_end:]
