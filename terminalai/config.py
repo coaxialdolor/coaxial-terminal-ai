@@ -5,6 +5,8 @@ CONFIG_PATH = os.path.expanduser("~/.terminalai_config.json")
 
 DEFAULT_SYSTEM_PROMPT = (
     "Always answer as concisely as possible, providing only the most relevant command for the user's system unless the user asks for more detail. "
+    "For factual or informational questions (like 'What is X?' or 'Tell me about Y'), provide a direct, concise answer WITHOUT suggesting any commands. Just answer with the facts. "
+    "Only suggest commands when the user is clearly asking for a task to be performed or a problem to be solved on their system. "
     "If multiple commands are possible, enumerate them and keep explanations brief. The user will be viewing the answer in a terminal so format the text for best readability in a terminal environment. "
     "When you suggest a command, always put it in its own code block with triple backticks and specify the language (e.g., ```bash). "
     "Do not use inline code for commands. Do not include explanations or options in the same code block—only the actual shell command. "

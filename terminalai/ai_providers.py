@@ -30,12 +30,26 @@ class MistralProvider(AIProvider):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        data = {
-            "model": "mistral-tiny",  # You can change to another model if needed
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
-        }
+        
+        # Check if the prompt includes a system prompt section
+        if "\n\n" in prompt:
+            system_prompt, user_prompt = prompt.split("\n\n", 1)
+            data = {
+                "model": "mistral-tiny",  # You can change to another model if needed
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            }
+        else:
+            # Just a user prompt without system instructions
+            data = {
+                "model": "mistral-tiny",  # You can change to another model if needed
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
+            }
+        
         try:
             response = requests.post(url, headers=headers, json=data, timeout=30)
             response.raise_for_status()

@@ -40,14 +40,90 @@ def get_system_context():
     prompt = get_system_prompt()
     return prompt.replace("the user's system", sys_str)
 
+def is_likely_command(line):
+    """Return True if the line looks like a shell command."""
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return False
+    
+    # Skip natural language sentences
+    if len(line.split()) > 3 and line[0].isupper() and line[-1] in ['.', '!', '?']:
+        return False
+    
+    # Command detection approach: look for known command patterns
+    known_cmds = [
+        "ls", "cd", "cat", "cp", "mv", "rm", "find", "grep", "awk", "sed", "chmod",
+        "chown", "head", "tail", "touch", "mkdir", "rmdir", "tree", "du", "df", "ps", 
+        "top", "htop", "less", "more", "man", "which", "whereis", "locate", "pwd", "whoami",
+        "date", "cal", "env", "export", "ssh", "scp", "curl", "wget", "tar", "zip", "unzip",
+        "python", "pip", "brew", "apt", "yum", "dnf", "docker", "git"
+    ]
+    
+    # Include echo but with special handling
+    if line.startswith("echo "):
+        content = line[5:].strip()
+        # Skip if it looks like a sentence (starts with capital, ends with punctuation)
+        if (content.startswith('"') and content.endswith('"')) or (content.startswith("'") and content.endswith("'")):
+            content = content[1:-1]
+        if content and content[0].isupper() and content[-1] in ['.', '!', '?']:
+            return False
+    
+    # Check if the line starts with a known command
+    first_word = line.split()[0] if line.split() else ""
+    if first_word in known_cmds and len(line.split()) >= 2:
+        return True
+    if first_word == "echo" and len(line.split()) >= 2:
+        return True
+    
+    # Check for shell operators
+    if ' | ' in line or ' && ' in line or ' || ' in line or ' > ' in line or ' >> ' in line:
+        for cmd in known_cmds:
+            if line.startswith(cmd + ' '):
+                return True
+    
+    return False
+
 def extract_commands(ai_response):
     """Extract shell commands from AI response code blocks."""
     commands = []
+    
+    # Only extract commands from code blocks (most reliable source)
     code_blocks = re.findall(r'```(?:bash|sh)?\n([\s\S]*?)```', ai_response)
-    for block in code_blocks:
+    
+    # Split the AI response into sections
+    sections = re.split(r'```(?:bash|sh)?\n[\s\S]*?```', ai_response)
+    
+    for i, block in enumerate(code_blocks):
+        # Get the text before this code block (if available)
+        context_before = sections[i] if i < len(sections) else ""
+        
+        # Skip code blocks that appear to be presenting information rather than commands
+        skip_patterns = [
+            r'(?i)example',
+            r'(?i)here\'s how',
+            r'(?i)alternatively',
+            r'(?i)you can use',
+            r'(?i)other approach',
+            r'(?i)result is',
+            r'(?i)output will be'
+        ]
+        
+        should_skip = False
+        for pattern in skip_patterns:
+            if re.search(pattern, context_before[-100:] if len(context_before) > 100 else context_before):
+                should_skip = True
+                break
+        
+        if should_skip:
+            continue
+        
         for line in block.splitlines():
+            # Skip blank lines and comments
+            if not line.strip() or line.strip().startswith('#'):
+                continue
             if is_likely_command(line):
                 commands.append(line.strip())
+    
     # Deduplicate, preserve order
     seen = set()
     result = []
@@ -56,26 +132,6 @@ def extract_commands(ai_response):
             seen.add(cmd)
             result.append(cmd)
     return result
-
-def is_likely_command(line):
-    """Return True if the line looks like a shell command."""
-    line = line.strip()
-    if not line or line.startswith("#"):
-        return False
-    known_cmds = [
-        "ls", "cd", "cat", "echo", "cp", "mv", "rm", "find", "grep", "awk", "sed", "chmod",
-        "chown", "head", "tail", "touch", "mkdir", "rmdir", "tree", "du", "df", "ps", "kill",
-        "top", "htop", "less", "more", "man", "which", "whereis", "locate", "pwd", "whoami",
-        "date", "cal", "env", "export", "ssh", "scp", "curl", "wget", "tar", "zip", "unzip",
-        "python", "pip", "brew", "apt", "yum", "dnf", "docker", "git"
-    ]
-    for cmd in known_cmds:
-        if line.startswith(cmd + ' '):
-            if len(line.split()) >= 2:
-                return True
-    if '|' in line or '&&' in line:
-        return True
-    return False
 
 def print_ai_answer_with_rich(ai_response):
     """Print the AI response using rich formatting for code blocks."""
@@ -87,10 +143,15 @@ def print_ai_answer_with_rich(ai_response):
         if before.strip():
             print(colorize_ai(before.strip()))
         code = match.group(2)
+        has_command = False
         for line in code.splitlines():
             if is_likely_command(line):
                 console.print(Panel(Syntax(line, "bash", theme="monokai", line_numbers=False),
                                    title="Command", border_style="yellow"))
+                has_command = True
+        # If no detected commands, just print the code block as regular text
+        if not has_command and code.strip():
+            print(colorize_ai(f"```\n{code}\n```"))
         last_end = match.end()
     after = ai_response[last_end:]
     if after.strip():
@@ -209,7 +270,7 @@ def main():
                     '4': "Reset the system prompt to the default recommended by TerminalAI.",
                     '5': "Set or update the API key (or host for Ollama) for any provider.",
                     '6': "See a list of all providers and the currently stored API key or host for each.",
-                    '7': "Install the shell extension to allow forbidden commands (like cd) to be run in your current shell.",
+                    '7': "This option will install a script in your shell to allow certain commands like 'cd' to be performed by the AI. Some shell commands (like changing directories) can only run in your current shell and not in a subprocess. This integration adds a function to your shell configuration that allows TerminalAI to execute these commands in your active shell.",
                     '8': "Uninstall the shell extension from your shell config.",
                     '9': "Exit the setup menu."
                 }
@@ -447,90 +508,6 @@ def main():
                             print("Command not executed.")
             else:
                 print("Command not executed.")
-    else:
-        # Interactive setup menu
-        while True:
-            print("\nTerminalAI Setup Menu:")
-            print("1. Set default provider")
-            print("2. See current system prompt")
-            print("3. Edit current system prompt")
-            print("4. Reset system prompt to default")
-            print("5. Setup API keys")
-            print("6. Install shell extension")
-            print("7. Uninstall shell extension")
-            print("8. Exit")
-            choice = input("Choose an action (1-8): ").strip()
-            config = load_config()
-            if choice == '1':
-                providers = list(config['providers'].keys())
-                print("\nAvailable providers:")
-                for idx, p in enumerate(providers, 1):
-                    print(f"  {idx}. {p}{' (default)' if p == config.get('default_provider') else ''}")
-                sel = input(f"Select provider (1-{len(providers)}): ").strip()
-                if sel.isdigit() and 1 <= int(sel) <= len(providers):
-                    config['default_provider'] = providers[int(sel)-1]
-                    save_config(config)
-                    print(f"Default provider set to {providers[int(sel)-1]}.")
-                else:
-                    print("Invalid selection.")
-            elif choice == '2':
-                console.print("\n[bold]Current system prompt:[/bold]\n")
-                console.print(get_system_prompt())
-                console.input("[dim]Press Enter to continue...[/dim]")
-            elif choice == '3':
-                console.print("\nCurrent system prompt:\n")
-                console.print(config.get('system_prompt', ''))
-                new_prompt = input("\nEnter new system prompt (leave blank to cancel):\n")
-                if new_prompt.strip():
-                    config['system_prompt'] = new_prompt.strip()
-                    save_config(config)
-                    console.print("System prompt updated.")
-                else:
-                    console.print("No changes made.")
-                console.input("[dim]Press Enter to continue...[/dim]")
-            elif choice == '4':
-                config['system_prompt'] = DEFAULT_SYSTEM_PROMPT
-                save_config(config)
-                console.print("System prompt reset to default.")
-            elif choice == '5':
-                providers = list(config['providers'].keys())
-                console.print("\nProviders:")
-                for idx, p in enumerate(providers, 1):
-                    console.print(f"  {idx}. {p}")
-                sel = console.input(f"Select provider to set API key/host (1-{len(providers)}): ").strip()
-                if sel.isdigit() and 1 <= int(sel) <= len(providers):
-                    pname = providers[int(sel)-1]
-                    if pname == 'ollama':
-                        current = config['providers'][pname].get('host', '')
-                        console.print(f"Current host: {current}")
-                        new_host = input("Enter new Ollama host (e.g., http://localhost:11434): ").strip()
-                        if new_host:
-                            config['providers'][pname]['host'] = new_host
-                            save_config(config)
-                            console.print("Ollama host updated.")
-                        else:
-                            console.print("No changes made.")
-                    else:
-                        current = config['providers'][pname].get('api_key', '')
-                        console.print(f"Current API key: {'(not set)' if not current else '[hidden]'}")
-                        new_key = input(f"Enter new API key for {pname}: ").strip()
-                        if new_key:
-                            config['providers'][pname]['api_key'] = new_key
-                            save_config(config)
-                            console.print(f"API key for {pname} updated.")
-                        else:
-                            console.print("No changes made.")
-                else:
-                    console.print("Invalid selection.")
-            elif choice == '6':
-                install_shell_integration()
-            elif choice == '7':
-                uninstall_shell_integration()
-            elif choice == '8':
-                print("Exiting setup.")
-                break
-            else:
-                print("Invalid choice. Please select a number from 1 to 8.")
 
 if __name__ == "__main__":
     main()
