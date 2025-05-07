@@ -1,1 +1,0 @@
-Make a an asci art logo for TerminalAI - it should be displayed at the top on ai setup screen and if we do ai --version  or ai -h /ai help. It should not be displayed when used for queries like "ai "what is the command...." 

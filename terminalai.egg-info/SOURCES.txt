@@ -5,7 +5,7 @@ terminalai/ai_providers.py
 terminalai/color_utils.py
 terminalai/command_utils.py
 terminalai/config.py
-terminalai/terminalai.py
+terminalai/terminalai_cli.py
 terminalai.egg-info/PKG-INFO
 terminalai.egg-info/SOURCES.txt
 terminalai.egg-info/dependency_links.txt

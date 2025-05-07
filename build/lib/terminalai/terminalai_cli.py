@@ -12,6 +12,7 @@ import os
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.panel import Panel
+from rich.text import Text
 from terminalai.config import load_config, save_config, get_system_prompt, DEFAULT_SYSTEM_PROMPT
 from terminalai.ai_providers import get_provider
 from terminalai.command_utils import is_shell_command, run_shell_command
@@ -197,36 +198,16 @@ def main():
                     "3. Edit current system prompt",
                     "4. Reset system prompt to default",
                     "5. Setup API keys",
-                    "6. See current API keys",
-                    "7. Install shell extension",
-                    "8. Uninstall shell extension",
-                    "9. Exit"
+                    "6. Install shell extension",
+                    "7. Uninstall shell extension",
+                    "8. Exit"
                 ]
-                menu_info = {
-                    '1': "Set which AI provider (OpenRouter, Gemini, Mistral, Ollama) is used by default for all queries.",
-                    '2': "View the current system prompt that guides the AI's behavior.",
-                    '3': "Edit the system prompt to customize how the AI responds to your queries.",
-                    '4': "Reset the system prompt to the default recommended by TerminalAI.",
-                    '5': "Set or update the API key (or host for Ollama) for any provider.",
-                    '6': "See a list of all providers and the currently stored API key or host for each.",
-                    '7': "Install the shell extension to allow forbidden commands (like cd) to be run in your current shell.",
-                    '8': "Uninstall the shell extension from your shell config.",
-                    '9': "Exit the setup menu."
-                }
                 for opt in menu_options:
                     num, desc = opt.split('.', 1)
                     console.print(f"[bold yellow]{num}[/bold yellow].[white]{desc}[/white]")
-                console.print("[dim]Type 'i' followed by a number (e.g., i1) for more info about an option.[/dim]")
-                choice = console.input("[bold green]Choose an action (1-9): [/bold green]").strip()
+                choice = console.input("[bold green]Choose an action (1-8): [/bold green]").strip()
                 config = load_config()
-                if choice.startswith('i') and choice[1:].isdigit():
-                    info_num = choice[1:]
-                    if info_num in menu_info:
-                        console.print(f"[bold cyan]Info for option {info_num}:[/bold cyan] {menu_info[info_num]}")
-                    else:
-                        console.print("[red]No info available for that option.[/red]")
-                    console.input("[dim]Press Enter to continue...[/dim]")
-                elif choice == '1':
+                if choice == '1':
                     providers = list(config['providers'].keys())
                     console.print("\n[bold]Available providers:[/bold]")
                     for idx, p in enumerate(providers, 1):
@@ -292,28 +273,16 @@ def main():
                         console.print("[red]Invalid selection.[/red]")
                     console.input("[dim]Press Enter to continue...[/dim]")
                 elif choice == '6':
-                    providers = list(config['providers'].keys())
-                    console.print("\n[bold]Current API keys / hosts:[/bold]")
-                    for p in providers:
-                        if p == 'ollama':
-                            val = config['providers'][p].get('host', '')
-                            shown = val if val else '[not set]'
-                        else:
-                            val = config['providers'][p].get('api_key', '')
-                            shown = '[not set]' if not val else '[hidden]'
-                        console.print(f"[bold yellow]{p}:[/bold yellow] {shown}")
-                    console.input("[dim]Press Enter to continue...[/dim]")
-                elif choice == '7':
                     install_shell_integration()
                     console.input("[dim]Press Enter to continue...[/dim]")
-                elif choice == '8':
+                elif choice == '7':
                     uninstall_shell_integration()
                     console.input("[dim]Press Enter to continue...[/dim]")
-                elif choice == '9':
+                elif choice == '8':
                     console.print("[bold cyan]Exiting setup.[/bold cyan]")
                     break
                 else:
-                    console.print("[red]Invalid choice. Please select a number from 1 to 9.[/red]")
+                    console.print("[red]Invalid choice. Please select a number from 1 to 8.[/red]")
                     console.input("[dim]Press Enter to continue...[/dim]")
         else:
             parser.print_help()
