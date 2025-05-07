@@ -380,26 +380,91 @@ def main():
             parser.print_help()
         return
 
+    # Create a custom formatter class with colored help
+    class ColoredHelpFormatter(argparse.RawDescriptionHelpFormatter):
+        def __init__(self, prog):
+            super().__init__(prog, max_help_position=40, width=100)
+        
+        def _format_action(self, action):
+            # Format the help with color codes
+            result = super()._format_action(action)
+            # Add color to argument names
+            result = result.replace('ai setup', '\033[1;36mai setup\033[0m')
+            result = result.replace('--yes', '\033[1;33m--yes\033[0m')
+            result = result.replace('-y', '\033[1;33m-y\033[0m')
+            result = result.replace('--verbose', '\033[1;33m--verbose\033[0m')
+            result = result.replace('-v', '\033[1;33m-v\033[0m')
+            result = result.replace('--long', '\033[1;33m--long\033[0m')
+            result = result.replace('-l', '\033[1;33m-l\033[0m')
+            result = result.replace('--help', '\033[1;33m--help\033[0m')
+            result = result.replace('-h', '\033[1;33m-h\033[0m')
+            return result
+    
+    # Custom help formatter for the program description
+    class ColoredDescriptionFormatter(ColoredHelpFormatter):
+        def format_help(self):
+            help_text = super().format_help()
+            # Add colored logo
+            logo = '''
+\033[1;36m████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗ █████╗ ██╗     █████╗ ██╗
+\033[1;36m╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗██║    ██╔══██╗██║
+\033[1;36m   ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║███████║██║    ███████║██║
+\033[1;36m   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██╔══██║██║    ██╔══██║██║
+\033[1;36m   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██║  ██║██║    ██║  ██║███████╗
+\033[1;36m   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝    ╚═╝  ╚═╝╚══════╝\033[0m
+'''
+            # Add usage examples with color
+            examples = '''
+\033[1;32mUsage Examples:\033[0m
+  \033[1m1. Interactive Mode:\033[0m
+     \033[33mai\033[0m
+     \033[90m# Starts an interactive session where you can type your query\033[0m
+
+  \033[1m2. Direct Query:\033[0m
+     \033[33mai "how do I list all files in the current directory?"\033[0m
+     \033[90m# Sends query directly to the AI assistant\033[0m
+
+  \033[1m3. Auto-confirm Commands:\033[0m
+     \033[33mai -y "create a temporary file with random data"\033[0m
+     \033[90m# Automatically confirms command execution (except for risky commands)\033[0m
+
+  \033[1m4. Configure Settings:\033[0m
+     \033[33mai setup\033[0m
+     \033[90m# Opens the setup menu to configure providers, API keys, and preferences\033[0m
+
+  \033[1m5. Shell Integration:\033[0m
+     \033[33mai setup --install-shell-integration\033[0m
+     \033[90m# Enables running shell state-changing commands like 'cd'\033[0m
+
+\033[1;35mNote:\033[0m When the AI suggests multiple commands, you can select which one to run by number.
+      For risky commands, you'll always be asked for confirmation before execution.
+'''
+            return logo + "\n" + help_text + examples
+    
+    # Custom parser with colored help
     parser = argparse.ArgumentParser(
         prog="ai",
-        description="TerminalAI: Command-line AI assistant."
+        description="\033[1;37mTerminalAI: An AI-powered assistant for your command line.\033[0m",
+        epilog="\033[1;37mFor more information, use 'ai setup' to configure providers and settings.\033[0m",
+        formatter_class=ColoredDescriptionFormatter
     )
+    
     parser.add_argument(
         '-y', '--yes',
         action='store_true',
-        help='Automatically confirm command execution'
+        help='\033[1;32mAutomatically confirm command execution\033[0m'
     )
     parser.add_argument(
         '-v', '--verbose',
         action='store_true',
-        help='Verbose, bypass concise instruction'
+        help='\033[1;32mVerbose output with detailed explanations\033[0m'
     )
     parser.add_argument(
         '-l', '--long',
         action='store_true',
-        help='Long, bypass concise instruction'
+        help='\033[1;32mRequest longer, more comprehensive responses\033[0m'
     )
-    parser.add_argument('query', nargs=argparse.REMAINDER, help='Your AI request or command')
+    parser.add_argument('query', nargs=argparse.REMAINDER, help='\033[1;32mYour question or command for the AI\033[0m')
     args = parser.parse_args()
 
     # Interactive mode when no query is provided
