@@ -436,6 +436,7 @@ def main():
                         print("Command not executed.")
                 else:
                     if args.yes:
+                        # Automatic confirmation with -y flag, still check for risky commands
                         if risky:
                             confirm2 = input("[RISKY] This command is potentially dangerous. Are you absolutely sure? [Y/N] ").strip().lower()
                             if confirm2 != 'y':
@@ -445,6 +446,7 @@ def main():
                         output = run_shell_command(cmd)
                         print(output)
                     else:
+                        # Single Y/N confirmation for regular commands
                         confirm = input("Do you want to run this command? [Y/N] ").strip().lower()
                         if confirm == 'y':
                             if risky:
@@ -472,6 +474,7 @@ def main():
                 forbidden = is_forbidden_command(cmd)
                 risky = is_risky_command(cmd)
                 if forbidden:
+                    # For forbidden commands, always ask for confirmation
                     confirm = input(f"[FORBIDDEN] This command ('{cmd}') changes shell state. Run in your current shell? [Y/N] ").strip().lower()
                     if confirm == 'y':
                         if risky:
@@ -484,28 +487,17 @@ def main():
                     else:
                         print("Command not executed.")
                 else:
-                    if args.yes:
-                        if risky:
-                            confirm2 = input("[RISKY] This command is potentially dangerous. Are you absolutely sure? [Y/N] ").strip().lower()
-                            if confirm2 != 'y':
-                                print("Command not executed.")
-                                return
-                        print(colorize_command(f"[RUNNING] {cmd}"))
-                        output = run_shell_command(cmd)
-                        print(output)
-                    else:
-                        confirm = input("Do you want to run this command? [Y/N] ").strip().lower()
-                        if confirm == 'y':
-                            if risky:
-                                confirm2 = input("[RISKY] This command is potentially dangerous. Are you absolutely sure? [Y/N] ").strip().lower()
-                                if confirm2 != 'y':
-                                    print("Command not executed.")
-                                    return
-                            print(colorize_command(f"[RUNNING] {cmd}"))
-                            output = run_shell_command(cmd)
-                            print(output)
-                        else:
+                    # For normal commands, run immediately after selection without extra confirmation
+                    if risky:
+                        # Still confirm risky commands
+                        confirm = input(f"[RISKY] The command '{cmd}' is potentially dangerous. Are you absolutely sure? [Y/N] ").strip().lower()
+                        if confirm != 'y':
                             print("Command not executed.")
+                            return
+                    # Run the command without additional confirmation
+                    print(colorize_command(f"[RUNNING] {cmd}"))
+                    output = run_shell_command(cmd)
+                    print(output)
             else:
                 print("Command not executed.")
 
