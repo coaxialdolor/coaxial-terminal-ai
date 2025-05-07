@@ -402,12 +402,21 @@ def main():
     parser.add_argument('query', nargs=argparse.REMAINDER, help='Your AI request or command')
     args = parser.parse_args()
 
+    # Interactive mode when no query is provided
     if not args.query or (len(args.query) == 1 and args.query[0] == ''):
-        print("Please provide a query. Example: ai how do I see the newest file in this folder?")
-        return
+        print(colorize_ai("AI: What is your question?"))
+        try:
+            prompt = input(": ").strip()
+            if not prompt:
+                print("No question provided. Exiting.")
+                return
+        except KeyboardInterrupt:
+            print("\nExiting.")
+            return
+    else:
+        prompt = ' '.join(args.query)
 
     provider = get_provider()
-    prompt = ' '.join(args.query)
     system_context = get_system_context()
     full_prompt = f"{system_context}\n\n{prompt}"
     ai_response = provider.query(full_prompt)
