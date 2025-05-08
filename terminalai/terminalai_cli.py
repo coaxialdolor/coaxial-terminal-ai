@@ -324,7 +324,9 @@ def main():
                     "6. See current API keys",
                     "7. Install shell extension",
                     "8. Uninstall shell extension",
-                    "9. Exit"
+                    "9. View quick setup guide",
+                    "10. About TerminalAI",
+                    "11. Exit"
                 ]
                 menu_info = {
                     '1': "Set which AI provider (OpenRouter, Gemini, Mistral, Ollama) is used by default for all queries.",
@@ -335,13 +337,15 @@ def main():
                     '6': "See a list of all providers and the currently stored API key or host for each.",
                     '7': "This option will install a script in your shell to allow certain commands like 'cd' to be performed by the AI. Some shell commands (like changing directories) can only run in your current shell and not in a subprocess. This integration adds a function to your shell configuration that allows TerminalAI to execute these commands in your active shell.",
                     '8': "Uninstall the shell extension from your shell config.",
-                    '9': "Exit the setup menu."
+                    '9': "Display the quick setup guide to help you get started with TerminalAI.",
+                    '10': "View information about TerminalAI, including version and links.",
+                    '11': "Exit the setup menu."
                 }
                 for opt in menu_options:
                     num, desc = opt.split('.', 1)
                     console.print(f"[bold yellow]{num}[/bold yellow].[white]{desc}[/white]")
                 console.print("[dim]Type 'i' followed by a number (e.g., i1) for more info about an option.[/dim]")
-                choice = console.input("[bold green]Choose an action (1-9): [/bold green]").strip()
+                choice = console.input("[bold green]Choose an action (1-11): [/bold green]").strip()
                 config = load_config()
                 if choice.startswith('i') and choice[1:].isdigit():
                     info_num = choice[1:]
@@ -434,10 +438,87 @@ def main():
                     uninstall_shell_integration()
                     console.input("[dim]Press Enter to continue...[/dim]")
                 elif choice == '9':
+                    console.print("\n[bold cyan]Quick Setup Guide:[/bold cyan]\n")
+                    guide = """
+[bold yellow]1. Installation[/bold yellow]
+
+You have two options to install TerminalAI:
+
+[bold green]Option A: Install from PyPI (Recommended)[/bold green]
+    pip install coaxial-terminal-ai
+
+[bold green]Option B: Install from source[/bold green]
+    git clone https://github.com/coaxialdolor/terminalai.git
+    cd terminalai
+    pip install -e .
+
+[bold yellow]2. Initial Configuration[/bold yellow]
+
+In a terminal window, run:
+    ai setup
+
+• Enter [bold]5[/bold] to select "Setup API Keys"
+• Select your preferred AI provider:
+  - Mistral is recommended for its good performance and generous free tier limits
+  - Ollama is ideal if you prefer locally hosted AI
+  - You can also use OpenRouter or Gemini
+• Enter the API key for your selected provider(s)
+• Press Enter to return to the setup menu
+
+[bold yellow]3. Set Default Provider[/bold yellow]
+
+• At the setup menu, select [bold]1[/bold] to "Setup default provider"
+• Choose a provider that you've saved an API key for
+• Press Enter to return to the setup menu
+
+[bold yellow]4. Install Shell Integration (Recommended)[/bold yellow]
+
+For technical reasons, certain commands like cd, export, etc. can't be automatically executed by TerminalAI.
+
+• Select [bold]7[/bold] to "Install shell integration" 
+• This will add a function to your shell configuration file (.bashrc, .zshrc, etc.)
+• The integration enables these special commands to work seamlessly
+• After installation, restart your terminal or source your shell configuration file
+
+[bold yellow]5. Start Using TerminalAI[/bold yellow]
+
+You're now ready to use TerminalAI! Here's how:
+
+[bold green]Direct Query with Quotes[/bold green]
+    ai "how do I find all text files in the current directory?"
+
+[bold green]Interactive Mode[/bold green]
+    ai
+    AI: What is your question?
+    : how do I find all text files in the current directory?
+
+[bold green]Running Commands[/bold green]
+• When TerminalAI suggests terminal commands, you'll be prompted:
+  - For a single command: Enter Y to run or N to skip
+  - For multiple commands: Enter the number of the command you want to run
+  - For shell state-changing commands (marked with #TERMINALAI_SHELL_COMMAND), they'll execute automatically if shell integration is installed
+"""
+                    console.print(guide)
+                    console.input("[dim]Press Enter to continue...[/dim]")
+                elif choice == '10':
+                    version = "0.1.1"  # Update this when version changes
+                    console.print("\n[bold cyan]About TerminalAI:[/bold cyan]\n")
+                    console.print(f"[bold]Version:[/bold] {version}")
+                    console.print("[bold]GitHub:[/bold] https://github.com/coaxialdolor/terminalai")
+                    console.print("[bold]PyPI:[/bold] https://pypi.org/project/coaxial-terminal-ai/")
+                    console.print("\n[bold]Description:[/bold]")
+                    console.print("TerminalAI is a command-line AI assistant designed to interpret user")
+                    console.print("requests, suggest relevant terminal commands, and execute them interactively.")
+                    console.print("\n[bold red]Disclaimer:[/bold red]")
+                    console.print("This application is provided as-is without any warranties. Use at your own risk.")
+                    console.print("The developers cannot be held responsible for any data loss, system damage,")
+                    console.print("or other issues that may occur from executing suggested commands.")
+                    console.input("[dim]Press Enter to continue...[/dim]")
+                elif choice == '11':
                     console.print("[bold cyan]Exiting setup.[/bold cyan]")
                     break
                 else:
-                    console.print("[red]Invalid choice. Please select a number from 1 to 9.[/red]")
+                    console.print("[red]Invalid choice. Please select a number from 1 to 11.[/red]")
                     console.input("[dim]Press Enter to continue...[/dim]")
         else:
             parser.print_help()
@@ -476,6 +557,25 @@ def main():
 \033[1;36m   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██║  ██║███████╗ ██║  ██║██║
 \033[1;36m   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝ ╚═╝  ╚═╝╚═╝\033[0m
 '''
+            # Add quick setup guide
+            quick_setup = '''
+\033[1;35mQuick Setup Guide:\033[0m
+
+\033[1;33m1. Installation:\033[0m
+   \033[0mInstall from PyPI:\033[0m \033[32mpip install coaxial-terminal-ai\033[0m
+
+\033[1;33m2. Configuration:\033[0m
+   \033[0mRun setup:\033[0m \033[32mai setup\033[0m
+   \033[0m- Enter 5 to set up API keys for your preferred provider\033[0m
+   \033[0m- Enter 1 to set your default provider\033[0m
+   \033[0m- Enter 7 to install shell integration (recommended)\033[0m
+
+\033[1;33m3. Start Using:\033[0m
+   \033[0mDirect query:\033[0m \033[32mai "your question here"\033[0m
+   \033[0mInteractive mode:\033[0m \033[32mai\033[0m \033[0m(then enter your question)\033[0m
+
+\033[0mFor detailed instructions, run:\033[0m \033[32mai setup\033[0m \033[0mand select option 9\033[0m
+'''
             # Add usage examples with color
             examples = '''
 \033[1;32mUsage Examples:\033[0m
@@ -502,7 +602,7 @@ def main():
 \033[1;35mNote:\033[0m When the AI suggests multiple commands, you can select which one to run by number.
       For risky commands, you'll always be asked for confirmation before execution.
 '''
-            return logo + "\n" + help_text + examples
+            return logo + "\n" + help_text + quick_setup + examples
     
     # Custom parser with colored help
     parser = argparse.ArgumentParser(

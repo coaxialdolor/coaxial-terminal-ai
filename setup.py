@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='coaxial-terminal-ai',
-    version='0.1.0',
+    version='0.1.1',
     packages=find_packages(),
     install_requires=[
         'requests',
@@ -42,5 +42,9 @@ setup(
         'Operating System :: OS Independent',
         'Topic :: Utilities',
     ],
-    python_requires='>=3.7',
+    python_requires='>=3.8',
+    package_data={
+        '': ['LICENSE', 'README.md', 'quick_setup_guide.md'],
+    },
+    include_package_data=True,
 )

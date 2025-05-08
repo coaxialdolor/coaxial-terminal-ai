@@ -14,12 +14,28 @@ TerminalAI is a command-line AI assistant designed to interpret user requests, s
 
 ## Installation
 
-From the repository:
+### Option 1: Install from PyPI (Recommended)
+```sh
+pip install coaxial-terminal-ai
+```
+
+### Option 2: Install from source
 ```sh
 git clone https://github.com/coaxialdolor/terminalai.git
 cd terminalai
 pip install -e .
 ```
+
+## Quick Setup
+
+See the [Quick Setup Guide](quick_setup_guide.md) for detailed instructions.
+
+In brief:
+1. Install TerminalAI
+2. Run `ai setup` to configure your API keys
+3. Set your default provider
+4. Install shell integration (recommended)
+5. Start using TerminalAI!
 
 ## Usage
 
@@ -139,6 +155,17 @@ ai setup
 - Risky commands (rm, chmod, etc.) require additional confirmation
 - Shell state-changing commands are explicitly marked
 - Safe subprocess execution for normal commands
+
+## Disclaimer
+
+**TerminalAI is provided as-is without any warranties. Use at your own risk.**
+
+The developers of TerminalAI cannot be held responsible for:
+- Data loss
+- System damage
+- Any other adverse effects resulting from executing commands suggested by the AI
+
+Always review commands before executing them, especially those that modify system files or can potentially delete data. The AI assistant makes its best effort to provide appropriate commands, but it may not always suggest the optimal or safest solution for your specific environment.
 
 ## Help and Documentation
 

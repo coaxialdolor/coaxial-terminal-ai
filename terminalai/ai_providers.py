@@ -9,7 +9,6 @@ get_system_context() function, which passes the detected OS information to these
 import requests
 from terminalai.config import load_config
 
-
 class AIProvider:
     """Base class for all AI providers."""
 
@@ -23,7 +22,6 @@ class AIProvider:
             The response from the AI provider.
         """
         raise NotImplementedError
-
 
 class OpenRouterProvider(AIProvider):
     """OpenRouter AI provider implementation."""
@@ -77,7 +75,6 @@ class OpenRouterProvider(AIProvider):
             return response.json()["choices"][0]["message"]["content"]
         except (requests.RequestException, KeyError, IndexError) as e:
             return f"[OpenRouter API error] {e}"
-
 
 class GeminiProvider(AIProvider):
     """Google Gemini AI provider implementation."""
@@ -134,16 +131,15 @@ class GeminiProvider(AIProvider):
 
         try:
             response = requests.post(
-                f"{url}?key={self.api_key}", 
-                headers=headers, 
-                json=data, 
+                f"{url}?key={self.api_key}",
+                headers=headers,
+                json=data,
                 timeout=30
             )
             response.raise_for_status()
             return response.json()["candidates"][0]["content"]["parts"][0]["text"]
         except (requests.RequestException, KeyError, IndexError) as e:
             return f"[Gemini API error] {e}"
-
 
 class MistralProvider(AIProvider):
     """Mistral AI provider implementation."""
@@ -197,7 +193,6 @@ class MistralProvider(AIProvider):
             return response.json()["choices"][0]["message"]["content"]
         except (requests.RequestException, KeyError, IndexError) as e:
             return f"[Mistral API error] {e}"
-
 
 class OllamaProvider(AIProvider):
     """Ollama local model provider implementation."""
@@ -253,7 +248,6 @@ class OllamaProvider(AIProvider):
         except (requests.RequestException, KeyError) as e:
             return f"[Ollama API error] {e}"
 
-
 def get_provider():
     """Get the configured AI provider based on settings.
 
@@ -266,7 +260,7 @@ def get_provider():
     config = load_config()
     provider_name = config.get('default_provider', 'openrouter')
     provider_cfg = config['providers'][provider_name]
-    
+
     if provider_name == 'openrouter':
         return OpenRouterProvider(provider_cfg.get('api_key', ''))
     elif provider_name == 'gemini':
