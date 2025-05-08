@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='coaxial-terminal-ai',
-    version='0.1.2',
+    version='0.1.3',
     packages=find_packages(),
     install_requires=[
         'requests',
@@ -27,6 +27,7 @@ setup(
     project_urls={
         "Bug Tracker": "https://github.com/coaxialdolor/terminalai/issues",
     },
+    license="MIT",
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',
@@ -39,7 +40,6 @@ setup(
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3.12',
-        'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         'Topic :: Utilities',
     ],
