@@ -20,3 +20,7 @@ wheels/
 *.egg
 MANIFEST
 .DS_Store
+
+# Package update scripts
+update_package.py
+update_package_readme.md
