@@ -50,13 +50,22 @@ def is_likely_command(line):
     if len(line.split()) > 3 and line[0].isupper() and line[-1] in ['.', '!', '?']:
         return False
     
+    # Skip lines that look like factual statements (starts with capital, contains verb phrases)
+    factual_indicators = ["is", "are", "was", "were", "has", "have", "had", "means", "represents", "consists"]
+    if line.split() and line[0].isupper():
+        for word in factual_indicators:
+            if f" {word} " in f" {line} ":
+                return False
+    
     # Command detection approach: look for known command patterns
     known_cmds = [
         "ls", "cd", "cat", "cp", "mv", "rm", "find", "grep", "awk", "sed", "chmod",
         "chown", "head", "tail", "touch", "mkdir", "rmdir", "tree", "du", "df", "ps", 
         "top", "htop", "less", "more", "man", "which", "whereis", "locate", "pwd", "whoami",
         "date", "cal", "env", "export", "ssh", "scp", "curl", "wget", "tar", "zip", "unzip",
-        "python", "pip", "brew", "apt", "yum", "dnf", "docker", "git"
+        "python", "pip", "brew", "apt", "yum", "dnf", "docker", "git", "npm", "node",
+        "make", "gcc", "clang", "javac", "java", "mvn", "gradle", "cargo", "rustc",
+        "go", "swift", "kotlin", "dotnet", "perl", "php", "ruby", "mvn", "jest"
     ]
     
     # Include echo but with special handling
@@ -75,8 +84,16 @@ def is_likely_command(line):
     if first_word == "echo" and len(line.split()) >= 2:
         return True
     
-    # Check for shell operators
-    if ' | ' in line or ' && ' in line or ' || ' in line or ' > ' in line or ' >> ' in line:
+    # Check for shell operators that indicate command usage
+    shell_operators = [' | ', ' && ', ' || ', ' > ', ' >> ', ' < ', '$(', '`']
+    for operator in shell_operators:
+        if operator in line:
+            for cmd in known_cmds:
+                if re.search(rf'\b{cmd}\b', line):  # Use word boundaries for exact match
+                    return True
+    
+    # Check for options/flags which indicate commands
+    if re.search(r'\s-[a-zA-Z]+\b', line) or re.search(r'\s--[a-zA-Z-]+\b', line):
         for cmd in known_cmds:
             if line.startswith(cmd + ' '):
                 return True
@@ -86,6 +103,28 @@ def is_likely_command(line):
 def extract_commands(ai_response):
     """Extract shell commands from AI response code blocks."""
     commands = []
+    
+    # Check if this is a purely factual response without any command suggestions
+    # Common patterns in factual responses
+    factual_response_patterns = [
+        r'^\[AI\] [A-Z].*\.$',  # Starts with capitalized sentence and ends with period
+        r'^\[AI\] approximately',  # Approximate numerical answer
+        r'^\[AI\] about',  # Approximate answer with "about"
+        r'^\[AI\] [0-9]',  # Starts with a number
+    ]
+    
+    # If the response matches a factual pattern and doesn't contain code blocks, skip command extraction
+    is_likely_factual = False
+    for pattern in factual_response_patterns:
+        if re.search(pattern, ai_response, re.IGNORECASE):
+            # If response is short and doesn't have code blocks, it's likely just factual
+            if len(ai_response.split()) < 50 and '```' not in ai_response:
+                is_likely_factual = True
+                break
+    
+    # Skip command extraction for factual responses
+    if is_likely_factual:
+        return []
     
     # Only extract commands from code blocks (most reliable source)
     code_blocks = re.findall(r'```(?:bash|sh)?\n([\s\S]*?)```', ai_response)
@@ -105,7 +144,8 @@ def extract_commands(ai_response):
             r'(?i)you can use',
             r'(?i)other approach',
             r'(?i)result is',
-            r'(?i)output will be'
+            r'(?i)output will be',
+            r'(?i)this is what'
         ]
         
         should_skip = False
@@ -136,6 +176,29 @@ def extract_commands(ai_response):
 def print_ai_answer_with_rich(ai_response):
     """Print the AI response using rich formatting for code blocks."""
     console = Console()
+    
+    # Check if this is likely a pure factual response
+    factual_response_patterns = [
+        r'^\[AI\] [A-Z].*\.$',  # Starts with capitalized sentence and ends with period
+        r'^\[AI\] approximately',  # Approximate numerical answer
+        r'^\[AI\] about',  # Approximate answer with "about"
+        r'^\[AI\] [0-9]',  # Starts with a number
+    ]
+    
+    is_likely_factual = False
+    for pattern in factual_response_patterns:
+        if re.search(pattern, ai_response, re.IGNORECASE):
+            # If response is short and doesn't have code blocks, it's likely just factual
+            if len(ai_response.split()) < 50 and '```' not in ai_response:
+                is_likely_factual = True
+                break
+    
+    # For factual answers, just print them directly without special formatting
+    if is_likely_factual:
+        print(colorize_ai(ai_response))
+        return
+    
+    # For command-based responses, format them specially
     code_block_pattern = re.compile(r'```(bash|sh)?\n([\s\S]*?)```')
     last_end = 0
     for match in code_block_pattern.finditer(ai_response):
