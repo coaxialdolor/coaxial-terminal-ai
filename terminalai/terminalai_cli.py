@@ -569,7 +569,7 @@ You're now ready to use TerminalAI! Here's how:
                     console.print(guide) # Original line 510 was too long
                     console.input("[dim]Press Enter to continue...[/dim]")
                 elif choice == '10':
-                    version = "0.1.5"  # Update this when version changes
+                    version = "0.1.6"  # Update this when version changes
                     console.print("\n[bold cyan]About TerminalAI:[/bold cyan]\n")
                     console.print(f"[bold]Version:[/bold] {version}")
                     console.print("[bold]GitHub:[/bold] https://github.com/coaxialdolor/terminalai")
