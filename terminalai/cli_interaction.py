@@ -60,7 +60,7 @@ def parse_args():
 
 def handle_commands(commands, auto_confirm=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
-    from terminalai.color_utils import colorize_info, colorize_error, colorize_success, colorize_prompt, colorize_highlight
+    from terminalai.color_utils import colorize_command
 
     if not commands:
         return
@@ -77,22 +77,22 @@ def handle_commands(commands, auto_confirm=False):
 
             if is_risky:
                 # For risky stateful commands, prompt first
-                print(colorize_error(
+                print(colorize_command(
                     f"[STATEFUL COMMAND] The command '{command}' changes shell state."
                     " Copy to clipboard to run manually? [Y/N/S(how)]: "
                 ), end="")
                 choice = input().lower()
 
                 if choice == 's':
-                    print(colorize_highlight(f"\n{command}\n"))
+                    print(colorize_command(f"\n{command}\n"))
                     handle_commands([command])
                 elif choice == 'y':
                     copy_to_clipboard(command)
-                    print(colorize_success(f"✓ Command copied to clipboard. Paste and run manually."))
+                    print(colorize_command(f"Command copied to clipboard. Paste and run manually."))
             else:
                 # For non-risky stateful commands like 'cd', automatically copy
                 copy_to_clipboard(command)
-                print(colorize_success(f"✓ Command '{command}' copied to clipboard. Paste and run manually."))
+                print(colorize_command(f"[STATEFUL COMMAND] '{command}' copied to clipboard. Paste and run manually."))
             return
 
         # Check if it's a risky command
@@ -102,13 +102,12 @@ def handle_commands(commands, auto_confirm=False):
 
         # If auto_confirm is True and it's not a risky command, skip confirmation
         if auto_confirm and not is_risky:
-            print(colorize_info(f"Auto-executing: {command}"))
+            print(colorize_command(f"Auto-executing: {command}"))
             run_command(command)
             return
 
         # Otherwise prompt for confirmation
-        risk_prefix = colorize_error("[RISKY] ") if is_risky else ""
-        print(colorize_prompt(f"{risk_prefix}{confirm_msg}"), end="")
+        print(colorize_command(confirm_msg), end="")
         choice = input().lower()
 
         if not choice:  # Default based on risk
@@ -118,15 +117,15 @@ def handle_commands(commands, auto_confirm=False):
             run_command(command)
 
     else:  # Multiple commands
-        print(colorize_info(f"Found {n_commands} commands:"))
+        print(colorize_command(f"Found {n_commands} commands:"))
         for i, cmd in enumerate(commands, 1):
             is_risky_cmd = is_risky_command(cmd)
             is_stateful_cmd = is_stateful_command(cmd)
-            risk_label = colorize_error(" [RISKY]") if is_risky_cmd else ""
-            stateful_label = colorize_highlight(" [STATEFUL]") if is_stateful_cmd else ""
-            print(colorize_info(f"{i}: ") + f"{cmd}{risk_label}{stateful_label}")
+            risk_label = " [RISKY]" if is_risky_cmd else ""
+            stateful_label = " [STATEFUL]" if is_stateful_cmd else ""
+            print(colorize_command(f"{i}: {cmd}{risk_label}{stateful_label}"))
 
-        print(colorize_prompt("Enter the number of the command to execute (or 'a' for all, 'q' to quit): "), end="")
+        print(colorize_command("Enter the number of the command to execute (or 'a' for all, 'q' to quit): "), end="")
         choice = input().lower()
 
         if choice == "q":
@@ -140,21 +139,21 @@ def handle_commands(commands, auto_confirm=False):
 
                     if is_cmd_risky:
                         # For risky stateful commands, prompt first
-                        print(colorize_error(
+                        print(colorize_command(
                             f"[STATEFUL COMMAND] The command '{cmd}' changes shell state."
                             " Copy to clipboard? [Y/n]: "
                         ), end="")
                         subchoice = input().lower()
                         if subchoice.lower() != "n":
                             copy_to_clipboard(cmd)
-                            print(colorize_success(f"✓ Command copied to clipboard. Paste and run manually."))
+                            print(colorize_command(f"Command copied to clipboard. Paste and run manually."))
                     else:
                         # For non-risky stateful commands like 'cd', automatically copy
                         copy_to_clipboard(cmd)
-                        print(colorize_success(f"✓ Command '{cmd}' copied to clipboard. Paste and run manually."))
+                        print(colorize_command(f"[STATEFUL COMMAND] '{cmd}' copied to clipboard. Paste and run manually."))
                 else:
                     if is_risky_command(cmd):
-                        print(colorize_error(f"Execute risky command '{cmd}'? [y/N]: "), end="")
+                        print(colorize_command(f"Execute risky command '{cmd}'? [y/N]: "), end="")
                         subchoice = input().lower()
                         if subchoice != "y":
                             continue
@@ -172,69 +171,65 @@ def handle_commands(commands, auto_confirm=False):
 
                     if is_cmd_risky:
                         # For risky stateful commands, prompt first
-                        print(colorize_error(
+                        print(colorize_command(
                             f"[STATEFUL COMMAND] The command '{cmd}' changes shell state."
                             " Copy to clipboard? [Y/n]: "
                         ), end="")
                         subchoice = input().lower()
                         if subchoice.lower() != "n":
                             copy_to_clipboard(cmd)
-                            print(colorize_success(f"✓ Command copied to clipboard. Paste and run manually."))
+                            print(colorize_command(f"Command copied to clipboard. Paste and run manually."))
                     else:
                         # For non-risky stateful commands like 'cd', automatically copy
                         copy_to_clipboard(cmd)
-                        print(colorize_success(f"✓ Command '{cmd}' copied to clipboard. Paste and run manually."))
+                        print(colorize_command(f"[STATEFUL COMMAND] '{cmd}' copied to clipboard. Paste and run manually."))
                 else:
                     if is_risky_command(cmd):
-                        print(colorize_error(f"Execute risky command '{cmd}'? [y/N]: "), end="")
+                        print(colorize_command(f"Execute risky command '{cmd}'? [y/N]: "), end="")
                         subchoice = input().lower()
                         if subchoice == "y":
                             run_command(cmd)
                     else:
-                        print(colorize_prompt(f"Execute '{cmd}'? [Y/n]: "), end="")
+                        print(colorize_command(f"Execute '{cmd}'? [Y/n]: "), end="")
                         subchoice = input().lower()
                         if subchoice.lower() != "n":
                             run_command(cmd)
             else:
-                print(colorize_error(f"Invalid choice: {choice}"))
+                print(colorize_command(f"Invalid choice: {choice}"))
 
 def run_command(command):
     """Execute a shell command with error handling."""
-    from terminalai.color_utils import colorize_error, colorize_success, colorize_prompt
+    from terminalai.color_utils import colorize_command
 
     if not command:
         return
 
     if not is_shell_command(command):
-        print(colorize_error(f"Warning: '{command}' doesn't look like a valid shell command."))
-        print(colorize_prompt("Execute anyway? [y/N]: "), end="")
+        print(colorize_command(f"Warning: '{command}' doesn't look like a valid shell command."))
+        print(colorize_command("Execute anyway? [y/N]: "), end="")
         choice = input().lower()
         if choice != "y":
             return
 
     success = run_shell_command(command)
     if not success:
-        print(colorize_error(f"Command failed: {command}"))
-    else:
-        print(colorize_success(f"✓ Command executed successfully"))
+        print(colorize_command(f"Command failed: {command}"))
 
 def interactive_mode():
     """Run TerminalAI in interactive mode."""
     from terminalai.config import load_config
-    from terminalai.color_utils import colorize_prompt, colorize_highlight, colorize_error
+    from terminalai.color_utils import colorize_command
 
     config = load_config()
 
-    print(colorize_highlight("TerminalAI Interactive Mode"))
-    print(colorize_highlight("========================"))
-    print(colorize_prompt("What is your question? (Type 'exit' to quit)"))
+    print(colorize_command("TerminalAI: What is your question? (Type 'exit' to quit)"))
 
     while True:
-        print(colorize_prompt("> "), end="")
+        print(colorize_command(": "), end="")
         query = input().strip()
 
         if query.lower() in ["exit", "quit", "q"]:
-            print(colorize_highlight("Goodbye!"))
+            print(colorize_command("Goodbye!"))
             sys.exit(0)
 
         if not query:
@@ -246,7 +241,7 @@ def interactive_mode():
         from terminalai.ai_providers import get_provider
         provider = get_provider(config.get("default_provider", ""))
         if not provider:
-            print(colorize_error("No AI provider configured. Please run 'ai setup' first."))
+            print(colorize_command("No AI provider configured. Please run 'ai setup' first."))
             break
 
         try:
@@ -261,56 +256,56 @@ def interactive_mode():
                 handle_commands(commands, auto_confirm=False)
 
         except Exception as e:
-            print(colorize_error(f"Error: {str(e)}"))
+            print(colorize_command(f"Error: {str(e)}"))
 
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
     from terminalai.config import load_config, save_config
-    from terminalai.color_utils import colorize_success, colorize_info, colorize_prompt, colorize_highlight
+    from terminalai.color_utils import colorize_success, colorize_info, colorize_prompt, colorize_highlight, colorize_command
     config = load_config()
 
-    print(colorize_highlight("\n✦ TerminalAI Setup Wizard ✦"))
-    print(colorize_highlight("=========================="))
+    print(colorize_command("TerminalAI Setup Wizard"))
+    print(colorize_command("===================="))
 
     # Configure AI providers
-    print(colorize_info("\nAI Provider Configuration:"))
-    print(colorize_info("1. Configure OpenRouter") + " (recommended for GPT access)")
-    print(colorize_info("2. Configure Mistral"))
-    print(colorize_info("3. Configure Gemini"))
-    print(colorize_info("4. Configure Ollama") + " (local models)")
-    print(colorize_info("5. Skip provider setup"))
+    print(colorize_command("\nAI Provider Configuration:"))
+    print(colorize_command("1. Configure OpenRouter (recommended for GPT access)"))
+    print(colorize_command("2. Configure Mistral"))
+    print(colorize_command("3. Configure Gemini"))
+    print(colorize_command("4. Configure Ollama (local models)"))
+    print(colorize_command("5. Skip provider setup"))
 
-    choice = input(colorize_prompt("\nChoose an option (1-5): ")).strip()
+    choice = input(colorize_command("Choose an option (1-5): ")).strip()
 
     if choice == "1":
-        api_key = input(colorize_prompt("Enter OpenRouter API key: ")).strip()
+        api_key = input(colorize_command("Enter OpenRouter API key: ")).strip()
         if api_key:
             config["providers"] = config.get("providers", {})
             config["providers"]["openrouter"] = {"api_key": api_key}
             config["default_provider"] = "openrouter"
-            print(colorize_success("✓ OpenRouter configured as default provider."))
+            print(colorize_command("OpenRouter configured as default provider."))
 
     elif choice == "2":
-        api_key = input(colorize_prompt("Enter Mistral API key: ")).strip()
+        api_key = input(colorize_command("Enter Mistral API key: ")).strip()
         if api_key:
             config["providers"] = config.get("providers", {})
             config["providers"]["mistral"] = {"api_key": api_key}
             config["default_provider"] = "mistral"
-            print(colorize_success("✓ Mistral configured as default provider."))
+            print(colorize_command("Mistral configured as default provider."))
 
     elif choice == "3":
-        api_key = input(colorize_prompt("Enter Gemini API key: ")).strip()
+        api_key = input(colorize_command("Enter Gemini API key: ")).strip()
         if api_key:
             config["providers"] = config.get("providers", {})
             config["providers"]["gemini"] = {"api_key": api_key}
             config["default_provider"] = "gemini"
-            print(colorize_success("✓ Gemini configured as default provider."))
+            print(colorize_command("Gemini configured as default provider."))
 
     elif choice == "4":
-        host = input(colorize_prompt("Enter Ollama host (default: http://localhost:11434): ")).strip()
+        host = input(colorize_command("Enter Ollama host (default: http://localhost:11434): ")).strip()
         if not host:
             host = "http://localhost:11434"
-        model = input(colorize_prompt("Enter Ollama model name (default: llama2): ")).strip()
+        model = input(colorize_command("Enter Ollama model name (default: llama2): ")).strip()
         if not model:
             model = "llama2"
 
@@ -320,15 +315,15 @@ def setup_wizard():
             "model": model
         }
         config["default_provider"] = "ollama"
-        print(colorize_success(f"✓ Ollama configured as default provider with model {model}."))
+        print(colorize_command(f"Ollama configured as default provider with model {model}."))
 
     # Shell integration
-    print(colorize_info("\nShell Integration (for stateful commands):"))
-    print(colorize_info("1. Install shell integration"))
-    print(colorize_info("2. Uninstall shell integration"))
-    print(colorize_info("3. Skip shell integration"))
+    print(colorize_command("\nShell Integration (for stateful commands):"))
+    print(colorize_command("1. Install shell integration"))
+    print(colorize_command("2. Uninstall shell integration"))
+    print(colorize_command("3. Skip shell integration"))
 
-    choice = input(colorize_prompt("\nChoose an option (1-3): ")).strip()
+    choice = input(colorize_command("Choose an option (1-3): ")).strip()
 
     if choice == "1":
         from terminalai.shell_integration import install_shell_integration
@@ -339,10 +334,10 @@ def setup_wizard():
 
     # Save configuration
     save_config(config)
-    print(colorize_success("\n✓ Setup completed successfully!"))
+    print(colorize_command("\nSetup completed successfully!"))
 
     # Show usage instructions
-    print(colorize_highlight("\nUsage Instructions:"))
-    print(colorize_info("- Run 'ai \"your question\"' to ask a question"))
-    print(colorize_info("- Run 'ai' without arguments for interactive mode"))
-    print(colorize_info("- Use 'ai -y \"your command request\"' to auto-confirm non-risky commands"))
+    print(colorize_command("\nUsage Instructions:"))
+    print(colorize_command("- Run 'ai \"your question\"' to ask a question"))
+    print(colorize_command("- Run 'ai' without arguments for interactive mode"))
+    print(colorize_command("- Use 'ai -y \"your command request\"' to auto-confirm non-risky commands"))

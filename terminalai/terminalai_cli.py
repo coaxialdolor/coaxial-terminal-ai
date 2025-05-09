@@ -15,7 +15,7 @@ from terminalai.shell_integration import get_system_context
 from terminalai.cli_interaction import (
     parse_args, handle_commands, interactive_mode, setup_wizard
 )
-from terminalai.color_utils import colorize_error, colorize_highlight
+from terminalai.color_utils import colorize_command
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -28,7 +28,7 @@ def main():
 
     # Check for version flag
     if args.version:
-        print(colorize_highlight(f"TerminalAI version {__version__}"))
+        print(f"TerminalAI version {__version__}")
         sys.exit(0)
 
     # Check for setup flag
@@ -42,7 +42,7 @@ def main():
     # Check if AI provider is configured
     provider_name = config.get("default_provider", "")
     if not provider_name:
-        print(colorize_error("No AI provider configured. Running setup wizard..."))
+        print(colorize_command("No AI provider configured. Running setup wizard..."))
         setup_wizard()
         sys.exit(0)
 
@@ -54,8 +54,8 @@ def main():
     # Get AI provider
     provider = get_provider(provider_name)
     if not provider:
-        print(colorize_error(f"Error: Provider '{provider_name}' is not configured properly."))
-        print(colorize_error("Please run 'ai setup' to configure an AI provider."))
+        print(colorize_command(f"Error: Provider '{provider_name}' is not configured properly."))
+        print(colorize_command("Please run 'ai setup' to configure an AI provider."))
         sys.exit(1)
 
     # Get system context
@@ -73,7 +73,7 @@ def main():
         user_query = args.query
         response = provider.generate_response(user_query, system_context, verbose=args.verbose or args.long)
     except (ValueError, TypeError, ConnectionError, requests.RequestException) as e:
-        print(colorize_error(f"Error from AI provider: {str(e)}"))
+        print(colorize_command(f"Error from AI provider: {str(e)}"))
         sys.exit(1)
 
     # Format and print response

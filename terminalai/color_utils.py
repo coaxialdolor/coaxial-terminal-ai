@@ -5,14 +5,14 @@ from pygments.lexers.special import TextLexer
 from pygments.formatters.terminal import TerminalFormatter
 import re
 
-# ANSI color codes
-AI_COLOR = "\033[38;5;45m"  # Bright cyan (using 256 color mode)
-COMMAND_COLOR = "\033[38;5;213;1m"  # Bright bold magenta (using 256 color mode)
-INFO_COLOR = "\033[38;5;220m"  # Golden yellow for info text
-ERROR_COLOR = "\033[38;5;196m"  # Bright red for errors
-SUCCESS_COLOR = "\033[38;5;46m"  # Bright green for success messages
-PROMPT_COLOR = "\033[38;5;208m"  # Orange for prompts
-HIGHLIGHT_COLOR = "\033[38;5;51m"  # Turquoise for highlights
+# ANSI color codes - Revert to original color scheme
+AI_COLOR = "\033[96m"  # Bright cyan
+COMMAND_COLOR = "\033[95;1m"  # Bright bold magenta
+INFO_COLOR = "\033[36m"  # Cyan for info text
+ERROR_COLOR = "\033[91m"  # Red for errors
+SUCCESS_COLOR = "\033[92m"  # Green for success messages
+PROMPT_COLOR = "\033[33m"  # Yellow for prompts
+HIGHLIGHT_COLOR = "\033[36m"  # Cyan for highlights
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
