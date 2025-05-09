@@ -281,26 +281,26 @@ def get_provider(provider_name=None):
 
     # Use specified provider or default from config
     if not provider_name:
-        provider_name = config.get("provider", "")
+        provider_name = config.get("default_provider", "")
 
     if not provider_name:
         return None
 
     # Initialize the appropriate provider based on name
     if provider_name == "openrouter":
-        api_key = config.get("api_keys", {}).get("openrouter", "")
+        api_key = config.get("providers", {}).get("openrouter", {}).get("api_key", "")
         if api_key:
             return OpenRouterProvider(api_key)
     elif provider_name == "gemini":
-        api_key = config.get("api_keys", {}).get("gemini", "")
+        api_key = config.get("providers", {}).get("gemini", {}).get("api_key", "")
         if api_key:
             return GeminiProvider(api_key)
     elif provider_name == "mistral":
-        api_key = config.get("api_keys", {}).get("mistral", "")
+        api_key = config.get("providers", {}).get("mistral", {}).get("api_key", "")
         if api_key:
             return MistralProvider(api_key)
     elif provider_name == "ollama":
-        ollama_config = config.get("ollama", {})
+        ollama_config = config.get("providers", {}).get("ollama", {})
         host = ollama_config.get("host", "http://localhost:11434")
         model = ollama_config.get("model", "llama3")
         return OllamaProvider(host)

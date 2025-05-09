@@ -40,7 +40,7 @@ def main():
     config = load_config()
 
     # Check if AI provider is configured
-    provider_name = config.get("provider", "")
+    provider_name = config.get("default_provider", "")
     if not provider_name:
         print(colorize_command("No AI provider configured. Running setup wizard..."))
         setup_wizard()

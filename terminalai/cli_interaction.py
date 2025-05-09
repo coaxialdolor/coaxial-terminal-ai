@@ -242,25 +242,25 @@ def setup_wizard():
     if choice == "1":
         api_key = input(colorize_command("Enter OpenRouter API key: ")).strip()
         if api_key:
-            config["api_keys"] = config.get("api_keys", {})
-            config["api_keys"]["openrouter"] = api_key
-            config["provider"] = "openrouter"
+            config["providers"] = config.get("providers", {})
+            config["providers"]["openrouter"] = {"api_key": api_key}
+            config["default_provider"] = "openrouter"
             print(colorize_command("OpenRouter configured as default provider."))
 
     elif choice == "2":
         api_key = input(colorize_command("Enter Mistral API key: ")).strip()
         if api_key:
-            config["api_keys"] = config.get("api_keys", {})
-            config["api_keys"]["mistral"] = api_key
-            config["provider"] = "mistral"
+            config["providers"] = config.get("providers", {})
+            config["providers"]["mistral"] = {"api_key": api_key}
+            config["default_provider"] = "mistral"
             print(colorize_command("Mistral configured as default provider."))
 
     elif choice == "3":
         api_key = input(colorize_command("Enter Gemini API key: ")).strip()
         if api_key:
-            config["api_keys"] = config.get("api_keys", {})
-            config["api_keys"]["gemini"] = api_key
-            config["provider"] = "gemini"
+            config["providers"] = config.get("providers", {})
+            config["providers"]["gemini"] = {"api_key": api_key}
+            config["default_provider"] = "gemini"
             print(colorize_command("Gemini configured as default provider."))
 
     elif choice == "4":
@@ -271,11 +271,12 @@ def setup_wizard():
         if not model:
             model = "llama2"
 
-        config["ollama"] = {
+        config["providers"] = config.get("providers", {})
+        config["providers"]["ollama"] = {
             "host": host,
             "model": model
         }
-        config["provider"] = "ollama"
+        config["default_provider"] = "ollama"
         print(colorize_command(f"Ollama configured as default provider with model {model}."))
 
     # Shell integration
