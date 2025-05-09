@@ -1,4 +1,10 @@
- # TerminalAI
+# Terminal AI
+
+A package that makes your terminal AI-powered.
+
+## Stateful Branch
+
+The stateful branch is dedicated to adding state management functionality to the Terminal AI application. This will enable more sophisticated interactions and better memory management for the terminal assistant.
 
 TerminalAI is a command-line AI assistant designed to interpret user requests, suggest relevant terminal commands, and execute them interactively.
 
