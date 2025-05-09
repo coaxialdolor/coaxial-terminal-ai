@@ -150,10 +150,23 @@ def run_command(command, cwd=None, env=None, capture_output=False, shell=False):
     """Runs a shell command and checks for errors."""
     # Mask token in command if present for logging
     display_command = list(command) if isinstance(command, list) else command.split()
-    if 'set-url' in display_command and len(display_command) > display_command.index('set-url') + 2:
-        url_index = display_command.index('set-url') + 2
-        if 'x-access-token' in display_command[url_index]:
-            display_command[url_index] = 'https://x-access-token:***@...'  # Mask the token part
+
+    # Mask any potential tokens or sensitive information in the command
+    sensitive_patterns = [
+        (r'ghp_[a-zA-Z0-9]{36,}', 'ghp_***'),
+        (r'pypi-[a-zA-Z0-9_-]{36,}', 'pypi-***'),
+        (r'([a-zA-Z0-9_-]{32,})', '***'),
+        (r'(https?://)([^:]+:[^@]+)(@)', r'\1***:***\3')
+    ]
+
+    # Apply masking to each element that might contain sensitive info
+    for i, arg in enumerate(display_command):
+        for pattern, replacement in sensitive_patterns:
+            if re.search(pattern, arg):
+                if 'set-url' in display_command and i > display_command.index('set-url'):
+                    display_command[i] = 'https://***:***@github.com/...'
+                else:
+                    display_command[i] = re.sub(pattern, replacement, arg)
 
     print_color(f"\n$ {' '.join(display_command) if isinstance(display_command, list) else display_command}", COLOR_BLUE)
     try:
@@ -168,20 +181,33 @@ def run_command(command, cwd=None, env=None, capture_output=False, shell=False):
         )
         if capture_output:
             if result.stdout.strip():
-                print(result.stdout.strip())
+                # Sanitize output before logging
+                sanitized_stdout = result.stdout.strip()
+                for pattern, replacement in sensitive_patterns:
+                    sanitized_stdout = re.sub(pattern, replacement, sanitized_stdout)
+                print(sanitized_stdout)
             if result.stderr.strip():
+                sanitized_stderr = result.stderr.strip()
+                for pattern, replacement in sensitive_patterns:
+                    sanitized_stderr = re.sub(pattern, replacement, sanitized_stderr)
                 print_color("stderr:", COLOR_YELLOW)
-                print(result.stderr.strip())
+                print(sanitized_stderr)
         return result
     except subprocess.CalledProcessError as e:
         print_color(f"Error executing command: {e}", COLOR_RED)
         if capture_output:
             if e.stdout.strip():
+                sanitized_stdout = e.stdout.strip()
+                for pattern, replacement in sensitive_patterns:
+                    sanitized_stdout = re.sub(pattern, replacement, sanitized_stdout)
                 print_color("stdout:", COLOR_RED)
-                print(e.stdout.strip())
+                print(sanitized_stdout)
             if e.stderr.strip():
+                sanitized_stderr = e.stderr.strip()
+                for pattern, replacement in sensitive_patterns:
+                    sanitized_stderr = re.sub(pattern, replacement, sanitized_stderr)
                 print_color("stderr:", COLOR_RED)
-                print(e.stderr.strip())
+                print(sanitized_stderr)
         raise
     except FileNotFoundError:
         print_color(f"Error: Command not found. Make sure '{command[0] if isinstance(command, list) else command.split()[0]}' is in your PATH.", COLOR_RED)
@@ -800,6 +826,9 @@ def publish_package(project_path):
         masked_command = command.copy()
         print_color(f"\n$ {' '.join(masked_command)}", COLOR_BLUE)
 
+        # Add specific warning about sensitive information in logs
+        print_color("Note: Verbose upload logs may contain sensitive information. Logs are being sanitized but review them before sharing.", COLOR_YELLOW)
+
         with Spinner(message="Uploading to PyPI...") as spinner:
             process = subprocess.Popen(
                 command,
@@ -815,22 +844,32 @@ def publish_package(project_path):
             for line in process.stdout:
                 line = line.strip()
                 if line:
+                    # Sanitize the line to avoid logging tokens
+                    sanitized_line = line
+                    for pattern in [r'token:\s*\S+', r'password:\s*\S+', r'auth=([^&\s]+)', r'Authorization:\s*\S+']:
+                        sanitized_line = re.sub(pattern, lambda m: m.group(0).split(':')[0] + ': <hidden>', sanitized_line)
+
                     # Update spinner with latest status but keep it short
-                    if "uploading" in line.lower():
-                        package_name = line.split(" ")[-1] if len(line.split(" ")) > 1 else "package"
+                    if "uploading" in sanitized_line.lower():
+                        package_name = sanitized_line.split(" ")[-1] if len(sanitized_line.split(" ")) > 1 else "package"
                         spinner.update_message(f"Uploading {package_name}...")
-                    elif "100%" in line:
+                    elif "100%" in sanitized_line:
                         spinner.update_message("Upload complete, processing...")
-                    # Log the full line
-                    logging.info(line)
+                    # Log the sanitized line
+                    logging.info(sanitized_line)
 
             # Also process stderr and watch for network errors
             network_error = False
             for line in process.stderr:
                 line = line.strip()
                 if line:
-                    logging.warning(line)
-                    if "network" in line.lower() or "connection" in line.lower() or "timeout" in line.lower():
+                    # Sanitize stderr as well
+                    sanitized_line = line
+                    for pattern in [r'token:\s*\S+', r'password:\s*\S+', r'auth=([^&\s]+)', r'Authorization:\s*\S+']:
+                        sanitized_line = re.sub(pattern, lambda m: m.group(0).split(':')[0] + ': <hidden>', sanitized_line)
+
+                    logging.warning(sanitized_line)
+                    if "network" in sanitized_line.lower() or "connection" in sanitized_line.lower() or "timeout" in sanitized_line.lower():
                         network_error = True
 
             # Wait for process to complete
@@ -1195,13 +1234,37 @@ def setup_logging():
     # Create log directory if it doesn't exist
     os.makedirs("logs", exist_ok=True)
 
+    # Create a filter to sanitize sensitive information from logs
+    class SensitiveInfoFilter(logging.Filter):
+        def __init__(self):
+            super().__init__()
+            # Patterns to look for in logs (tokens, passwords, etc.)
+            self.patterns = [
+                # GitHub tokens
+                (r'ghp_[a-zA-Z0-9]{36,}', 'ghp_***'),
+                # PyPI tokens
+                (r'pypi-[a-zA-Z0-9_-]{36,}', 'pypi-***'),
+                # Generic API tokens pattern
+                (r'[a-zA-Z0-9_-]{32,}', '***TOKEN***'),
+                # Credentials in URLs
+                (r'(https?://)([^:]+:[^@]+)(@)', r'\1***:***\3')
+            ]
+
+        def filter(self, record):
+            if isinstance(record.msg, str):
+                for pattern, replacement in self.patterns:
+                    record.msg = re.sub(pattern, replacement, record.msg)
+            return True
+
     # Create file handler with timestamp in the name
     file_handler = logging.FileHandler(os.path.join("logs", log_filename))
     file_handler.setLevel(logging.INFO)
+    file_handler.addFilter(SensitiveInfoFilter())
 
     # Create console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
+    console_handler.addFilter(SensitiveInfoFilter())
 
     # Create formatter and add it to the handlers
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
