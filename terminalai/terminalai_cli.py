@@ -87,7 +87,8 @@ def is_likely_command(line):
 
     # Check if the line starts with a known command
     first_word = line.split()[0] if line.split() else ""
-    if first_word in known_cmds and len(line.split()) >= 2:
+    # Check if the line starts with a known command or a stateful command
+    if (first_word in known_cmds or first_word in STATEFUL_COMMANDS) and len(line.split()) >= 2:
         return True
     if first_word == "echo" and len(line.split()) >= 2: # echo itself is a command
         return True
@@ -139,7 +140,8 @@ def extract_commands(ai_response):
         return []
 
     # Only extract commands from code blocks (most reliable source)
-    code_blocks = re.findall(r'```(?:bash|sh)?\n([\s\S]*?)```', ai_response)
+    # Made the \n after ``` optional to handle cases where AI omits it
+    code_blocks = re.findall(r'```(?:bash|sh)?\n?([\s\S]*?)```', ai_response)
 
     # Split the AI response into sections
     sections = re.split(r'```(?:bash|sh)?\n[\s\S]*?```', ai_response)
@@ -212,7 +214,8 @@ def print_ai_answer_with_rich(ai_response):
         return
 
     # For command-based responses, format them specially
-    code_block_pattern = re.compile(r'```(bash|sh)?\n([\s\S]*?)```')
+    # Made the \n after ``` optional
+    code_block_pattern = re.compile(r'```(bash|sh)?\n?([\s\S]*?)```')
     last_end = 0
     for match in code_block_pattern.finditer(ai_response):
         before = ai_response[last_end:match.start()]
@@ -268,50 +271,58 @@ def is_risky_command(cmd):
     return False
 
 def install_shell_integration():
-    """Install shell integration for stateful commands (like cd, export) in ~/.zshrc."""
-    zshrc = os.path.expanduser('~/.zshrc')
-    func_name = 'run_terminalai_shell_command'
-    comment = ('# Shell integration for terminalai to execute cd, '
-               'and other stateful commands\\n')
-    func = '''run_terminalai_shell_command() {
-   local cmd_hist=$(history | grep '#TERMINALAI_SHELL_COMMAND:' | tail -1 | sed 's/.*#TERMINALAI_SHELL_COMMAND: //')
-  if [ -n "$cmd_hist" ]; then
-    echo "[RUNNING in current shell]: $cmd_hist"
-    eval "$cmd_hist"
-  else
-    echo "No TerminalAI shell command found in history."
-  fi
-}
-'''
-    with open(zshrc, 'r', encoding='utf-8') as f:
-        content = f.read()
-    if func_name in content:
-        print('Shell integration already installed in ~/.zshrc.')
-        return
-    with open(zshrc, 'a', encoding='utf-8') as f:
-        # Original line 271 was too long
-        f.write('\\n')
-        f.write(comment)
-        f.write(func)
-        f.write('\\n')
-    print('Shell integration installed in ~/.zshrc.')
+    """(Shell Integration - Currently Under Reconstruction)"""
+    # zshrc = os.path.expanduser('~/.zshrc')
+    # func_name = 'run_terminalai_shell_command'
+    # comment = ('# Shell integration for terminalai to execute cd, '
+    #            'and other stateful commands\\n')
+    # func = '''run_terminalai_shell_command() {
+    #    local cmd_hist=$(history | grep '#TERMINALAI_SHELL_COMMAND:' | tail -1 | sed 's/.*#TERMINALAI_SHELL_COMMAND: //')
+    #   if [ -n "$cmd_hist" ]; then
+    #     echo "[RUNNING in current shell]: $cmd_hist"
+    #     eval "$cmd_hist"
+    #   else
+    #     echo "No TerminalAI shell command found in history."
+    #   fi
+    # }
+    # '''
+    # with open(zshrc, 'r', encoding='utf-8') as f:
+    #     content = f.read()
+    # if func_name in content:
+    #     print('Shell integration already installed in ~/.zshrc.')
+    #     return
+    # with open(zshrc, 'a', encoding='utf-8') as f:
+    #     # Original line 271 was too long
+    #     f.write('\\n')
+    #     f.write(comment)
+    #     f.write(func)
+    #     f.write('\\n')
+    # print('Shell integration installed in ~/.zshrc.')
+    console = Console()
+    console.print("[yellow]This feature (Shell Integration Installation) is currently under reconstruction.[/yellow]")
+
 
 def uninstall_shell_integration():
-    """Uninstall shell integration for stateful commands from ~/.zshrc."""
-    zshrc = os.path.expanduser('~/.zshrc')
-    with open(zshrc, 'r', encoding='utf-8') as f:
-        content = f.read()
-    # Remove the comment and function
-    # Original line 280 was too long
-    pattern_str = (
-        r'\\n?# Shell integration for terminalai to be able to execute cd, '
-        r'and other stateful commands\\nrun_terminalai_shell_command\(\)\s*\{[\s\S]+?^\}'
-    )
-    pattern = re.compile(pattern_str, re.MULTILINE)
-    new_content, n = pattern.subn('', content)
-    if n == 0:
-        print('Shell integration not found in ~/.zshrc.')
-        return
+    """(Shell Integration - Currently Under Reconstruction)"""
+    # zshrc = os.path.expanduser('~/.zshrc')
+    # with open(zshrc, 'r', encoding='utf-8') as f:
+    #     content = f.read()
+    # # Remove the comment and function
+    # # Original line 280 was too long
+    # pattern_str = (
+    #     r'\\n?# Shell integration for terminalai to be able to execute cd, '
+    #     r'and other stateful commands\\nrun_terminalai_shell_command\(\)\s*\{[\s\S]+?^\}'
+    # )
+    # pattern = re.compile(pattern_str, re.MULTILINE)
+    # new_content, n = pattern.subn('', content)
+    # if n == 0:
+    #     print('Shell integration not found in ~/.zshrc.')
+    #     return
+    # with open(zshrc, 'w', encoding='utf-8') as f:
+    #     f.write(new_content)
+    # print('Shell integration removed from ~/.zshrc.')
+    console = Console()
+    console.print("[yellow]This feature (Shell Integration Uninstallation) is currently under reconstruction.[/yellow]")
     with open(zshrc, 'w', encoding='utf-8') as f:
         f.write(new_content)
     print('Shell integration removed from ~/.zshrc.')
