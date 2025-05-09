@@ -1,4 +1,4 @@
-# TerminalAI
+ # TerminalAI
 
 TerminalAI is a command-line AI assistant designed to interpret user requests, suggest relevant terminal commands, and execute them interactively.
 
@@ -10,7 +10,8 @@ TerminalAI is a command-line AI assistant designed to interpret user requests, s
 - Smart handling of factual vs. command-based questions
 - Colored output with syntax highlighting for commands
 - `ai setup` command with menu interface for configuration
-- Shell integration for executing state-changing commands (cd, export, etc.)
+- Handles stateful commands (like `cd`, `export`) by offering to copy them to your clipboard.
+- Optional shell integration for advanced users (less emphasized now).
 
 ## Installation
 
@@ -34,8 +35,7 @@ In brief:
 1. Install TerminalAI
 2. Run `ai setup` to configure your API keys
 3. Set your default provider
-4. Install shell integration (recommended)
-5. Start using TerminalAI!
+4. Start using TerminalAI! (Shell integration is now optional and for specific use cases, see "Running Stateful Commands" section)
 
 ## Usage
 
@@ -60,7 +60,7 @@ ai setup
 # Set a default provider directly
 ai setup --set-default mistral
 
-# Install shell integration for forbidden commands
+# Install shell integration for stateful commands
 ai setup --install-shell-integration
 ```
 
@@ -83,7 +83,7 @@ When TerminalAI suggests commands:
 1. **Single Command**: You'll be prompted with a Y/N confirmation
 2. **Multiple Commands**: You'll choose which command to run by number
 3. **Risky Commands**: Always require an additional confirmation
-4. **Forbidden Commands**: Commands that change shell state (like `cd`) will be marked with a special marker
+4. **Stateful Commands**: For commands that change shell state (like `cd`, `export`), TerminalAI will offer to copy the command to your clipboard for you to run manually.
 
 ## Factual Questions vs. Commands
 
@@ -97,44 +97,29 @@ ai "what is the capital of France?"
 [AI] Paris
 
 ai "how do I find files containing 'error' in this directory?"
-[AI] 
+[AI]
 ╭─── Command ───╮
 │ grep -r "error" . │
 ╰───────────────╯
 ```
 
-## Running Forbidden Commands (cd, export, etc.)
+## Running Stateful Commands (cd, export, etc.)
 
-Some commands change your shell state and cannot be run by a subprocess. TerminalAI marks these with:
+Some commands, like `cd my_folder` or `export MY_VAR=value`, need to change the state of your current shell. A Python script like TerminalAI cannot directly make these changes in your active terminal session.
 
-```
-#TERMINALAI_SHELL_COMMAND: cd myfolder
-```
+**How TerminalAI Handles Stateful Commands:**
 
-To execute these commands, you can either:
+When TerminalAI suggests a stateful command, it will:
+1. Identify the command as stateful.
+2. Prompt you with an option to copy the command to your clipboard (e.g., `[STATEFUL COMMAND] The command 'cd my_folder' changes shell state. Copy to clipboard to run manually? [Y/N/S(how)]`).
+3. If you choose 'Y', the command is copied to your clipboard.
+4. You can then paste (`Cmd+V` or `Ctrl+Shift+V`) and run the command directly in your terminal.
 
-1. **Install shell integration** (recommended):
-   ```sh
-   ai setup --install-shell-integration
-   ```
-   
-2. **Manually add** the following function to your `.bashrc` or `.zshrc`:
-   ```sh
-   run_terminalai_shell_command() {
-     local cmd=$(history | grep '#TERMINALAI_SHELL_COMMAND:' | tail -1 | sed 's/.*#TERMINALAI_SHELL_COMMAND: //')
-     if [ -n "$cmd" ]; then
-       echo "[RUNNING in current shell]: $cmd"
-       eval "$cmd"
-     else
-       echo "No TerminalAI shell command found in history."
-     fi
-   }
-   ```
+This method ensures you have full control over commands that modify your shell's environment.
 
-After you see a `#TERMINALAI_SHELL_COMMAND:` line, run:
-```sh
-run_terminalai_shell_command
-```
+**Optional Shell Integration (Advanced/Legacy):**
+
+Previously, TerminalAI emphasized a shell integration function to handle these commands. While the code for this integration (`ai setup --install-shell-integration`) might still exist, the primary recommended method is now the copy-to-clipboard feature. The shell integration relies on parsing command history and may be less reliable or intuitive for some users. If you are an advanced user and prefer the shell function method, you can still install it via `ai setup`, but be aware that TerminalAI will no longer output the `#TERMINALAI_SHELL_COMMAND:` marker. You would need to adapt the shell function or manually identify the command if you choose this path.
 
 ## Supported AI Providers
 
@@ -153,7 +138,7 @@ ai setup
 
 - Commands are never executed without your explicit permission
 - Risky commands (rm, chmod, etc.) require additional confirmation
-- Shell state-changing commands are explicitly marked
+- Stateful (shell state-changing) commands are handled by offering to copy them to your clipboard.
 - Safe subprocess execution for normal commands
 
 ## Disclaimer

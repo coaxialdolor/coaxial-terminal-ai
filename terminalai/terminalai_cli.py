@@ -16,6 +16,7 @@ from terminalai.config import load_config, save_config, get_system_prompt, DEFAU
 from terminalai.ai_providers import get_provider
 from terminalai.command_utils import is_shell_command, run_shell_command
 from terminalai.color_utils import colorize_ai, colorize_command
+from terminalai.clipboard_utils import copy_to_clipboard
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -68,7 +69,8 @@ def is_likely_command(line):
         "date", "cal", "env", "export", "ssh", "scp", "curl", "wget", "tar", "zip", "unzip",
         "python", "pip", "brew", "apt", "yum", "dnf", "docker", "git", "npm", "node",
         "make", "gcc", "clang", "javac", "java", "mvn", "gradle", "cargo", "rustc",
-        "go", "swift", "kotlin", "dotnet", "perl", "php", "ruby", "mvn", "jest"
+        "go", "swift", "kotlin", "dotnet", "perl", "php", "ruby", "mvn", "jest",
+        "nano", "vim", "vi", "emacs", "pico", "subl", "code" # Added common editors
     ]
 
     # Include echo but with special handling
@@ -236,7 +238,7 @@ def print_ai_answer_with_rich(ai_response):
     if after.strip():
         print(colorize_ai(after.strip()))
 
-FORBIDDEN_COMMANDS = [
+STATEFUL_COMMANDS = [ # Commands that change shell state
     'cd', 'export', 'set', 'unset', 'alias', 'unalias', 'source', 'pushd', 'popd',
     'dirs', 'fg', 'bg', 'jobs', 'disown', 'exec', 'login', 'logout', 'exit',
     'kill', 'trap', 'shopt', 'enable', 'disable', 'declare', 'typeset',
@@ -250,12 +252,12 @@ RISKY_COMMANDS = [
     'halt', 'poweroff', 'mv /', 'cp /', '>:'
 ]
 
-def is_forbidden_command(cmd):
-    """Check if a command is in the forbidden list."""
+def is_stateful_command(cmd):
+    """Check if a command is in the stateful list (changes shell state)."""
     cmd_strip = cmd.strip().split()
     if not cmd_strip:
         return False
-    return cmd_strip[0] in FORBIDDEN_COMMANDS
+    return cmd_strip[0] in STATEFUL_COMMANDS
 
 def is_risky_command(cmd):
     """Check if a command is in the risky list."""
@@ -266,13 +268,13 @@ def is_risky_command(cmd):
     return False
 
 def install_shell_integration():
-    """Install shell integration for forbidden commands in ~/.zshrc."""
+    """Install shell integration for stateful commands (like cd, export) in ~/.zshrc."""
     zshrc = os.path.expanduser('~/.zshrc')
     func_name = 'run_terminalai_shell_command'
     comment = ('# Shell integration for terminalai to execute cd, '
-               'and other forbidden commands\\n')
+               'and other stateful commands\\n')
     func = '''run_terminalai_shell_command() {
-  local cmd_hist=$(history | grep '#TERMINALAI_SHELL_COMMAND:' | tail -1 | sed 's/.*#TERMINALAI_SHELL_COMMAND: //')
+   local cmd_hist=$(history | grep '#TERMINALAI_SHELL_COMMAND:' | tail -1 | sed 's/.*#TERMINALAI_SHELL_COMMAND: //')
   if [ -n "$cmd_hist" ]; then
     echo "[RUNNING in current shell]: $cmd_hist"
     eval "$cmd_hist"
@@ -295,7 +297,7 @@ def install_shell_integration():
     print('Shell integration installed in ~/.zshrc.')
 
 def uninstall_shell_integration():
-    """Uninstall shell integration for forbidden commands from ~/.zshrc."""
+    """Uninstall shell integration for stateful commands from ~/.zshrc."""
     zshrc = os.path.expanduser('~/.zshrc')
     with open(zshrc, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -303,7 +305,7 @@ def uninstall_shell_integration():
     # Original line 280 was too long
     pattern_str = (
         r'\\n?# Shell integration for terminalai to be able to execute cd, '
-        r'and other forbidden commands\\nrun_terminalai_shell_command\(\)\s*\{[\s\S]+?^\}'
+        r'and other stateful commands\\nrun_terminalai_shell_command\(\)\s*\{[\s\S]+?^\}'
     )
     pattern = re.compile(pattern_str, re.MULTILINE)
     new_content, n = pattern.subn('', content)
@@ -324,11 +326,11 @@ def main():
         parser.add_argument('--set-default', type=str, help='Set the default AI provider')
         parser.add_argument(
             '--install-shell-integration', action='store_true',
-            help='Install shell integration for forbidden commands'
+            help='Install shell integration for stateful commands'
         )
         parser.add_argument(
             '--uninstall-shell-integration', action='store_true',
-            help='Uninstall shell integration for forbidden commands'
+            help='Uninstall shell integration for stateful commands'
         )
         args = parser.parse_args(sys.argv[2:])
         if args.set_default:
@@ -379,15 +381,8 @@ def main():
                     '4': "Reset the system prompt to the default recommended by TerminalAI.",
                     '5': "Set/update API key/host for any provider.",
                     '6': "List providers and their stored API key/host.",
-                    '7': (
-                        "This option will install a script in your shell to allow certain "
-                        "commands like 'cd' to be performed by the AI. Some shell commands "
-                        "(like changing directories) can only run in your current shell and "
-                        "not in a subprocess. This integration adds a function to your shell "
-                        "configuration that allows TerminalAI to execute these commands in "
-                        "your active shell."
-                    ),
-                    '8': "Uninstall the shell extension from your shell config.",
+                    '7': "Shell Integration (Currently Under Reconstruction)",
+                    '8': "Uninstall Shell Integration (Currently Under Reconstruction)",
                     '9': "Display the quick setup guide to help you get started with TerminalAI.",
                     '10': "View information about TerminalAI, including version and links.",
                     '11': "Exit the setup menu."
@@ -498,10 +493,10 @@ def main():
                         console.print(f"[bold yellow]{p_item}:[/bold yellow] {shown}")
                     console.input("[dim]Press Enter to continue...[/dim]")
                 elif choice == '7':
-                    install_shell_integration()
+                    console.print("[yellow]This feature (Shell Integration Installation) is currently under reconstruction.[/yellow]")
                     console.input("[dim]Press Enter to continue...[/dim]")
                 elif choice == '8':
-                    uninstall_shell_integration()
+                    console.print("[yellow]This feature (Shell Integration Uninstallation) is currently under reconstruction.[/yellow]")
                     console.input("[dim]Press Enter to continue...[/dim]")
                 elif choice == '9':
                     console.print("\n[bold cyan]Quick Setup Guide:[/bold cyan]\n")
@@ -537,18 +532,18 @@ In a terminal window, run:
 • Choose a provider that you've saved an API key for
 • Press Enter to return to the setup menu
 
-[bold yellow]4. Install Shell Integration (Recommended)[/bold yellow]
 
-For technical reasons, certain commands like cd, export, etc. can't be
-automatically executed by TerminalAI.
+[bold yellow]4. Understanding Stateful Command Execution[/bold yellow]
 
-• Select [bold]7[/bold] to "Install shell integration"
-• This will add a function to your shell configuration file (.bashrc, .zshrc, etc.)
-• The integration enables these special commands to work seamlessly
-• After installation, restart your terminal or source your shell configuration file
+For commands like 'cd' or 'export' that change your shell's state, TerminalAI
+will offer to copy the command to your clipboard. You can then paste and run it.
+
+(Optional) Shell Integration:
+• You can still install a shell integration via option [bold]7[/bold] in the setup menu.
+  This is for advanced users who prefer a shell function for such commands.
+  Note that the primary method is now copy-to-clipboard.
 
 [bold yellow]5. Start Using TerminalAI[/bold yellow]
-
 You're now ready to use TerminalAI! Here's how:
 
 [bold green]Direct Query with Quotes[/bold green]
@@ -563,8 +558,8 @@ You're now ready to use TerminalAI! Here's how:
 • When TerminalAI suggests terminal commands, you'll be prompted:
   - For a single command: Enter Y to run or N to skip
   - For multiple commands: Enter the number of the command you want to run
-  - For shell state-changing commands (marked with #TERMINALAI_SHELL_COMMAND),
-    they'll execute automatically if shell integration is installed
+  - For stateful (shell state-changing) commands, you'll be prompted to copy them
+    to your clipboard to run manually.
 """
                     console.print(guide) # Original line 510 was too long
                     console.input("[dim]Press Enter to continue...[/dim]")
@@ -736,62 +731,55 @@ You're now ready to use TerminalAI! Here's how:
     if commands:
         if len(commands) == 1:
             cmd_to_run = commands[0] # Renamed cmd
-            forbidden = is_forbidden_command(cmd_to_run)
-            risky = is_risky_command(cmd_to_run)
-            if is_shell_command(cmd_to_run):
-                if forbidden:
-                    # Always require confirmation for forbidden commands
-                    confirm_prompt = (
-                        f"[FORBIDDEN] This command ('{cmd_to_run}') changes shell state. "
-                        "Run in your current shell? [Y/N] "
-                    )
-                    confirm = input(confirm_prompt).strip().lower()
-                    if confirm == 'y':
-                        if risky:
-                            confirm2_prompt = ("[RISKY] This command is potentially dangerous. "
-                                               "Are you absolutely sure? [Y/N] ")
-                            confirm2 = input(confirm2_prompt).strip().lower()
-                            if confirm2 != 'y':
-                                print("Command not executed.")
-                                return
-                        # Output marker for shell integration
-                        print(f"#TERMINALAI_SHELL_COMMAND: {cmd_to_run}")
-                        info_msg = ("[INFO] To run this command in your current shell, "
-                                    "use the provided shell function.")
-                        print(info_msg)
-                    else:
-                        print("Command not executed.")
-                else:
-                    if args.yes:
-                        # Automatic confirmation with -y flag, still check for risky commands
-                        if risky:
-                            confirm2_prompt = ("[RISKY] This command is potentially dangerous. "
-                                               "Are you absolutely sure? [Y/N] ")
-                            confirm2 = input(confirm2_prompt).strip().lower()
-                            if confirm2 != 'y':
-                                print("Command not executed.")
-                                return
+            is_cmd_stateful = is_stateful_command(cmd_to_run)
+            is_cmd_risky = is_risky_command(cmd_to_run)
+            if is_shell_command(cmd_to_run): # Ensure it's a shell command before proceeding
+                if is_cmd_stateful:
+                    # Handle stateful commands (e.g., copy to clipboard)
+                    proceed_with_stateful = True
+                    if is_cmd_risky:
+                        risky_confirm_prompt = ("[RISKY] This command is potentially dangerous. "
+                                           "Are you absolutely sure? [Y/N] ")
+                        risky_confirm = input(risky_confirm_prompt).strip().lower()
+                        if risky_confirm != 'y':
+                            print("Command not executed due to risk.")
+                            proceed_with_stateful = False
+
+                    if proceed_with_stateful:
+                        stateful_prompt_text = (
+                            f"[STATEFUL COMMAND] The command '{cmd_to_run}' changes shell state. "
+                            "Copy to clipboard to run manually? [Y/N/S(how)] "
+                        )
+                        confirm_stateful = input(stateful_prompt_text).strip().lower()
+                        if confirm_stateful == 'y':
+                            if copy_to_clipboard(cmd_to_run):
+                                print(f"Command '{cmd_to_run}' copied to clipboard. Paste it into your terminal to run.")
+                            # If copy_to_clipboard returns False, it prints its own error.
+                        elif confirm_stateful == 's':
+                            print(f"Command to run: {cmd_to_run}")
+                        else:
+                            print("Command not executed.")
+                else: # Not stateful, proceed with normal execution flow
+                    if args.yes and not is_cmd_risky: # Auto-confirm if -y and not risky
                         print(colorize_command(f"[RUNNING] {cmd_to_run}"))
                         output = run_shell_command(cmd_to_run)
                         print(output)
-                    else:
-                        # Single Y/N confirmation for regular commands
-                        confirm_prompt = "Do you want to run this command? [Y/N] "
-                        confirm = input(confirm_prompt).strip().lower()
+                    else: # Needs confirmation (either risky or no -y)
+                        if is_cmd_risky:
+                            risky_confirm_prompt = ("[RISKY] This command is potentially dangerous. "
+                                               "Are you absolutely sure? [Y/N] ")
+                            confirm = input(risky_confirm_prompt).strip().lower()
+                        else: # Not risky, but no -y, so standard confirmation
+                            confirm_prompt = "Do you want to run this command? [Y/N] "
+                            confirm = input(confirm_prompt).strip().lower()
+
                         if confirm == 'y':
-                            if risky:
-                                confirm2_prompt = ("[RISKY] This command is potentially dangerous. "
-                                                   "Are you absolutely sure? [Y/N] ")
-                                confirm2 = input(confirm2_prompt).strip().lower()
-                                if confirm2 != 'y':
-                                    print("Command not executed.")
-                                    return
                             print(colorize_command(f"[RUNNING] {cmd_to_run}"))
                             output = run_shell_command(cmd_to_run)
                             print(output)
                         else:
                             print("Command not executed.")
-        else:
+        else: # Multiple commands found
             print(colorize_ai("\nCommands found:"))
             for idx, cmd_item in enumerate(commands, 1): # Renamed cmd
                 print(colorize_command(f"  {idx}. {cmd_item}"))
@@ -804,46 +792,55 @@ You're now ready to use TerminalAI! Here's how:
             selection = input(selection_prompt).strip().lower()
             if selection.isdigit() and 1 <= int(selection) <= len(commands):
                 cmd_to_run = commands[int(selection)-1] # Renamed cmd
-                forbidden = is_forbidden_command(cmd_to_run)
-                risky = is_risky_command(cmd_to_run)
-                if forbidden:
-                    # For forbidden commands, always ask for confirmation
-                    confirm_prompt = (
-                        f"[FORBIDDEN] This command ('{cmd_to_run}') changes shell state. "
-                        "Run in your current shell? [Y/N] "
-                    )
-                    confirm = input(confirm_prompt).strip().lower()
-                    if confirm == 'y':
-                        if risky:
-                            confirm2_prompt = ("[RISKY] This command is potentially dangerous. "
-                                               "Are you absolutely sure? [Y/N] ")
-                            confirm2 = input(confirm2_prompt).strip().lower()
-                            if confirm2 != 'y':
-                                print("Command not executed.")
-                                return
-                        print(f"#TERMINALAI_SHELL_COMMAND: {cmd_to_run}")
-                        info_msg = ("[INFO] To run this command in your current shell, "
-                                    "use the provided shell function.")
-                        print(info_msg)
-                    else:
-                        print("Command not executed.")
-                else:
-                    # For normal commands, run immediately after selection without extra confirmation
-                    if risky:
-                        # Still confirm risky commands
-                        confirm_prompt = (
+                is_cmd_stateful = is_stateful_command(cmd_to_run)
+                is_cmd_risky = is_risky_command(cmd_to_run)
+
+                if is_cmd_stateful:
+                    # Handle stateful commands (e.g., copy to clipboard)
+                    proceed_with_stateful = True
+                    if is_cmd_risky:
+                        risky_confirm_prompt = ("[RISKY] This command is potentially dangerous. "
+                                           "Are you absolutely sure? [Y/N] ")
+                        risky_confirm = input(risky_confirm_prompt).strip().lower()
+                        if risky_confirm != 'y':
+                            print("Command not executed due to risk.")
+                            proceed_with_stateful = False
+
+                    if proceed_with_stateful:
+                        stateful_prompt_text = (
+                            f"[STATEFUL COMMAND] The command '{cmd_to_run}' changes shell state. "
+                            "Copy to clipboard to run manually? [Y/N/S(how)] "
+                        )
+                        confirm_stateful = input(stateful_prompt_text).strip().lower()
+                        if confirm_stateful == 'y':
+                            if copy_to_clipboard(cmd_to_run):
+                                print(f"Command '{cmd_to_run}' copied to clipboard. Paste it into your terminal to run.")
+                            # If copy_to_clipboard returns False, it prints its own error.
+                        elif confirm_stateful == 's':
+                            print(f"Command to run: {cmd_to_run}")
+                        else:
+                            print("Command not executed.")
+                else: # Not stateful, proceed with normal execution flow (selected command)
+                    if is_cmd_risky:
+                        # Still confirm risky commands even if selected by number
+                        risky_confirm_prompt = (
                             f"[RISKY] The command '{cmd_to_run}' is potentially dangerous. "
                             "Are you absolutely sure? [Y/N] "
                         )
-                        confirm = input(confirm_prompt).strip().lower()
+                        confirm = input(risky_confirm_prompt).strip().lower()
                         if confirm != 'y':
                             print("Command not executed.")
-                            return
-                    # Run the command without additional confirmation
-                    print(colorize_command(f"[RUNNING] {cmd_to_run}"))
-                    output = run_shell_command(cmd_to_run)
-                    print(output)
-            else:
+                            return # Exit if risky command not confirmed
+
+                    # If not risky, or risky and confirmed, run it
+                    # (Note: args.yes doesn't apply here as user explicitly selected a number)
+                    if not is_cmd_risky or (is_cmd_risky and confirm == 'y'):
+                        print(colorize_command(f"[RUNNING] {cmd_to_run}"))
+                        output = run_shell_command(cmd_to_run)
+                        print(output)
+                    elif is_cmd_risky and confirm != 'y': # Should have been caught above, but for clarity
+                        print("Command not executed.")
+            else: # Invalid selection or 'N'
                 print("Command not executed.")
 
 if __name__ == "__main__":
