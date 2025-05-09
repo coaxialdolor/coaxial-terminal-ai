@@ -1,11 +1,18 @@
 from pygments import highlight
-from pygments.lexers import BashLexer, PythonLexer, TextLexer
-from pygments.formatters import TerminalFormatter
+from pygments.lexers.shell import BashLexer
+from pygments.lexers.python import PythonLexer
+from pygments.lexers.special import TextLexer
+from pygments.formatters.terminal import TerminalFormatter
 import re
 
 # ANSI color codes
-AI_COLOR = "\033[96m"  # Bright cyan
-COMMAND_COLOR = "\033[95;1m"  # Bright bold magenta
+AI_COLOR = "\033[38;5;45m"  # Bright cyan (using 256 color mode)
+COMMAND_COLOR = "\033[38;5;213;1m"  # Bright bold magenta (using 256 color mode)
+INFO_COLOR = "\033[38;5;220m"  # Golden yellow for info text
+ERROR_COLOR = "\033[38;5;196m"  # Bright red for errors
+SUCCESS_COLOR = "\033[38;5;46m"  # Bright green for success messages
+PROMPT_COLOR = "\033[38;5;208m"  # Orange for prompts
+HIGHLIGHT_COLOR = "\033[38;5;51m"  # Turquoise for highlights
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
@@ -15,6 +22,21 @@ def colorize_ai(text):
 
 def colorize_command(text):
     return f"{COMMAND_COLOR}{text}{RESET}"
+
+def colorize_info(text):
+    return f"{INFO_COLOR}{text}{RESET}"
+
+def colorize_error(text):
+    return f"{ERROR_COLOR}{text}{RESET}"
+
+def colorize_success(text):
+    return f"{SUCCESS_COLOR}{text}{RESET}"
+
+def colorize_prompt(text):
+    return f"{PROMPT_COLOR}{text}{RESET}"
+
+def colorize_highlight(text):
+    return f"{HIGHLIGHT_COLOR}{text}{RESET}"
 
 def highlight_code_blocks(text):
     # Highlight triple backtick code blocks

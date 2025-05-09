@@ -44,8 +44,8 @@ def print_ai_answer_with_rich(ai_response):
         has_command = False
         for line in code.splitlines():
             if is_likely_command(line):
-                console.print(Panel(Syntax(line, "bash", theme="monokai", line_numbers=False),
-                                   title="Command", border_style="yellow"))
+                console.print(Panel(Syntax(line, "bash", theme="native", line_numbers=False),
+                                   title="Command", border_style="bright_yellow"))
                 has_command = True
         # If no detected commands, just print the code block as regular text
         if not has_command and code.strip():
