@@ -51,7 +51,7 @@ def install_shell_integration():
                 if "function _terminalai_execute" in content:
                     print(colorize_command("Shell integration already installed."))
                     return True
-        except Exception as e:
+        except (IOError, FileNotFoundError, PermissionError) as e:
             print(colorize_command(f"Error reading config file: {e}"))
             return False
 
@@ -77,7 +77,7 @@ function _terminalai_execute() {
                 f"Please restart your shell or run 'source {config_file}'."
             ))
             return True
-        except Exception as e:
+        except (IOError, FileNotFoundError, PermissionError) as e:
             print(colorize_command(f"Error installing shell integration: {e}"))
             return False
 
@@ -117,7 +117,7 @@ function TerminalAIExecute {
                 "Please restart PowerShell or run '. $PROFILE'."
             ))
             return True
-        except Exception as e:
+        except (subprocess.SubprocessError, FileNotFoundError, PermissionError) as e:
             print(colorize_command(f"Error installing shell integration: {e}"))
             return False
 
@@ -174,7 +174,7 @@ def uninstall_shell_integration():
             else:
                 print(colorize_command("Shell integration not found in config file."))
                 return False
-        except Exception as e:
+        except (IOError, FileNotFoundError, PermissionError) as e:
             print(colorize_command(f"Error removing shell integration: {e}"))
             return False
 
@@ -199,7 +199,7 @@ def uninstall_shell_integration():
                 "Please restart PowerShell or run '. $PROFILE'."
             ))
             return True
-        except Exception as e:
+        except (subprocess.SubprocessError, FileNotFoundError, PermissionError) as e:
             print(colorize_command(f"Error removing shell integration: {e}"))
             return False
 

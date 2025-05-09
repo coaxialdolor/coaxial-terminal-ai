@@ -5,17 +5,17 @@ Best practice: Run this script as a module from the project root:
 This ensures all imports work correctly. If you run this file directly, you may get import errors.
 """
 import sys
-import platform
+import requests
 from terminalai.__init__ import __version__
-from terminalai.config import load_config, save_config, get_system_prompt
+from terminalai.config import load_config
 from terminalai.ai_providers import get_provider
-from terminalai.command_extraction import extract_commands, is_stateful_command, is_risky_command
+from terminalai.command_extraction import extract_commands
 from terminalai.formatting import print_ai_answer_with_rich
-from terminalai.shell_integration import get_system_context, install_shell_integration, uninstall_shell_integration
+from terminalai.shell_integration import get_system_context
 from terminalai.cli_interaction import (
-    parse_args, handle_commands, run_command, interactive_mode, setup_wizard
+    parse_args, handle_commands, interactive_mode, setup_wizard
 )
-from terminalai.color_utils import colorize_ai, colorize_command
+from terminalai.color_utils import colorize_command
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -72,7 +72,7 @@ def main():
         # Ensure args.query is a string, not a list
         user_query = args.query
         response = provider.generate_response(user_query, system_context, verbose=args.verbose or args.long)
-    except Exception as e:
+    except (ValueError, TypeError, ConnectionError, requests.RequestException) as e:
         print(colorize_command(f"Error from AI provider: {str(e)}"))
         sys.exit(1)
 
