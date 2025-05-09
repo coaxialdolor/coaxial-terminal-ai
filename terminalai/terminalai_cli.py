@@ -8,7 +8,7 @@ import argparse
 import sys
 import platform
 import re
-import os
+# import os # No longer needed after shell integration code removal
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.panel import Panel
@@ -277,7 +277,8 @@ def install_shell_integration():
     # comment = ('# Shell integration for terminalai to execute cd, '
     #            'and other stateful commands\\n')
     # func = '''run_terminalai_shell_command() {
-    #    local cmd_hist=$(history | grep '#TERMINALAI_SHELL_COMMAND:' | tail -1 | sed 's/.*#TERMINALAI_SHELL_COMMAND: //')
+    #    local cmd_hist=$(history | grep '#TERMINALAI_SHELL_COMMAND:' | tail -1 | \
+    # sed 's/.*#TERMINALAI_SHELL_COMMAND: //')
     #   if [ -n "$cmd_hist" ]; then
     #     echo "[RUNNING in current shell]: $cmd_hist"
     #     eval "$cmd_hist"
@@ -299,33 +300,36 @@ def install_shell_integration():
     #     f.write('\\n')
     # print('Shell integration installed in ~/.zshrc.')
     console = Console()
-    console.print("[yellow]This feature (Shell Integration Installation) is currently under reconstruction.[/yellow]")
+    console.print(
+        "[yellow]This feature (Shell Integration Installation) "
+        "is currently under reconstruction.[/yellow]"
+    )
 
 
 def uninstall_shell_integration():
     """(Shell Integration - Currently Under Reconstruction)"""
-    # zshrc = os.path.expanduser('~/.zshrc')
-    # with open(zshrc, 'r', encoding='utf-8') as f:
-    #     content = f.read()
+    # zshrc = os.path.expanduser('~/.zshrc') # Keep this line commented
+    # with open(zshrc, 'r', encoding='utf-8') as f: # Keep this line commented
+    #     content = f.read() # Keep this line commented
     # # Remove the comment and function
     # # Original line 280 was too long
     # pattern_str = (
     #     r'\\n?# Shell integration for terminalai to be able to execute cd, '
     #     r'and other stateful commands\\nrun_terminalai_shell_command\(\)\s*\{[\s\S]+?^\}'
-    # )
-    # pattern = re.compile(pattern_str, re.MULTILINE)
-    # new_content, n = pattern.subn('', content)
-    # if n == 0:
-    #     print('Shell integration not found in ~/.zshrc.')
-    #     return
-    # with open(zshrc, 'w', encoding='utf-8') as f:
-    #     f.write(new_content)
-    # print('Shell integration removed from ~/.zshrc.')
+    # ) # Keep this line commented
+    # pattern = re.compile(pattern_str, re.MULTILINE) # Keep this line commented
+    # new_content, n = pattern.subn('', content) # Keep this line commented
+    # if n == 0: # Keep this line commented
+    #     print('Shell integration not found in ~/.zshrc.') # Keep this line commented
+    #     return # Keep this line commented
+    # # with open(zshrc, 'w', encoding='utf-8') as f: # This block caused undefined variable errors
+    # #     f.write(new_content)
+    # # print('Shell integration removed from ~/.zshrc.')
     console = Console()
-    console.print("[yellow]This feature (Shell Integration Uninstallation) is currently under reconstruction.[/yellow]")
-    with open(zshrc, 'w', encoding='utf-8') as f:
-        f.write(new_content)
-    print('Shell integration removed from ~/.zshrc.')
+    console.print(
+        "[yellow]This feature (Shell Integration Uninstallation) "
+        "is currently under reconstruction.[/yellow]"
+    )
 
 def main():
     """Main entry point for the TerminalAI CLI."""
@@ -441,12 +445,17 @@ def main():
                 elif choice == '3':
                     console.print("\n[bold]Current system prompt:[/bold]\n")
                     console.print(config.get('system_prompt', ''))
-                    new_prompt_input = "\n[bold green]Enter new system prompt (leave blank to cancel):\n[/bold green]"
+                    new_prompt_input = (
+                        "\n[bold green]Enter new system prompt "
+                        "(leave blank to cancel):\n[/bold green]"
+                    )
                     new_prompt = console.input(new_prompt_input)
                     if new_prompt.strip():
                         config['system_prompt'] = new_prompt.strip()
                         save_config(config)
-                        console.print("[bold green]System prompt updated.[/bold green]")
+                        console.print(
+                            "[bold green]System prompt updated.[/bold green]"
+                        )
                     else:
                         console.print("[yellow]No changes made.[/yellow]")
                     console.input("[dim]Press Enter to continue...[/dim]")
@@ -468,12 +477,16 @@ def main():
                         if pname == 'ollama':
                             current = config['providers'][pname].get('host', '')
                             console.print(f"Current host: {current}")
-                            ollama_host_prompt = "Enter new Ollama host (e.g., http://localhost:11434): "
+                            ollama_host_prompt = (
+                                "Enter new Ollama host (e.g., http://localhost:11434): "
+                            )
                             new_host = console.input(ollama_host_prompt).strip()
                             if new_host:
                                 config['providers'][pname]['host'] = new_host
                                 save_config(config)
-                                console.print("[bold green]Ollama host updated.[/bold green]")
+                                console.print(
+                                    "[bold green]Ollama host updated.[/bold green]"
+                                )
                             else:
                                 console.print("[yellow]No changes made.[/yellow]")
                         else:
@@ -485,7 +498,9 @@ def main():
                             if new_key:
                                 config['providers'][pname]['api_key'] = new_key
                                 save_config(config)
-                                console.print(f"[bold green]API key for {pname} updated.[/bold green]")
+                                console.print(
+                                    f"[bold green]API key for {pname} updated.[/bold green]"
+                                )
                             else:
                                 console.print("[yellow]No changes made.[/yellow]")
                     else:
@@ -582,19 +597,35 @@ You're now ready to use TerminalAI! Here's how:
                     console.print("[bold]PyPI:[/bold] https://pypi.org/project/coaxial-terminal-ai/")
                     console.print("\n[bold]Description:[/bold]")
                     # Original line 520 was too long
-                    console.print("TerminalAI is a command-line AI assistant designed to interpret user")
-                    console.print("requests, suggest relevant terminal commands, "
-                                  "and execute them interactively.")
+                    console.print(
+                        "TerminalAI is a command-line AI assistant designed to interpret user"
+                    )
+                    console.print(
+                        "requests, suggest relevant terminal commands, "
+                        "and execute them interactively."
+                    )
                     console.print("\n[bold red]Disclaimer:[/bold red]")
-                    console.print("This application is provided as-is without any warranties. Use at your own risk.")
-                    console.print("The developers cannot be held responsible for any data loss, system damage,")
-                    console.print("or other issues that may occur from executing suggested commands.")
+                    console.print(
+                        "This application is provided as-is without any warranties. "
+                        "Use at your own risk."
+                    )
+                    console.print(
+                        "The developers cannot be held responsible for any data loss, system damage,"
+                    )
+                    console.print(
+                        "or other issues that may occur from executing "
+                        "suggested commands."
+                    )
                     console.input("[dim]Press Enter to continue...[/dim]")
                 elif choice == '11':
-                    console.print("[bold cyan]Exiting setup.[/bold cyan]")
+                    console.print(
+                        "[bold cyan]Exiting setup.[/bold cyan]"
+                    )
                     break
                 else:
-                    error_msg = "Invalid choice. Please select a number from 1 to 11."
+                    error_msg = (
+                        "Invalid choice. Please select a number from 1 to 11."
+                    )
                     console.print(f"[red]{error_msg}[/red]")
                     console.input("[dim]Press Enter to continue...[/dim]")
         else:
@@ -749,9 +780,11 @@ You're now ready to use TerminalAI! Here's how:
                     # Handle stateful commands (e.g., copy to clipboard)
                     proceed_with_stateful = True
                     if is_cmd_risky:
-                        risky_confirm_prompt = ("[RISKY] This command is potentially dangerous. "
-                                           "Are you absolutely sure? [Y/N] ")
-                        risky_confirm = input(risky_confirm_prompt).strip().lower()
+                        risky_confirm_prompt = (
+                            "[RISKY] This command is potentially dangerous. "
+                            "Are you absolutely sure? [Y/N] ")
+                        risky_confirm = input(
+                            risky_confirm_prompt).strip().lower()
                         if risky_confirm != 'y':
                             print("Command not executed due to risk.")
                             proceed_with_stateful = False
@@ -781,7 +814,8 @@ You're now ready to use TerminalAI! Here's how:
                                                "Are you absolutely sure? [Y/N] ")
                             confirm = input(risky_confirm_prompt).strip().lower()
                         else: # Not risky, but no -y, so standard confirmation
-                            confirm_prompt = "Do you want to run this command? [Y/N] "
+                            confirm_prompt = (
+                                "Do you want to run this command? [Y/N] ")
                             confirm = input(confirm_prompt).strip().lower()
 
                         if confirm == 'y':
@@ -810,9 +844,11 @@ You're now ready to use TerminalAI! Here's how:
                     # Handle stateful commands (e.g., copy to clipboard)
                     proceed_with_stateful = True
                     if is_cmd_risky:
-                        risky_confirm_prompt = ("[RISKY] This command is potentially dangerous. "
-                                           "Are you absolutely sure? [Y/N] ")
-                        risky_confirm = input(risky_confirm_prompt).strip().lower()
+                        risky_confirm_prompt = (
+                            "[RISKY] This command is potentially dangerous. "
+                            "Are you absolutely sure? [Y/N] ")
+                        risky_confirm = input(
+                            risky_confirm_prompt).strip().lower()
                         if risky_confirm != 'y':
                             print("Command not executed due to risk.")
                             proceed_with_stateful = False
