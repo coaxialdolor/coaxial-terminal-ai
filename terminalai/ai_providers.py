@@ -23,6 +23,26 @@ class AIProvider:
         """
         raise NotImplementedError
 
+    def generate_response(self, user_query, system_context, verbose=False):
+        """Generate a response with the given query and system context.
+
+        Args:
+            user_query: The user's question or request
+            system_context: The system context/instructions
+            verbose: Whether to provide a more detailed response
+
+        Returns:
+            The formatted response from the AI
+        """
+        # Combine system context and user query
+        full_prompt = f"{system_context}\n\n{user_query}"
+
+        # Get the response
+        response = self.query(full_prompt)
+
+        # Add AI marker prefix
+        return f"[AI] {response}"
+
 class OpenRouterProvider(AIProvider):
     """OpenRouter AI provider implementation."""
 
@@ -248,26 +268,41 @@ class OllamaProvider(AIProvider):
         except (requests.RequestException, KeyError) as e:
             return f"[Ollama API error] {e}"
 
-def get_provider():
-    """Get the configured AI provider based on settings.
+def get_provider(provider_name=None):
+    """Get the provider instance for the specified name or the default one.
+
+    Args:
+        provider_name: Optional name of the provider to use. If None, use the default.
 
     Returns:
-        An instance of the configured AI provider.
-
-    Raises:
-        ValueError: If the configured provider is unknown.
+        An instance of the appropriate AI provider class, or None if unable to initialize.
     """
     config = load_config()
-    provider_name = config.get('default_provider', 'openrouter')
-    provider_cfg = config['providers'][provider_name]
 
-    if provider_name == 'openrouter':
-        return OpenRouterProvider(provider_cfg.get('api_key', ''))
-    elif provider_name == 'gemini':
-        return GeminiProvider(provider_cfg.get('api_key', ''))
-    elif provider_name == 'mistral':
-        return MistralProvider(provider_cfg.get('api_key', ''))
-    elif provider_name == 'ollama':
-        return OllamaProvider(provider_cfg.get('host', 'http://localhost:11434'))
-    else:
-        raise ValueError(f"Unknown provider: {provider_name}")
+    # Use specified provider or default from config
+    if not provider_name:
+        provider_name = config.get("provider", "")
+
+    if not provider_name:
+        return None
+
+    # Initialize the appropriate provider based on name
+    if provider_name == "openrouter":
+        api_key = config.get("api_keys", {}).get("openrouter", "")
+        if api_key:
+            return OpenRouterProvider(api_key)
+    elif provider_name == "gemini":
+        api_key = config.get("api_keys", {}).get("gemini", "")
+        if api_key:
+            return GeminiProvider(api_key)
+    elif provider_name == "mistral":
+        api_key = config.get("api_keys", {}).get("mistral", "")
+        if api_key:
+            return MistralProvider(api_key)
+    elif provider_name == "ollama":
+        ollama_config = config.get("ollama", {})
+        host = ollama_config.get("host", "http://localhost:11434")
+        model = ollama_config.get("model", "llama3")
+        return OllamaProvider(host)
+
+    return None
