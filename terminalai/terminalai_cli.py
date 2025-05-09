@@ -31,8 +31,13 @@ def main():
         print(f"TerminalAI version {__version__}")
         sys.exit(0)
 
-    # Check for setup flag
+    # Check for setup flag or "setup" command
     if args.setup:
+        setup_wizard()
+        sys.exit(0)
+
+    # Check if first argument is "setup" (positional argument)
+    if args.query and args.query == "setup":
         setup_wizard()
         sys.exit(0)
 

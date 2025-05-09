@@ -77,8 +77,17 @@ def is_likely_command(line):
 
     return False
 
-def extract_commands(ai_response):
-    """Extract shell commands from AI response code blocks."""
+def extract_commands(ai_response, max_commands=None):
+    """
+    Extract shell commands from AI response code blocks.
+
+    Args:
+        ai_response: The AI response text
+        max_commands: Optional limit on number of commands to extract
+
+    Returns:
+        List of commands
+    """
     commands = []
 
     # Check if this is a purely factual response without any command suggestions
@@ -142,6 +151,16 @@ def extract_commands(ai_response):
                 continue
             if is_likely_command(line):
                 commands.append(line.strip())
+                # If we have a max limit and reached it, return early
+                if max_commands and len(commands) >= max_commands:
+                    # Deduplicate before returning
+                    seen = set()
+                    result = []
+                    for cmd in commands:
+                        if cmd and cmd not in seen:
+                            seen.add(cmd)
+                            result.append(cmd)
+                    return result
 
     # Deduplicate, preserve order
     seen = set()

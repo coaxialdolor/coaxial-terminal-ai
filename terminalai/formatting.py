@@ -29,34 +29,45 @@ def print_ai_answer_with_rich(ai_response):
 
     # For factual answers, just print them directly without special formatting
     if is_likely_factual:
-        print(colorize_ai(ai_response))
+        console.print(f"[cyan]{ai_response}[/cyan]")
         return
 
     # For command-based responses, format them specially
     # Made the \n after ``` optional
     code_block_pattern = re.compile(r'```(bash|sh)?\n?([\s\S]*?)```')
     last_end = 0
+
+    # Count how many commands we've found - for cleaner UI
+    command_count = 0
+    max_displayed_commands = 3  # Limit number of command panels displayed
+
     for match in code_block_pattern.finditer(ai_response):
         before = ai_response[last_end:match.start()]
         if before.strip():
-            print(colorize_ai(before.strip()))
+            console.print(f"[cyan]{before.strip()}[/cyan]")
+
         code = match.group(2)
         has_command = False
+
         for line in code.splitlines():
-            if is_likely_command(line):
+            if is_likely_command(line) and command_count < max_displayed_commands:
                 console.print(Panel(Syntax(line, "bash", theme="monokai", line_numbers=False),
                                    title="Command", border_style="yellow"))
                 has_command = True
+                command_count += 1
+
         # If no detected commands, just print the code block as regular text
         if not has_command and code.strip():
-            print(colorize_ai("```"))
+            console.print("[cyan]```[/cyan]")
             for line_in_code in code.splitlines():
-                print(colorize_ai(line_in_code))
-            print(colorize_ai("```"))
+                console.print(f"[cyan]{line_in_code}[/cyan]")
+            console.print("[cyan]```[/cyan]")
+
         last_end = match.end()
+
     after = ai_response[last_end:]
     if after.strip():
-        print(colorize_ai(after.strip()))
+        console.print(f"[cyan]{after.strip()}[/cyan]")
 
 class ColoredHelpFormatter(argparse.RawDescriptionHelpFormatter):
     """Custom argparse formatter with colored output."""
