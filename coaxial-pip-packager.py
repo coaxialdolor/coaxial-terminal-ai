@@ -794,7 +794,7 @@ def publish_package(project_path):
 
         # Use --verbose for better feedback
         # Pass the list of packages to upload
-        command = [sys.executable, '-m', 'twine', 'upload'] + packages_to_upload
+        command = [sys.executable, '-m', 'twine', 'upload', '--verbose'] + packages_to_upload
 
         # Display the masked command (hide token)
         masked_command = command.copy()
