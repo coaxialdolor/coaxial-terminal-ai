@@ -2,9 +2,7 @@
 import sys
 import argparse
 from terminalai.command_utils import run_shell_command, is_shell_command
-from terminalai.command_extraction import (
-    extract_commands, is_stateful_command, is_risky_command
-)
+from terminalai.command_extraction import is_stateful_command, is_risky_command
 from terminalai.formatting import ColoredDescriptionFormatter
 from terminalai.clipboard_utils import copy_to_clipboard
 
@@ -300,14 +298,35 @@ def interactive_mode():
 
             # Extract and handle commands from the response, limiting to max 3 commands
             # to avoid overwhelming the user in interactive mode
-            from terminalai.command_extraction import extract_commands
-            commands = extract_commands(response, max_commands=3)
+            from terminalai.command_extraction import extract_commands as get_commands
+            commands = get_commands(response, max_commands=3)
 
             if commands:
+                # For interactive mode, we need to handle stateful commands specially
+                for cmd in commands:
+                    if is_stateful_command(cmd):
+                        is_risky = is_risky_command(cmd)
+                        prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Copy to clipboard? [Y/n]: "
+                        console.print(Text(prompt_text, style="yellow bold"), end="")
+                        choice = input().lower()
+
+                        if choice != 'n':  # Default to yes
+                            copy_to_clipboard(cmd)
+                            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
+                            # Exit interactive mode to shell for the user to paste
+                            console.print("[cyan]Exiting to shell...[/cyan]")
+                            sys.exit(0)
+                        break
+
+                # If we get here, there were no stateful commands or user chose not to copy them
                 handle_commands(commands, auto_confirm=False)
 
         except Exception as e:
-            console.print(f"[bold red]Error: {str(e)}[/bold red]")
+            # Use a more specific exception type if possible
+            console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
+            # Log error details for debugging
+            import traceback
+            traceback.print_exc()
 
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
