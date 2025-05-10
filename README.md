@@ -115,17 +115,41 @@ Some commands, like `cd my_folder` or `export MY_VAR=value`, need to change the 
 
 **How TerminalAI Handles Stateful Commands:**
 
+There are now two ways to handle stateful commands:
+
+### 1. Seamless Execution via Shell Integration (Recommended for Advanced Users)
+
+You can install a shell function named `ai` that enables seamless execution of state-changing commands directly in your current shell session. This works by capturing the output of the TerminalAI executable and evaluating it in your shell using `eval $(ai ...)` automatically.
+
+**To install:**
+
+- Run `ai setup` and choose option 7: "Install ai shell integration".
+- This will add a function named `ai` to your shell config (e.g., `.zshrc` or `.bashrc`).
+- After restarting your shell or sourcing your config, you can use `ai` as before:
+
+```sh
+ai "cd my_folder && export VAR=1"
+```
+- If you confirm the command, it will be executed in your current shell, and state changes will apply.
+
+**Note:**
+- If you cancel, nothing is executed.
+- This works for Bash/Zsh. PowerShell support for seamless mode is not yet implemented.
+
+### 2. Copy to Clipboard (Default for Most Users)
+
 When TerminalAI suggests a stateful command, it will:
 1. Identify the command as stateful.
-2. Prompt you with an option to copy the command to your clipboard (e.g., `[STATEFUL COMMAND] The command 'cd my_folder' changes shell state. Copy to clipboard to run manually? [Y/N/S(how)]`).
+2. Prompt you with an option to copy the command to your clipboard (e.g., `[STATEFUL COMMAND] The command 'cd my_folder' changes shell state. Copy to clipboard to run manually? [Y/n]`).
 3. If you choose 'Y', the command is copied to your clipboard.
 4. You can then paste (`Cmd+V` or `Ctrl+Shift+V`) and run the command directly in your terminal.
 
 This method ensures you have full control over commands that modify your shell's environment.
 
-**Optional Shell Integration (Advanced/Legacy):**
-
-Previously, TerminalAI emphasized a shell integration function to handle these commands. While the code for this integration (`ai setup --install-shell-integration`) might still exist, the primary recommended method is now the copy-to-clipboard feature. The shell integration relies on parsing command history and may be less reliable or intuitive for some users. If you are an advanced user and prefer the shell function method, you can still install it via `ai setup`, but be aware that TerminalAI will no longer output the `#TERMINALAI_SHELL_COMMAND:` marker. You would need to adapt the shell function or manually identify the command if you choose this path.
+**Safety Features:**
+- Commands are never executed without your explicit permission.
+- Risky commands (rm, chmod, etc.) require additional confirmation.
+- State-changing commands are handled by offering to copy them to your clipboard or, if you use the shell integration, by seamless execution.
 
 ## Supported AI Providers
 

@@ -55,9 +55,15 @@ def parse_args():
         help="Show version information"
     )
 
+    parser.add_argument(
+        "--eval-mode",
+        action="store_true",
+        help=argparse.SUPPRESS
+    )
+
     return parser.parse_args()
 
-def handle_commands(commands, auto_confirm=False):
+def handle_commands(commands, auto_confirm=False, eval_mode=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
     from rich.console import Console
     from rich.panel import Panel
@@ -72,59 +78,55 @@ def handle_commands(commands, auto_confirm=False):
 
     if n_commands == 1:
         command = commands[0]
-
-        # Check if it's a stateful command that changes shell state
-        if is_stateful_command(command):
-            # Check if it's also risky
-            is_risky = is_risky_command(command)
-
-            if is_risky:
-                # For risky stateful commands, prompt first
-                prompt_text = f"[STATEFUL COMMAND] The command '{command}' changes shell state. Copy to clipboard to run manually? [Y/N/S(how)]: "
-                console.print(Text(prompt_text, style="yellow bold"), end="")
-                choice = input().lower()
-
-                if choice == 's':
-                    console.print(Panel(command, border_style="yellow", title="Command"))
-                    handle_commands([command])
-                elif choice == 'y' or choice == '':  # Default to yes
-                    copy_to_clipboard(command)
-                    console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                    # In interactive mode, this will return to the prompt
-                    return
-            else:
-                # For non-risky stateful commands like 'cd', prompt user
-                prompt_text = f"[STATEFUL COMMAND] '{command}' changes shell state. Copy to clipboard? [Y/n]: "
-                console.print(Text(prompt_text, style="yellow bold"), end="")
-                choice = input().lower()
-                if choice != 'n':  # Default to yes for non-risky commands
-                    copy_to_clipboard(command)
-                    console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                    # In interactive mode, this will return to the prompt
-                    return
-            return
-
-        # Check if it's a risky command
+        is_stateful = is_stateful_command(command)
         is_risky = is_risky_command(command)
+        # If eval_mode and user confirms, print only the command and exit
+        if eval_mode:
+            # Prompt for confirmation (unless auto_confirm)
+            if is_risky:
+                confirm_msg = "Execute? [y/N]: "
+                default_choice = "n"
+            else:
+                confirm_msg = "Execute? [Y/n]: "
+                default_choice = "y"
+            style = "yellow" if is_risky else "green"
+            console.print(Text(confirm_msg, style=style), end="")
+            choice = input().lower()
+            if not choice:
+                choice = default_choice
+            if choice == "y":
+                print(command)
+                sys.exit(0)
+            else:
+                sys.exit(0)
+        # If not eval_mode and stateful, warn and offer clipboard
+        if is_stateful:
+            prompt_text = (
+                f"[STATEFUL COMMAND] '{command}' changes shell state. "
+                "To execute seamlessly, install the ai shell integration (see setup). "
+                "Copy to clipboard instead? [Y/n]: "
+            )
+            console.print(Text(prompt_text, style="yellow bold"), end="")
+            choice = input().lower()
+            if choice != 'n':
+                copy_to_clipboard(command)
+                console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
+            return
+        # Otherwise, normal risky/safe command logic
         confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
         default_choice = "n" if is_risky else "y"
-
-        # If auto_confirm is True and it's not a risky command, skip confirmation
         if auto_confirm and not is_risky:
             console.print(f"[green]Auto-executing: {command}[/green]")
             run_command(command)
             return
-
-        # Otherwise prompt for confirmation
         style = "yellow" if is_risky else "green"
         console.print(Text(confirm_msg, style=style), end="")
         choice = input().lower()
-
-        if not choice:  # Default based on risk
+        if not choice:
             choice = default_choice
-
         if choice == "y":
             run_command(command)
+        return
 
     else:  # Multiple commands - display in a cleaner format
         # Create a list of command objects for display
@@ -305,7 +307,6 @@ def interactive_mode():
                 # For interactive mode, we need to handle stateful commands specially
                 for cmd in commands:
                     if is_stateful_command(cmd):
-                        is_risky = is_risky_command(cmd)
                         prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Copy to clipboard? [Y/n]: "
                         console.print(Text(prompt_text, style="yellow bold"), end="")
                         choice = input().lower()
@@ -321,10 +322,15 @@ def interactive_mode():
                 # If we get here, there were no stateful commands or user chose not to copy them
                 handle_commands(commands, auto_confirm=False)
 
-        except Exception as e:
-            # Use a more specific exception type if possible
+        except (ValueError, TypeError, ConnectionError, RuntimeError, KeyboardInterrupt) as e:
+            # Catch common user/AI errors, but not all exceptions
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
             # Log error details for debugging
+            import traceback
+            traceback.print_exc()
+        except Exception as e:
+            # Catch-all for truly unexpected errors (should be rare)
+            console.print(f"[bold red]Unexpected error: {str(e)}[/bold red]")
             import traceback
             traceback.print_exc()
 
@@ -358,8 +364,8 @@ def setup_wizard():
             "4. Reset system prompt to default",
             "5. Setup API keys",
             "6. See current API keys",
-            "7. Install shell extension",
-            "8. Uninstall shell extension",
+            "7. Install ai shell integration",
+            "8. Uninstall ai shell integration",
             "9. View quick setup guide",
             "10. About TerminalAI",
             "11. Exit"
@@ -372,8 +378,8 @@ def setup_wizard():
             '4': "Reset the system prompt to the default recommended by TerminalAI.",
             '5': "Set/update API key/host for any provider.",
             '6': "List providers and their stored API key/host.",
-            '7': "Shell Integration (Currently Under Reconstruction)",
-            '8': "Uninstall Shell Integration (Currently Under Reconstruction)",
+            '7': "Install the 'ai' shell function for seamless stateful command execution (recommended for advanced users).",
+            '8': "Uninstall the 'ai' shell function from your shell config.",
             '9': "Display the quick setup guide to help you get started with TerminalAI.",
             '10': "View information about TerminalAI, including version and links.",
             '11': "Exit the setup menu."
@@ -495,10 +501,12 @@ def setup_wizard():
                 console.print(f"[bold yellow]{p_item}:[/bold yellow] {shown}")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '7':
-            console.print("[yellow]This feature (Shell Integration Installation) is currently under reconstruction.[/yellow]")
+            from terminalai.shell_integration import install_shell_integration
+            install_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '8':
-            console.print("[yellow]This feature (Shell Integration Uninstallation) is currently under reconstruction.[/yellow]")
+            from terminalai.shell_integration import uninstall_shell_integration
+            uninstall_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '9':
             console.print("\n[bold cyan]Quick Setup Guide:[/bold cyan]\n")

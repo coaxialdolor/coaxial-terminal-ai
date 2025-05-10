@@ -39,14 +39,28 @@ ai setup
 
 ## 4. Understanding Stateful Command Execution
 
-For commands like `cd` or `export` that change your shell's state, TerminalAI
-will offer to copy the command to your clipboard. You can then paste and run it.
-This is the primary method for handling such commands.
+There are now two ways to handle commands that change your shell's state (like `cd` or `export`):
 
-**(Optional) Shell Integration for Advanced Users:**
-* You can still install a shell integration via option `7` in the `ai setup` menu.
-* This is for advanced users who might prefer a dedicated shell function.
-* Note: The primary method is copy-to-clipboard, and TerminalAI no longer outputs the specific marker (`#TERMINALAI_SHELL_COMMAND:`) that this shell function traditionally relied on.
+### A. Seamless Execution via ai Shell Integration (Advanced/Recommended)
+
+- Run `ai setup` and select option 7 to install the ai shell integration.
+- This adds a shell function named `ai` to your shell config (e.g., `.zshrc` or `.bashrc`).
+- After restarting your shell or sourcing your config, you can use `ai` as before:
+
+```
+ai "cd my_folder && export VAR=1"
+```
+- If you confirm the command, it will be executed in your current shell, and state changes will apply.
+- If you cancel, nothing is executed.
+- This works for Bash/Zsh. PowerShell support for seamless mode is not yet implemented.
+
+### B. Copy to Clipboard (Default)
+
+When TerminalAI suggests a stateful command, it will:
+- Identify the command as stateful.
+- Prompt you to copy the command to your clipboard (e.g., `[STATEFUL COMMAND] The command 'cd my_folder' changes shell state. Copy to clipboard to run manually? [Y/n]`).
+- If you choose 'Y', the command is copied to your clipboard.
+- You can then paste and run the command directly in your terminal.
 
 ## 5. Start Using TerminalAI
 

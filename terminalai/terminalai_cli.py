@@ -87,7 +87,7 @@ def main():
     # Extract and handle commands from the response
     commands = extract_commands(response)
     if commands:
-        handle_commands(commands, auto_confirm=args.yes)
+        handle_commands(commands, auto_confirm=args.yes, eval_mode=getattr(args, 'eval_mode', False))
 
 if __name__ == "__main__":
     main()

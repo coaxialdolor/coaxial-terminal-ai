@@ -1,0 +1,135 @@
+************* Module terminalai
+terminalai/__init__.py:1:0: C0114: Missing module docstring (missing-module-docstring)
+************* Module terminalai.config
+terminalai/config.py:9:0: C0301: Line too long (152/100) (line-too-long)
+terminalai/config.py:10:0: C0301: Line too long (111/100) (line-too-long)
+terminalai/config.py:1:0: C0114: Missing module docstring (missing-module-docstring)
+terminalai/config.py:35:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/config.py:38:9: W1514: Using open without explicitly specifying an encoding (unspecified-encoding)
+terminalai/config.py:41:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/config.py:42:9: W1514: Using open without explicitly specifying an encoding (unspecified-encoding)
+terminalai/config.py:45:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/config.py:49:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/config.py:54:0: C0116: Missing function or method docstring (missing-function-docstring)
+************* Module terminalai.command_utils
+terminalai/command_utils.py:5:0: C0301: Line too long (116/100) (line-too-long)
+terminalai/command_utils.py:6:0: C0301: Line too long (115/100) (line-too-long)
+terminalai/command_utils.py:1:0: C0114: Missing module docstring (missing-module-docstring)
+terminalai/command_utils.py:3:0: C0116: Missing function or method docstring (missing-function-docstring)
+************* Module terminalai.formatting
+terminalai/formatting.py:107:0: C0304: Final newline missing (missing-final-newline)
+terminalai/formatting.py:10:0: R0914: Too many local variables (16/15) (too-many-locals)
+terminalai/formatting.py:7:0: W0611: Unused colorize_ai imported from terminalai.color_utils (unused-import)
+************* Module terminalai.cli_interaction
+terminalai/cli_interaction.py:156:0: C0301: Line too long (109/100) (line-too-long)
+terminalai/cli_interaction.py:170:0: C0301: Line too long (127/100) (line-too-long)
+terminalai/cli_interaction.py:175:0: C0301: Line too long (112/100) (line-too-long)
+terminalai/cli_interaction.py:179:0: C0301: Line too long (130/100) (line-too-long)
+terminalai/cli_interaction.py:182:0: C0301: Line too long (112/100) (line-too-long)
+terminalai/cli_interaction.py:200:0: C0301: Line too long (127/100) (line-too-long)
+terminalai/cli_interaction.py:205:0: C0301: Line too long (112/100) (line-too-long)
+terminalai/cli_interaction.py:209:0: C0301: Line too long (130/100) (line-too-long)
+terminalai/cli_interaction.py:212:0: C0301: Line too long (112/100) (line-too-long)
+terminalai/cli_interaction.py:235:0: C0301: Line too long (104/100) (line-too-long)
+terminalai/cli_interaction.py:286:0: C0301: Line too long (105/100) (line-too-long)
+terminalai/cli_interaction.py:311:0: C0301: Line too long (127/100) (line-too-long)
+terminalai/cli_interaction.py:317:0: C0301: Line too long (112/100) (line-too-long)
+terminalai/cli_interaction.py:377:0: C0301: Line too long (125/100) (line-too-long)
+terminalai/cli_interaction.py:609:0: C0304: Final newline missing (missing-final-newline)
+terminalai/cli_interaction.py:66:0: R0914: Too many local variables (25/15) (too-many-locals)
+terminalai/cli_interaction.py:68:4: C0415: Import outside toplevel (rich.console.Console) (import-outside-toplevel)
+terminalai/cli_interaction.py:69:4: C0415: Import outside toplevel (rich.panel.Panel) (import-outside-toplevel)
+terminalai/cli_interaction.py:70:4: C0415: Import outside toplevel (rich.text.Text) (import-outside-toplevel)
+terminalai/cli_interaction.py:79:4: R1705: Unnecessary "else" after "return", remove the "else" and de-indent the code inside it (no-else-return)
+terminalai/cli_interaction.py:159:8: R1705: Unnecessary "elif" after "return", remove the leading "el" from "elif" (no-else-return)
+terminalai/cli_interaction.py:79:4: R1702: Too many nested blocks (6/5) (too-many-nested-blocks)
+terminalai/cli_interaction.py:79:4: R1702: Too many nested blocks (6/5) (too-many-nested-blocks)
+terminalai/cli_interaction.py:79:4: R1702: Too many nested blocks (6/5) (too-many-nested-blocks)
+terminalai/cli_interaction.py:66:0: R0912: Too many branches (38/12) (too-many-branches)
+terminalai/cli_interaction.py:66:0: R0915: Too many statements (109/50) (too-many-statements)
+terminalai/cli_interaction.py:79:4: R1702: Too many nested blocks (6/5) (too-many-nested-blocks)
+terminalai/cli_interaction.py:226:4: C0415: Import outside toplevel (rich.console.Console) (import-outside-toplevel)
+terminalai/cli_interaction.py:227:4: C0415: Import outside toplevel (rich.panel.Panel) (import-outside-toplevel)
+terminalai/cli_interaction.py:250:0: R0914: Too many local variables (23/15) (too-many-locals)
+terminalai/cli_interaction.py:252:4: C0415: Import outside toplevel (terminalai.config.load_config) (import-outside-toplevel)
+terminalai/cli_interaction.py:253:4: C0415: Import outside toplevel (rich.console.Console) (import-outside-toplevel)
+terminalai/cli_interaction.py:254:4: C0415: Import outside toplevel (rich.text.Text) (import-outside-toplevel)
+terminalai/cli_interaction.py:255:4: C0415: Import outside toplevel (rich.panel.Panel) (import-outside-toplevel)
+terminalai/cli_interaction.py:256:4: C0415: Import outside toplevel (rich.rule.Rule) (import-outside-toplevel)
+terminalai/cli_interaction.py:280:8: C0415: Import outside toplevel (terminalai.shell_integration.get_system_context) (import-outside-toplevel)
+terminalai/cli_interaction.py:283:8: C0415: Import outside toplevel (terminalai.ai_providers.get_provider) (import-outside-toplevel)
+terminalai/cli_interaction.py:326:15: W0718: Catching too general exception Exception (broad-exception-caught)
+terminalai/cli_interaction.py:298:12: C0415: Import outside toplevel (terminalai.formatting.print_ai_answer_with_rich) (import-outside-toplevel)
+terminalai/cli_interaction.py:303:12: C0415: Import outside toplevel (terminalai.command_extraction.extract_commands) (import-outside-toplevel)
+terminalai/cli_interaction.py:330:12: C0415: Import outside toplevel (traceback) (import-outside-toplevel)
+terminalai/cli_interaction.py:266:4: R1702: Too many nested blocks (6/5) (too-many-nested-blocks)
+terminalai/cli_interaction.py:310:24: W0612: Unused variable 'is_risky' (unused-variable)
+terminalai/cli_interaction.py:333:0: R0914: Too many local variables (40/15) (too-many-locals)
+terminalai/cli_interaction.py:335:4: C0415: Import outside toplevel (terminalai.config.load_config, terminalai.config.save_config, terminalai.config.get_system_prompt, terminalai.config.DEFAULT_SYSTEM_PROMPT) (import-outside-toplevel)
+terminalai/cli_interaction.py:339:4: C0415: Import outside toplevel (rich.console.Console) (import-outside-toplevel)
+terminalai/cli_interaction.py:500:12: C0415: Import outside toplevel (terminalai.shell_integration.install_shell_integration) (import-outside-toplevel)
+terminalai/cli_interaction.py:504:12: C0415: Import outside toplevel (terminalai.shell_integration.uninstall_shell_integration) (import-outside-toplevel)
+terminalai/cli_interaction.py:573:12: C0415: Import outside toplevel (terminalai.__init__.__version__) (import-outside-toplevel)
+terminalai/cli_interaction.py:333:0: R0912: Too many branches (35/12) (too-many-branches)
+terminalai/cli_interaction.py:333:0: R0915: Too many statements (143/50) (too-many-statements)
+************* Module terminalai.color_utils
+terminalai/color_utils.py:1:0: C0114: Missing module docstring (missing-module-docstring)
+terminalai/color_utils.py:20:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/color_utils.py:23:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/color_utils.py:26:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/color_utils.py:29:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/color_utils.py:32:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/color_utils.py:35:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/color_utils.py:38:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/color_utils.py:41:0: C0116: Missing function or method docstring (missing-function-docstring)
+terminalai/color_utils.py:46:11: R1714: Consider merging these comparisons with 'in' by using 'lang in ('bash', 'sh')'. Use a set instead if elements are hashable. (consider-using-in)
+terminalai/color_utils.py:6:0: C0411: standard import "re" should be placed before third party imports "pygments.highlight", "pygments.lexers.shell.BashLexer", "pygments.lexers.python.PythonLexer", "pygments.lexers.special.TextLexer", "pygments.formatters.terminal.TerminalFormatter" (wrong-import-order)
+************* Module terminalai.command_extraction
+terminalai/command_extraction.py:186:0: C0304: Final newline missing (missing-final-newline)
+terminalai/command_extraction.py:31:0: R0911: Too many return statements (8/6) (too-many-return-statements)
+terminalai/command_extraction.py:31:0: R0912: Too many branches (14/12) (too-many-branches)
+terminalai/command_extraction.py:80:0: R0914: Too many local variables (18/15) (too-many-locals)
+terminalai/command_extraction.py:122:4: R1702: Too many nested blocks (6/5) (too-many-nested-blocks)
+terminalai/command_extraction.py:80:0: R0912: Too many branches (16/12) (too-many-branches)
+************* Module terminalai.shell_integration
+terminalai/shell_integration.py:37:0: C0301: Line too long (111/100) (line-too-long)
+terminalai/shell_integration.py:47:0: C0301: Line too long (162/100) (line-too-long)
+terminalai/shell_integration.py:70:0: C0301: Line too long (110/100) (line-too-long)
+terminalai/shell_integration.py:112:0: C0301: Line too long (120/100) (line-too-long)
+terminalai/shell_integration.py:116:0: C0304: Final newline missing (missing-final-newline)
+terminalai/shell_integration.py:17:4: C0415: Import outside toplevel (terminalai.config.get_system_prompt) (import-outside-toplevel)
+terminalai/shell_integration.py:23:4: C0415: Import outside toplevel (shutil) (import-outside-toplevel)
+terminalai/shell_integration.py:25:4: R1705: Unnecessary "elif" after "return", remove the leading "el" from "elif" (no-else-return)
+terminalai/shell_integration.py:25:7: R1714: Consider merging these comparisons with 'in' by using 'system in ('Darwin', 'Linux')'. Use a set instead if elements are hashable. (consider-using-in)
+terminalai/shell_integration.py:79:7: R1714: Consider merging these comparisons with 'in' by using 'system in ('Darwin', 'Linux')'. Use a set instead if elements are hashable. (consider-using-in)
+terminalai/shell_integration.py:98:8: R1705: Unnecessary "else" after "return", remove the "else" and de-indent the code inside it (no-else-return)
+************* Module terminalai.terminalai_cli
+terminalai/terminalai_cli.py:71:0: C0301: Line too long (107/100) (line-too-long)
+terminalai/terminalai_cli.py:73:0: C0301: Line too long (126/100) (line-too-long)
+terminalai/terminalai_cli.py:79:0: C0301: Line too long (108/100) (line-too-long)
+terminalai/terminalai_cli.py:90:0: C0301: Line too long (101/100) (line-too-long)
+terminalai/terminalai_cli.py:1:0: R0801: Similar lines in 2 files
+==terminalai.command_extraction:[94:112]
+==terminalai.formatting:[14:31]
+    factual_response_patterns = [
+        r'^\[AI\] [A-Z].*\.$',  # Starts with capital, ends with period
+        r'^\[AI\] approximately',  # Approximate numerical answer
+        r'^\[AI\] about',  # Approximate answer with "about"
+        r'^\[AI\] [0-9]',  # Starts with a number
+    ]
+
+    # If factual and no code blocks, skip command extraction
+    is_likely_factual = False
+    for pattern in factual_response_patterns:
+        if re.search(pattern, ai_response, re.IGNORECASE):
+            # If response is short and doesn't have code blocks, it's likely just factual
+            if len(ai_response.split()) < 50 and '```' not in ai_response:
+                is_likely_factual = True
+                break
+
+    # Skip command extraction for factual responses
+    if is_likely_factual: (duplicate-code)
+
+------------------------------------------------------------------
+Your code has been rated at 8.77/10 (previous run: 5.58/10, +3.19)
+
