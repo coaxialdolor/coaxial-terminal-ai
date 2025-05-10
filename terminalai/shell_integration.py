@@ -2,6 +2,10 @@
 import os
 import platform
 from terminalai.color_utils import colorize_command
+from terminalai.clipboard_utils import copy_to_clipboard
+from rich.console import Console
+from rich.text import Text
+from rich.panel import Panel
 
 def get_system_context():
     """Return the system context string for the prompt."""
@@ -18,20 +22,58 @@ def get_system_context():
     prompt = get_system_prompt()
     return prompt.replace("the user's system", sys_str)
 
+def get_shell_config_file():
+    system = platform.system()
+    home = os.path.expanduser("~")
+    shell = os.environ.get("SHELL", "")
+    config_file = ""
+    if "zsh" in shell:
+        config_file = os.path.join(home, ".zshrc")
+    elif "bash" in shell:
+        config_file = os.path.join(home, ".bashrc")
+        if system == "Darwin" and not os.path.exists(config_file):
+            config_file = os.path.join(home, ".bash_profile")
+    return config_file
+
+def check_shell_integration():
+    """Check if the ai shell integration is installed and highlight it in the config file."""
+    console = Console()
+    config_file = get_shell_config_file()
+    if not config_file or not os.path.exists(config_file):
+        console.print("[red]Could not determine shell config file.[/red]")
+        return False
+    with open(config_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+    start_marker = '# >>> TERMINALAI SHELL INTEGRATION START'
+    end_marker = '# <<< TERMINALAI SHELL INTEGRATION END'
+    start_idx = content.find(start_marker)
+    end_idx = content.find(end_marker, start_idx)
+    if start_idx != -1 and end_idx != -1:
+        end_idx += len(end_marker)
+        before = content[:start_idx]
+        block = content[start_idx:end_idx]
+        after = content[end_idx:]
+        # Print with highlighting
+        console.print("[bold]Shell config file:[/bold] " + config_file)
+        if before:
+            console.print(Text(before, style="white"))
+        console.print(Panel(Text(block, style="black on yellow"), title="[green]TerminalAI Shell Integration Block[/green]", border_style="yellow"))
+        if after:
+            console.print(Text(after, style="white"))
+        console.print("\n[bold green]The shell integration is installed.[/bold green]")
+        return True
+    else:
+        console.print("[bold]Shell config file:[/bold] " + config_file)
+        console.print(Text(content, style="white"))
+        console.print("\n[bold red]The shell integration is not installed.[/bold red]")
+        return False
+
 def install_shell_integration():
     """Install shell integration for seamless stateful command execution via 'ai' shell function."""
     import shutil
     system = platform.system()
     if system in ("Darwin", "Linux"):
-        home = os.path.expanduser("~")
-        shell = os.environ.get("SHELL", "")
-        config_file = ""
-        if "zsh" in shell:
-            config_file = os.path.join(home, ".zshrc")
-        elif "bash" in shell:
-            config_file = os.path.join(home, ".bashrc")
-            if system == "Darwin" and not os.path.exists(config_file):
-                config_file = os.path.join(home, ".bash_profile")
+        config_file = get_shell_config_file()
         if not config_file or not os.path.exists(config_file):
             print(colorize_command(
                 "Could not determine shell config file. Please manually add the function to your shell config."
@@ -71,9 +113,22 @@ ai() {{
         content += "\n" + shell_function + "\n"
         with open(config_file, 'w', encoding='utf-8') as f:
             f.write(content)
+        # Copy the appropriate source command to clipboard
+        shell = os.environ.get("SHELL", "")
+        if "zsh" in shell:
+            source_cmd = f"source ~/.zshrc"
+        elif "bash" in shell:
+            if system == "Darwin" and os.path.exists(os.path.expanduser("~/.bash_profile")):
+                source_cmd = f"source ~/.bash_profile"
+            else:
+                source_cmd = f"source ~/.bashrc"
+        else:
+            source_cmd = f"source {config_file}"
+        copy_to_clipboard(source_cmd)
         print(colorize_command(
             f"TerminalAI shell integration installed in {config_file} as 'ai' shell function.\n"
-            f"Please restart your shell or run 'source {config_file}'."
+            f"[Copied '{source_cmd}' to clipboard]\n"
+            f"Please restart your shell or run '{source_cmd}'."
         ))
         return True
     if system == "Windows":

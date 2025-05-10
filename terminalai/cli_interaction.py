@@ -366,9 +366,10 @@ def setup_wizard():
             "6. See current API keys",
             "7. Install ai shell integration",
             "8. Uninstall ai shell integration",
-            "9. View quick setup guide",
-            "10. About TerminalAI",
-            "11. Exit"
+            "9. Check ai shell integration",
+            "10. View quick setup guide",
+            "11. About TerminalAI",
+            "12. Exit"
         ]
         menu_info = {
             '1': ("Set which AI provider (OpenRouter, Gemini, Mistral, Ollama) "
@@ -380,9 +381,10 @@ def setup_wizard():
             '6': "List providers and their stored API key/host.",
             '7': "Install the 'ai' shell function for seamless stateful command execution (recommended for advanced users).",
             '8': "Uninstall the 'ai' shell function from your shell config.",
-            '9': "Display the quick setup guide to help you get started with TerminalAI.",
-            '10': "View information about TerminalAI, including version and links.",
-            '11': "Exit the setup menu."
+            '9': "Check if the 'ai' shell integration is installed and highlight it in your shell config.",
+            '10': "Display the quick setup guide to help you get started with TerminalAI.",
+            '11': "View information about TerminalAI, including version and links.",
+            '12': "Exit the setup menu."
         }
         for opt in menu_options:
             num, desc = opt.split('.', 1)
@@ -390,7 +392,7 @@ def setup_wizard():
         info_prompt = ("Type 'i' followed by a number (e.g., i1) "
                        "for more info about an option.")
         console.print(f"[dim]{info_prompt}[/dim]")
-        choice = console.input("[bold green]Choose an action (1-11): [/bold green]").strip()
+        choice = console.input("[bold green]Choose an action (1-12): [/bold green]").strip()
         config = load_config()
         if choice.startswith('i') and choice[1:].isdigit():
             info_num = choice[1:]
@@ -509,6 +511,10 @@ def setup_wizard():
             uninstall_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '9':
+            from terminalai.shell_integration import check_shell_integration
+            check_shell_integration()
+            console.input("[dim]Press Enter to continue...[/dim]")
+        elif choice == '10':
             console.print("\n[bold cyan]Quick Setup Guide:[/bold cyan]\n")
             guide = """
 [bold yellow]1. Installation[/bold yellow]
@@ -573,7 +579,7 @@ You're now ready to use TerminalAI! Here's how:
 """
             console.print(guide)
             console.input("[dim]Press Enter to continue...[/dim]")
-        elif choice == '10':
+        elif choice == '11':
             from terminalai.__init__ import __version__
             console.print("\n[bold cyan]About TerminalAI:[/bold cyan]\n")
             console.print(f"[bold]Version:[/bold] {__version__}")
@@ -600,14 +606,14 @@ You're now ready to use TerminalAI! Here's how:
                 "suggested commands."
             )
             console.input("[dim]Press Enter to continue...[/dim]")
-        elif choice == '11':
+        elif choice == '12':
             console.print(
                 "[bold cyan]Exiting setup.[/bold cyan]"
             )
             break
         else:
             error_msg = (
-                "Invalid choice. Please select a number from 1 to 11."
+                "Invalid choice. Please select a number from 1 to 12."
             )
             console.print(f"[red]{error_msg}[/red]")
             console.input("[dim]Press Enter to continue...[/dim]")
