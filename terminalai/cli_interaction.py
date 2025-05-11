@@ -336,17 +336,18 @@ def interactive_mode(chat_mode=False):
             from terminalai.formatting import print_ai_answer_with_rich
             print_ai_answer_with_rich(response)
 
-            # Extract and handle commands from the response, limiting to max 3 commands
+            # Extract and handle commands from the response, no max_commands limit
             from terminalai.command_extraction import extract_commands as get_commands
-            commands = get_commands(response, max_commands=3)
+            commands = get_commands(response)
 
+            # Always prompt for execution if there are commands
             if commands:
                 handle_commands(commands, auto_confirm=False)
             # Always exit after showing a response and handling commands, unless in chat_mode
             if not chat_mode:
                 sys.exit(0)
 
-        except (ValueError, TypeError, OSError) as e:
+        except (ValueError, TypeError, OSError, KeyboardInterrupt, SystemExit) as e:
             # Catch common user/AI errors, but not all exceptions
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
             import traceback

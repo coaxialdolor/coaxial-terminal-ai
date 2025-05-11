@@ -70,7 +70,6 @@ def check_shell_integration():
 
 def install_shell_integration():
     """Install shell integration for seamless stateful command execution via 'ai' shell function."""
-    import shutil
     system = platform.system()
     if system in ("Darwin", "Linux"):
         config_file = get_shell_config_file()
@@ -93,13 +92,13 @@ def install_shell_integration():
         if 'function ai' in content or 'alias ai=' in content:
             print(colorize_command("Warning: An 'ai' function or alias already exists in your shell config. Please resolve this conflict before installing."))
             return False
-        ai_path = shutil.which("ai") or "ai"
-        shell_function = f"""
+        shell_function = (
+"""
 # >>> TERMINALAI SHELL INTEGRATION START
 # Added by TerminalAI (https://github.com/coaxialdolor/terminalai)
 # This shell function enables seamless stateful command execution via eval $(ai ...)
 # Prompts and errors from the Python script are sent to stderr and are visible in the terminal.
-ai() {{
+ai() {
     export TERMINALAI_SHELL_INTEGRATION=1
     if [ $# -eq 0 ] || [ "$1" = "setup" ] || [ "$1" = "--chat" ] || [ "$1" = "-c" ] || [ "$1" = "ai-c" ]; then
         command ai "$@"
@@ -111,9 +110,10 @@ ai() {{
             eval "$output"
         fi
     fi
-}}
+}
 # <<< TERMINALAI SHELL INTEGRATION END
 """
+        )
         # Ensure block is separated by newlines
         if not content.endswith("\n"):
             content += "\n"
@@ -123,12 +123,12 @@ ai() {{
         # Copy the appropriate source command to clipboard
         shell = os.environ.get("SHELL", "")
         if "zsh" in shell:
-            source_cmd = f"source ~/.zshrc"
+            source_cmd = "source ~/.zshrc"
         elif "bash" in shell:
             if system == "Darwin" and os.path.exists(os.path.expanduser("~/.bash_profile")):
-                source_cmd = f"source ~/.bash_profile"
+                source_cmd = "source ~/.bash_profile"
             else:
-                source_cmd = f"source ~/.bashrc"
+                source_cmd = "source ~/.bashrc"
         else:
             source_cmd = f"source {config_file}"
         copy_to_clipboard(source_cmd)

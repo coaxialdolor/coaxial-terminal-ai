@@ -49,10 +49,9 @@ def is_likely_command(line):
                 return False
 
     # Command detection approach: look for known command patterns
-    # Check if the line starts with a known command
     first_word = line.split()[0] if line.split() else ""
-    # Check if the line starts with a known command or a stateful command
-    if (first_word in KNOWN_COMMANDS or first_word in STATEFUL_COMMANDS) and len(line.split()) >= 2:
+    # Allow single-word commands if they are known
+    if first_word in KNOWN_COMMANDS or first_word in STATEFUL_COMMANDS:
         return True
     if first_word == "echo" and len(line.split()) >= 2:  # echo itself is a command
         return True
