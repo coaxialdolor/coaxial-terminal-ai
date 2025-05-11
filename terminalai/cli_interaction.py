@@ -144,31 +144,23 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
             run_command(command)
         return
 
-    else:  # Multiple commands - display in a cleaner format
-        # Create a list of command objects for display
+    elif n_commands > 1:
+        # Always enumerate and prompt for selection if multiple commands
         cmd_list = []
         for i, cmd in enumerate(commands, 1):
             is_risky_cmd = is_risky_command(cmd)
             is_stateful_cmd = is_stateful_command(cmd)
-
             cmd_text = f"[cyan]{i}[/cyan]: [white]{cmd}[/white]"
-
             if is_risky_cmd:
                 cmd_text += " [bold red][RISKY][/bold red]"
-
             if is_stateful_cmd:
                 cmd_text += " [bold yellow][STATEFUL][/bold yellow]"
-
             cmd_list.append(cmd_text)
-
-        # Display commands in a clean panel
         console.print(Panel(
             "\n".join(cmd_list),
             title=f"Found {n_commands} commands",
             border_style="blue"
         ))
-
-        # Ask for selection in a clean way
         console.print(Text("Enter command number, 'a' for all, or 'q' to quit: ", style="bold cyan"), end="")
         choice = input().lower()
 
@@ -345,36 +337,18 @@ def interactive_mode(chat_mode=False):
             print_ai_answer_with_rich(response)
 
             # Extract and handle commands from the response, limiting to max 3 commands
-            # to avoid overwhelming the user in interactive mode
             from terminalai.command_extraction import extract_commands as get_commands
             commands = get_commands(response, max_commands=3)
 
             if commands:
-                # For interactive mode, we need to handle stateful commands specially
-                for cmd in commands:
-                    if is_stateful_command(cmd):
-                        prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Copy to clipboard? [Y/n]: "
-                        console.print(Text(prompt_text, style="yellow bold"), end="")
-                        choice = input().lower()
-
-                        if choice != 'n':  # Default to yes
-                            copy_to_clipboard(cmd)
-                            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                            # Exit interactive mode to shell for the user to paste
-                            console.print("[cyan]Exiting to shell...[/cyan]")
-                            sys.exit(0)
-                        break
-
-                # If we get here, there were no stateful commands or user chose not to copy them
                 handle_commands(commands, auto_confirm=False)
             # Always exit after showing a response and handling commands, unless in chat_mode
             if not chat_mode:
                 sys.exit(0)
 
-        except (ValueError, TypeError, ConnectionError, RuntimeError, KeyboardInterrupt) as e:
+        except (ValueError, TypeError, OSError) as e:
             # Catch common user/AI errors, but not all exceptions
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
-            # Log error details for debugging
             import traceback
             traceback.print_exc()
         except Exception as e:
