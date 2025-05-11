@@ -277,8 +277,8 @@ def interactive_mode(chat_mode=False):
             print_ai_answer_with_rich(response)
 
             # Extract and handle commands from the response, no max_commands limit
-            from terminalai.command_extraction import extract_commands as get_commands
-            commands = get_commands(response)
+            from terminalai.command_extraction import extract_commands_from_output
+            commands = extract_commands_from_output(response)
 
             # Always prompt for execution if there are commands
             if commands:

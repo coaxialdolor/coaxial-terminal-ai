@@ -343,6 +343,24 @@ offline_extraction_cases = [
     ("╭───── Command ─────╮\n│ Ls -L │\n╰─────────────────────╯\n", ["Ls -L"]),
     # Example 60
     ("╭───── Command ─────╮\n│ echo café │\n╰─────────────────────╯\n", ["echo café"]),
+    # Example 61: Multiple rich panel commands as in user example
+    ("[AI] There are multiple ways to list files in a directory by date and by size on macOS/zsh. Here are two examples:\n"
+     "1. Using the `ls` command with custom sorting options:\n"
+     "╭───────────────────────────────── Command ──────────────────────────────────╮\n"
+     "│ ls -lt --time-style=+\"%Y-%m-%d %H:%M\" --group-directories-first            │\n"
+     "╰────────────────────────────────────────────────────────────────────────────╯\n"
+     "This command lists files in long format, sorted by modification date in descending order, with the year, month, day, hour, and minute displayed. The `--group-directories-first` option groups directories at the beginning of the output.\n"
+     "2. Using the `lsd` command:\n\nIf you have the `lsd` package installed, you can use it to display file details in a more colorful and organized manner:\n"
+     "This command lists files in a detailed format, grouped by modification time in descending order.\n\nTo install `lsd`, you can use Homebrew:\n"
+     "╭───────────────────────────────── Command ──────────────────────────────────╮\n"
+     "│ brew install lsd                                                           │\n"
+     "╰────────────────────────────────────────────────────────────────────────────╯\n"
+     "Remember to replace the commands above with the appropriate paths if you installed them elsewhere.\n\nFor listing files by size, you can use the following command:\n"
+     "╭───────────────────────────────── Command ──────────────────────────────────╮\n"
+     "│ ls -lS                                                                     │\n"
+     "╰────────────────────────────────────────────────────────────────────────────╯\n"
+     "This command lists files in long format, sorted by file size in ascending order.\n",
+     ["ls -lt --time-style=+\"%Y-%m-%d %H:%M\" --group-directories-first", "brew install lsd", "ls -lS"]),
 ]
 
 @pytest.mark.parametrize("ai_response,expected", offline_extraction_cases)

@@ -10,7 +10,7 @@ import os
 from terminalai.__init__ import __version__
 from terminalai.config import load_config
 from terminalai.ai_providers import get_provider
-from terminalai.command_extraction import extract_commands
+from terminalai.command_extraction import extract_commands_from_output
 from terminalai.formatting import print_ai_answer_with_rich
 from terminalai.shell_integration import get_system_context
 from terminalai.cli_interaction import (
@@ -54,8 +54,11 @@ def main():
 
     # Run in interactive mode if no query provided
     if not args.query or getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c'):
-        interactive_mode(chat_mode=True)
-        sys.exit(0)
+        try:
+            interactive_mode(chat_mode=True)
+        except SystemExit:
+            pass
+        return
 
     # Get AI provider
     provider = get_provider(provider_name)
@@ -90,7 +93,7 @@ def main():
     print_ai_answer_with_rich(response, to_stderr=rich_to_stderr)
 
     # Extract and handle commands from the response
-    commands = extract_commands(response)
+    commands = extract_commands_from_output(response)
     if commands:
         handle_commands(commands, auto_confirm=args.yes, eval_mode=getattr(args, 'eval_mode', False), rich_to_stderr=rich_to_stderr)
 

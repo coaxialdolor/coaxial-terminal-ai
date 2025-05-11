@@ -183,3 +183,28 @@ def is_risky_command(cmd):
         return False
     first_word = cmd.split()[0] if cmd.split() else ""
     return any(risky in first_word for risky in RISKY_COMMANDS)
+
+def extract_commands_from_output(output):
+    """Extract commands from both Markdown code blocks and rich panel output."""
+    commands = []
+    # Extract from Markdown code blocks
+    code_blocks = re.findall(r'```(?:bash|sh)?\n?([\s\S]*?)```', output)
+    for block in code_blocks:
+        for line in block.splitlines():
+            line = line.strip()
+            if line and not line.startswith('#'):
+                commands.append(line)
+    # Extract from rich panels (lines between │ ... │)
+    panel_lines = re.findall(r'^\s*│\s*(.*?)\s*│\s*$', output, re.MULTILINE)
+    for line in panel_lines:
+        # Exclude lines that are just explanations or empty
+        if line and not line.startswith('TerminalAI') and not line.startswith('Command') and not line.startswith('Found') and not line.startswith('AI Chat Mode') and not line.startswith('Type '):
+            commands.append(line.strip())
+    # Deduplicate, preserve order
+    seen = set()
+    result = []
+    for cmd in commands:
+        if cmd and cmd not in seen:
+            seen.add(cmd)
+            result.append(cmd)
+    return result
