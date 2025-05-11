@@ -1,11 +1,11 @@
 """CLI interaction functionality for TerminalAI."""
+import os
 import sys
 import argparse
 from terminalai.command_utils import run_shell_command, is_shell_command
 from terminalai.command_extraction import is_stateful_command, is_risky_command
 from terminalai.formatting import ColoredDescriptionFormatter
 from terminalai.clipboard_utils import copy_to_clipboard
-import os
 
 def parse_args():
     """Parse command line arguments."""
@@ -514,7 +514,6 @@ In a terminal window, run:
 • At the setup menu, select [bold]1[/bold] to "Setup default provider"
 • Choose a provider that you've saved an API key for
 • Press Enter to return to the setup menu
-
 
 [bold yellow]4. Understanding Stateful Command Execution[/bold yellow]
 

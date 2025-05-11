@@ -4,7 +4,6 @@ Ensures that command parsing is robust and safe. All file/folder operations are 
 """
 import os
 import shutil
-import tempfile
 import pytest
 from terminalai.command_extraction import extract_commands, is_stateful_command, is_risky_command
 import subprocess

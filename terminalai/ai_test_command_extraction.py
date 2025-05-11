@@ -4,13 +4,12 @@ This is a copy of test_command_extraction.py for evaluation purposes.
 # --- Begin copy ---
 import os
 import shutil
-import tempfile
-import pytest
-from terminalai.command_extraction import extract_commands, is_stateful_command, is_risky_command
 import subprocess
 import sys
 import time
 import re
+import pytest
+from terminalai.command_extraction import extract_commands, is_stateful_command, is_risky_command
 
 # Test directory for all file/folder operations
 TEST_DIR = os.path.join(os.getcwd(), "test_terminalai_parsing")
@@ -26,6 +25,7 @@ def setup_and_teardown():
         shutil.rmtree(TEST_DIR)
 
 def test_single_command_in_code_block():
+    """Test extracting a single command from a code block."""
     ai_response = """
 Here is the command:
 ```bash
@@ -38,6 +38,7 @@ ls -l
     assert not is_risky_command(commands[0])
 
 def test_multiple_commands_separate_blocks():
+    """Test extracting multiple commands from separate code blocks."""
     ai_response = """
 First list files:
 ```bash
@@ -52,6 +53,7 @@ ls -a
     assert commands == ["ls", "ls -a"]
 
 def test_multiple_commands_single_block():
+    """Test extracting multiple commands from a single code block."""
     ai_response = """
 To create and enter a directory:
 ```bash
@@ -65,6 +67,7 @@ cd test_terminalai_parsing
     assert is_stateful_command(commands[1])
 
 def test_command_with_comment_inside_block():
+    """Test extracting a command with a comment inside a code block."""
     ai_response = """
 ```bash
 # This is a comment
@@ -75,13 +78,15 @@ ls -l
     assert commands == ["ls -l"]
 
 def test_no_command_factual_response():
+    """Test that no commands are extracted from a factual response."""
     ai_response = """
 The ls command lists files in a directory.
 """
     commands = extract_commands(ai_response)
-    assert commands == []
+    assert not commands
 
 def test_risky_command_detection():
+    """Test detecting a risky command."""
     ai_response = """
 ```bash
 rm -rf test_terminalai_parsing
@@ -92,6 +97,7 @@ rm -rf test_terminalai_parsing
     assert is_risky_command(commands[0])
 
 def test_stateful_and_risky_combined():
+    """Test detecting both stateful and risky commands."""
     ai_response = """
 ```bash
 cd ~
@@ -107,6 +113,7 @@ rm -rf test_terminalai_parsing
     assert is_risky_command(commands[1])
 
 def test_command_with_home_dir():
+    """Test extracting a command with a home directory reference."""
     ai_response = """
 ```bash
 ls ~
@@ -116,6 +123,7 @@ ls ~
     assert commands == ["ls ~"]
 
 def test_command_with_placeholder_path():
+    """Test extracting a command with a placeholder path."""
     ai_response = """
 ```bash
 cp file.txt /path/to/folder/
@@ -125,6 +133,7 @@ cp file.txt /path/to/folder/
     assert commands == ["cp file.txt /path/to/folder/"]
 
 def test_command_with_actual_test_dir():
+    """Test extracting a command with an actual test directory."""
     ai_response = f"""
 ```bash
 touch {TEST_DIR}/file.txt
@@ -134,6 +143,7 @@ touch {TEST_DIR}/file.txt
     assert commands == [f"touch {TEST_DIR}/file.txt"]
 
 def test_command_with_extra_whitespace():
+    """Test extracting a command with extra whitespace."""
     ai_response = """
 ```bash
    ls    -l
@@ -143,6 +153,7 @@ def test_command_with_extra_whitespace():
     assert commands == ["ls    -l"]
 
 def test_command_with_pipe():
+    """Test extracting a command with a pipe."""
     ai_response = """
 ```bash
 grep foo file.txt | sort | uniq
@@ -152,6 +163,7 @@ grep foo file.txt | sort | uniq
     assert commands == ["grep foo file.txt | sort | uniq"]
 
 def test_command_with_comment_outside_block():
+    """Test extracting a command with a comment outside a code block."""
     ai_response = """
 # This is a comment about the command
 ```bash
@@ -162,6 +174,7 @@ ls -l
     assert commands == ["ls -l"]
 
 def test_factual_with_code_block():
+    """Test that no commands are extracted from a factual response with a code block."""
     ai_response = """
 The following is the output of the ls command:
 ```bash
@@ -171,9 +184,10 @@ file2.txt
 """
     commands = extract_commands(ai_response)
     # Should not treat these as commands
-    assert commands == []
+    assert not commands
 
 def test_command_with_multiple_flags():
+    """Test extracting a command with multiple flags."""
     ai_response = """
 ```bash
 ls -l -a -h
@@ -191,6 +205,7 @@ def run_cli_query(query):
     return result.stdout + result.stderr
 
 def test_cli_direct_query():
+    """Test the CLI with a direct query."""
     query = "How do I list files in the current directory?"
     output = run_cli_query(query)
     if not ("ls" in output or "ls -l" in output):
@@ -198,6 +213,7 @@ def test_cli_direct_query():
     assert "ls" in output or "ls -l" in output
 
 def test_cli_interactive_mode():
+    """Test the CLI in interactive mode."""
     env = os.environ.copy()
     process = subprocess.Popen([
         sys.executable, '-m', 'terminalai.terminalai_cli'
@@ -210,6 +226,7 @@ def test_cli_interactive_mode():
     assert "ls" in output or "ls -l" in output
 
 def test_cli_unique_query():
+    """Test the CLI with a unique query."""
     unique_query = f"What is the current Unix timestamp? (test {int(time.time())})"
     output = run_cli_query(unique_query)
     print("\n[UNIQUE CLI OUTPUT]\n" + output)
@@ -217,12 +234,14 @@ def test_cli_unique_query():
     assert "date" in output or any(char.isdigit() for char in output)
 
 def test_cli_unique_query_2():
+    """Test the CLI with a unique query."""
     unique_query = f"What is the output of 'whoami' on a typical Unix system? (test {int(time.time())})"
     output = run_cli_query(unique_query)
     print("\n[UNIQUE CLI OUTPUT 2]\n" + output)
     assert "whoami" in output or any(char.isalpha() for char in output)
 
 def test_cli_unique_query_3():
+    """Test the CLI with a unique query."""
     unique_query = f"How do I count the number of lines in a file called data.txt? (test {int(time.time())})"
     output = run_cli_query(unique_query)
     print("\n[UNIQUE CLI OUTPUT 3]\n" + output)
@@ -254,32 +273,52 @@ def extract_commands_from_output(output):
     return result
 
 def test_cli_two_ways_query():
+    """Test the CLI with a query asking for two ways to list files."""
     unique_query = f"Show me two ways to list files in the current directory. (test {int(time.time())})"
     output = run_cli_query(unique_query)
     print("\n[TWO WAYS CLI OUTPUT]\n" + output)
     commands = extract_commands_from_output(output)
-    assert len(commands) >= 2, f"Expected at least 2 commands, got {len(commands)}. Output:\n{output}"
-    assert "ls" in ' '.join(commands) and ("find" in ' '.join(commands) or "dir" in ' '.join(commands) or "get-childitem" in ' '.join(commands)), f"Expected both 'ls' and another command. Output:\n{output}"
+    assert len(commands) >= 2, (
+        f"Expected at least 2 commands, got {len(commands)}. Output:\n{output}"
+    )
+    assert "ls" in ' '.join(commands) and (
+        "find" in ' '.join(commands) or
+        "dir" in ' '.join(commands) or
+        "get-childitem" in ' '.join(commands)
+    ), f"Expected both 'ls' and another command. Output:\n{output}"
 
 def test_cli_three_ways_query():
+    """Test the CLI with a query asking for three ways to list files."""
     unique_query = f"Give me three ways to list files in the current directory. (test {int(time.time())})"
     output = run_cli_query(unique_query)
     print("\n[THREE WAYS CLI OUTPUT]\n" + output)
     commands = extract_commands_from_output(output)
-    assert len(commands) >= 3, f"Expected at least 3 commands, got {len(commands)}. Output:\n{output}"
-    assert "ls" in ' '.join(commands) and ("find" in ' '.join(commands) or "dir" in ' '.join(commands) or "get-childitem" in ' '.join(commands)), f"Expected 'ls' and another command. Output:\n{output}"
+    assert len(commands) >= 3, (
+        f"Expected at least 3 commands, got {len(commands)}. Output:\n{output}"
+    )
+    assert "ls" in ' '.join(commands) and (
+        "find" in ' '.join(commands) or
+        "dir" in ' '.join(commands) or
+        "get-childitem" in ' '.join(commands)
+    ), f"Expected 'ls' and another command. Output:\n{output}"
 
 def test_cli_multi_command_formatting():
+    """Test the CLI with a query asking for multiple commands in different formats."""
     unique_query = f"List files in two different ways. (test {int(time.time())})"
     output = run_cli_query(unique_query)
     print("\n[MULTI COMMAND FORMATTING OUTPUT]\n" + output)
     commands = extract_commands_from_output(output)
-    assert len(commands) >= 2, f"Expected at least 2 commands, got {len(commands)}. Output:\n{output}"
+    assert len(commands) >= 2, (
+        f"Expected at least 2 commands, got {len(commands)}. Output:\n{output}"
+    )
     # Check that each command is a single line (no multi-command blocks)
     for cmd in commands:
-        assert '\n' not in cmd, f"Each command should be a single line. Command:\n{cmd}\nOutput:\n{output}"
+        assert '\n' not in cmd, (
+            f"Each command should be a single line. Command:\n{cmd}\nOutput:\n{output}"
+        )
 
 def test_cli_enumerates_multiple_commands_and_handles_cancel():
+    """Test the CLI enumerates multiple commands and handles cancel."""
     # Simulate a response with multiple commands (as code blocks and panels)
     ai_response = (
         "[AI] To list files by date (most recent first) and by size (largest first), you can use the following `zsh` command:\n"

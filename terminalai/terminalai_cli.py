@@ -4,9 +4,9 @@ Best practice: Run this script as a module from the project root:
     python -m terminalai.terminalai_cli
 This ensures all imports work correctly. If you run this file directly, you may get import errors.
 """
+import os
 import sys
 import requests
-import os
 from terminalai.__init__ import __version__
 from terminalai.config import load_config
 from terminalai.ai_providers import get_provider
@@ -75,15 +75,21 @@ def main():
 
     # Adjust system context for verbosity/length if requested
     if args.verbose:
-        system_context = system_context + "\nPlease provide a detailed response with thorough explanation."
+        system_context += (
+            "\nPlease provide a detailed response with thorough explanation."
+        )
     if args.long:
-        system_context = system_context + "\nPlease provide a comprehensive, in-depth response covering all relevant aspects."
+        system_context += (
+            "\nPlease provide a comprehensive, in-depth response covering all relevant aspects."
+        )
 
     # Generate response
     try:
         # Ensure args.query is a string, not a list
         user_query = args.query
-        response = provider.generate_response(user_query, system_context, verbose=args.verbose or args.long)
+        response = provider.generate_response(
+            user_query, system_context, verbose=args.verbose or args.long
+        )
     except (ValueError, TypeError, ConnectionError, requests.RequestException) as e:
         print(colorize_command(f"Error from AI provider: {str(e)}"))
         sys.exit(1)
@@ -95,7 +101,12 @@ def main():
     # Extract and handle commands from the response
     commands = extract_commands_from_output(response)
     if commands:
-        handle_commands(commands, auto_confirm=args.yes, eval_mode=getattr(args, 'eval_mode', False), rich_to_stderr=rich_to_stderr)
+        handle_commands(
+            commands,
+            auto_confirm=args.yes,
+            eval_mode=getattr(args, 'eval_mode', False),
+            rich_to_stderr=rich_to_stderr
+        )
 
 if __name__ == "__main__":
     main()

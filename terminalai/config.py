@@ -1,3 +1,4 @@
+"""Configuration utilities for TerminalAI."""
 import os
 import json
 
@@ -12,7 +13,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "   - Each command must be in its own code block with triple backticks and no comments or explanations inside.\n"
     "   - Explanations must be outside code blocks.\n"
     "   - Never use comments inside code blocks.\n"
-    "   - If suggesting multiple commands, use multiple code blocks.\n"
+    "   - If you mention multiple commands or variations of commands for example different flags in the explanation, you MUST provide each in its own code block.\n"
     "   - If the user asks for 'two ways', 'multiple ways', or similar, ALWAYS enumerate each way as a separate command in its own code block.\n"
     "   - Never put more than one command in a single code block.\n"
     "   - Always use '~' to represent the user's home directory in all commands. Never use /Users/username, /home/username, or $HOME.\n"
@@ -48,11 +49,11 @@ DEFAULT_CONFIG = {
 def load_config():
     if not os.path.exists(CONFIG_PATH):
         save_config(DEFAULT_CONFIG)
-    with open(CONFIG_PATH, 'r') as f:
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 def save_config(config):
-    with open(CONFIG_PATH, 'w') as f:
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2)
 
 def get_system_prompt():
