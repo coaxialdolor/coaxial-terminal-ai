@@ -55,21 +55,18 @@ def print_ai_answer_with_rich(ai_response, to_stderr=False):
             console.print(f"[cyan]{home_replace(before.strip())}[/cyan]")
 
         code = match.group(2)
-        has_command = False
-
-        # NEW: Extract and display commands even if code block has comments
+        # Always extract and display commands, even if preceded by comments
         for line in code.splitlines():
             stripped = line.strip()
             if not stripped or stripped.startswith('#'):
                 continue
-            if is_likely_command(stripped) and command_count < max_displayed_commands:
+            if is_likely_command(stripped):
                 console.print(Panel(Syntax(home_replace(stripped), "bash", theme="monokai", line_numbers=False),
                                    title="Command", border_style="yellow"))
-                has_command = True
                 command_count += 1
 
         # If no detected commands, just print the code block as regular text
-        if not has_command and code.strip():
+        if command_count == 0 and code.strip():
             console.print("[cyan]```[/cyan]")
             for line_in_code in code.splitlines():
                 console.print(f"[cyan]{home_replace(line_in_code)}[/cyan]")
