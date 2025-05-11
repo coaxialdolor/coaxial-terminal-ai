@@ -55,7 +55,7 @@ def print_ai_answer_with_rich(ai_response, to_stderr=False):
             console.print(f"[cyan]{home_replace(before.strip())}[/cyan]")
 
         code = match.group(2)
-        # Always extract and display commands, even if preceded by comments
+        # Split code block into lines and display each command separately if valid
         for line in code.splitlines():
             stripped = line.strip()
             if not stripped or stripped.startswith('#'):
