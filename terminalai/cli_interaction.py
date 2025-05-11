@@ -83,6 +83,7 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False):
         # If eval_mode and user confirms, print only the command and exit
         if eval_mode:
             # Prompt for confirmation (unless auto_confirm)
+            import sys
             if is_risky:
                 confirm_msg = "Execute? [y/N]: "
                 default_choice = "n"
@@ -90,7 +91,9 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False):
                 confirm_msg = "Execute? [Y/n]: "
                 default_choice = "y"
             style = "yellow" if is_risky else "green"
-            console.print(Text(confirm_msg, style=style), end="")
+            # Print prompt to stderr
+            print(confirm_msg, end="", file=sys.stderr)
+            sys.stderr.flush()
             choice = input().lower()
             if not choice:
                 choice = default_choice
@@ -98,7 +101,8 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False):
                 print(command)
                 sys.exit(0)
             else:
-                sys.exit(0)
+                print("[Cancelled]", file=sys.stderr)
+                sys.exit(1)
         # If not eval_mode and stateful, warn and offer clipboard
         if is_stateful:
             prompt_text = (

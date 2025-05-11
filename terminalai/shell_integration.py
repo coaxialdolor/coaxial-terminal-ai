@@ -98,11 +98,17 @@ def install_shell_integration():
 # >>> TERMINALAI SHELL INTEGRATION START
 # Added by TerminalAI (https://github.com/coaxialdolor/terminalai)
 # This shell function enables seamless stateful command execution via eval $(ai ...)
+# Prompts and errors from the Python script are sent to stderr and are visible in the terminal.
 ai() {{
-    local output
-    output=$( {ai_path} --eval-mode "$@" )
-    if [ -n "$output" ]; then
-        eval "$output"
+    if [ $# -eq 0 ] || [ "$1" = "setup" ]; then
+        {ai_path} "$@"
+    else
+        local output
+        output=$({ai_path} --eval-mode "$@")
+        local status=$?
+        if [ $status -eq 0 ] && [ -n "$output" ]; then
+            eval "$output"
+        fi
     fi
 }}
 # <<< TERMINALAI SHELL INTEGRATION END
