@@ -57,9 +57,13 @@ def print_ai_answer_with_rich(ai_response, to_stderr=False):
         code = match.group(2)
         has_command = False
 
+        # NEW: Extract and display commands even if code block has comments
         for line in code.splitlines():
-            if is_likely_command(line) and command_count < max_displayed_commands:
-                console.print(Panel(Syntax(home_replace(line), "bash", theme="monokai", line_numbers=False),
+            stripped = line.strip()
+            if not stripped or stripped.startswith('#'):
+                continue
+            if is_likely_command(stripped) and command_count < max_displayed_commands:
+                console.print(Panel(Syntax(home_replace(stripped), "bash", theme="monokai", line_numbers=False),
                                    title="Command", border_style="yellow"))
                 has_command = True
                 command_count += 1

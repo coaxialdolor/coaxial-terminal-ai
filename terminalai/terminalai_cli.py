@@ -6,6 +6,7 @@ This ensures all imports work correctly. If you run this file directly, you may 
 """
 import sys
 import requests
+import os
 from terminalai.__init__ import __version__
 from terminalai.config import load_config
 from terminalai.ai_providers import get_provider
@@ -65,6 +66,9 @@ def main():
 
     # Get system context
     system_context = get_system_context()
+    # Add current working directory to context
+    cwd = os.getcwd()
+    system_context += f"\nThe user's current working directory is: {cwd}"
 
     # Adjust system context for verbosity/length if requested
     if args.verbose:
