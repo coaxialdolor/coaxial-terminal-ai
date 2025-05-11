@@ -10,6 +10,7 @@ from terminalai.command_extraction import extract_commands, is_stateful_command,
 import subprocess
 import sys
 import time
+import re
 
 # Test directory for all file/folder operations
 TEST_DIR = os.path.join(os.getcwd(), "test_terminalai_parsing")
@@ -226,4 +227,55 @@ def test_cli_unique_query_3():
     output = run_cli_query(unique_query)
     print("\n[UNIQUE CLI OUTPUT 3]\n" + output)
     assert "wc -l" in output or "cat" in output or any(char.isdigit() for char in output)
+
+def extract_commands_from_output(output):
+    """Extract commands from both Markdown code blocks and rich panel output."""
+    commands = []
+    # Extract from Markdown code blocks
+    code_blocks = re.findall(r'```(?:bash|sh)?\n?([\s\S]*?)```', output)
+    for block in code_blocks:
+        for line in block.splitlines():
+            line = line.strip()
+            if line and not line.startswith('#'):
+                commands.append(line)
+    # Extract from rich panels (lines between │ ... │)
+    panel_lines = re.findall(r'^\s*│\s*(.*?)\s*│\s*$', output, re.MULTILINE)
+    for line in panel_lines:
+        # Exclude lines that are just explanations or empty
+        if line and not line.startswith('TerminalAI') and not line.startswith('Command') and not line.startswith('Found') and not line.startswith('AI Chat Mode') and not line.startswith('Type '):
+            commands.append(line.strip())
+    # Deduplicate, preserve order
+    seen = set()
+    result = []
+    for cmd in commands:
+        if cmd and cmd not in seen:
+            seen.add(cmd)
+            result.append(cmd)
+    return result
+
+def test_cli_two_ways_query():
+    unique_query = f"Show me two ways to list files in the current directory. (test {int(time.time())})"
+    output = run_cli_query(unique_query)
+    print("\n[TWO WAYS CLI OUTPUT]\n" + output)
+    commands = extract_commands_from_output(output)
+    assert len(commands) >= 2, f"Expected at least 2 commands, got {len(commands)}. Output:\n{output}"
+    assert "ls" in ' '.join(commands) and ("find" in ' '.join(commands) or "dir" in ' '.join(commands) or "get-childitem" in ' '.join(commands)), f"Expected both 'ls' and another command. Output:\n{output}"
+
+def test_cli_three_ways_query():
+    unique_query = f"Give me three ways to list files in the current directory. (test {int(time.time())})"
+    output = run_cli_query(unique_query)
+    print("\n[THREE WAYS CLI OUTPUT]\n" + output)
+    commands = extract_commands_from_output(output)
+    assert len(commands) >= 3, f"Expected at least 3 commands, got {len(commands)}. Output:\n{output}"
+    assert "ls" in ' '.join(commands) and ("find" in ' '.join(commands) or "dir" in ' '.join(commands) or "get-childitem" in ' '.join(commands)), f"Expected 'ls' and another command. Output:\n{output}"
+
+def test_cli_multi_command_formatting():
+    unique_query = f"List files in two different ways. (test {int(time.time())})"
+    output = run_cli_query(unique_query)
+    print("\n[MULTI COMMAND FORMATTING OUTPUT]\n" + output)
+    commands = extract_commands_from_output(output)
+    assert len(commands) >= 2, f"Expected at least 2 commands, got {len(commands)}. Output:\n{output}"
+    # Check that each command is a single line (no multi-command blocks)
+    for cmd in commands:
+        assert '\n' not in cmd, f"Each command should be a single line. Command:\n{cmd}\nOutput:\n{output}"
 # --- End copy ---
