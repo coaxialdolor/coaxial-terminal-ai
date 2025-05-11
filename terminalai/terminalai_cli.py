@@ -82,12 +82,13 @@ def main():
         sys.exit(1)
 
     # Format and print response
-    print_ai_answer_with_rich(response)
+    rich_to_stderr = getattr(args, 'eval_mode', False)
+    print_ai_answer_with_rich(response, to_stderr=rich_to_stderr)
 
     # Extract and handle commands from the response
     commands = extract_commands(response)
     if commands:
-        handle_commands(commands, auto_confirm=args.yes, eval_mode=getattr(args, 'eval_mode', False))
+        handle_commands(commands, auto_confirm=args.yes, eval_mode=getattr(args, 'eval_mode', False), rich_to_stderr=rich_to_stderr)
 
 if __name__ == "__main__":
     main()

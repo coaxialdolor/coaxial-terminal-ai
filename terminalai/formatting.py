@@ -6,10 +6,18 @@ from rich.syntax import Syntax
 from rich.panel import Panel
 from terminalai.color_utils import colorize_ai
 from terminalai.command_extraction import is_likely_command
+import os
+import sys
 
-def print_ai_answer_with_rich(ai_response):
-    """Print the AI response using rich formatting for code blocks."""
-    console = Console()
+def print_ai_answer_with_rich(ai_response, to_stderr=False):
+    """Print the AI response using rich formatting for code blocks, replacing home dir with ~. If to_stderr is True, print to stderr."""
+    console = Console(file=sys.stderr if to_stderr else None)
+    home = os.path.expanduser("~")
+    # Replace /Users/<username> or /home/<username> with ~ in code blocks and command lines
+    def home_replace(text):
+        # Replace both /Users/<username> and /home/<username> with ~
+        text = re.sub(rf"{re.escape(home)}", "~", text)
+        return text
 
     # Check if this is likely a pure factual response
     factual_response_patterns = [
@@ -44,14 +52,14 @@ def print_ai_answer_with_rich(ai_response):
     for match in code_block_pattern.finditer(ai_response):
         before = ai_response[last_end:match.start()]
         if before.strip():
-            console.print(f"[cyan]{before.strip()}[/cyan]")
+            console.print(f"[cyan]{home_replace(before.strip())}[/cyan]")
 
         code = match.group(2)
         has_command = False
 
         for line in code.splitlines():
             if is_likely_command(line) and command_count < max_displayed_commands:
-                console.print(Panel(Syntax(line, "bash", theme="monokai", line_numbers=False),
+                console.print(Panel(Syntax(home_replace(line), "bash", theme="monokai", line_numbers=False),
                                    title="Command", border_style="yellow"))
                 has_command = True
                 command_count += 1
@@ -60,14 +68,14 @@ def print_ai_answer_with_rich(ai_response):
         if not has_command and code.strip():
             console.print("[cyan]```[/cyan]")
             for line_in_code in code.splitlines():
-                console.print(f"[cyan]{line_in_code}[/cyan]")
+                console.print(f"[cyan]{home_replace(line_in_code)}[/cyan]")
             console.print("[cyan]```[/cyan]")
 
         last_end = match.end()
 
     after = ai_response[last_end:]
     if after.strip():
-        console.print(f"[cyan]{after.strip()}[/cyan]")
+        console.print(f"[cyan]{home_replace(after.strip())}[/cyan]")
 
 class ColoredHelpFormatter(argparse.RawDescriptionHelpFormatter):
     """Custom argparse formatter with colored output."""

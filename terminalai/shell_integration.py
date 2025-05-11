@@ -105,8 +105,8 @@ ai() {{
     else
         local output
         output=$({ai_path} --eval-mode "$@")
-        local status=$?
-        if [ $status -eq 0 ] && [ -n "$output" ]; then
+        local ai_status=$?
+        if [ $ai_status -eq 0 ] && [ -n "$output" ]; then
             eval "$output"
         fi
     fi

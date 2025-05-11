@@ -63,13 +63,13 @@ def parse_args():
 
     return parser.parse_args()
 
-def handle_commands(commands, auto_confirm=False, eval_mode=False):
+def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
     from rich.console import Console
     from rich.panel import Panel
     from rich.text import Text
 
-    console = Console()
+    console = Console(file=sys.stderr if rich_to_stderr else None)
 
     if not commands:
         return
@@ -83,7 +83,6 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False):
         # If eval_mode and user confirms, print only the command and exit
         if eval_mode:
             # Prompt for confirmation (unless auto_confirm)
-            import sys
             if is_risky:
                 confirm_msg = "Execute? [y/N]: "
                 default_choice = "n"
@@ -91,9 +90,9 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False):
                 confirm_msg = "Execute? [Y/n]: "
                 default_choice = "y"
             style = "yellow" if is_risky else "green"
-            # Print prompt to stderr
-            print(confirm_msg, end="", file=sys.stderr)
-            sys.stderr.flush()
+            # Print prompt to stderr if rich_to_stderr, else stdout
+            print(confirm_msg, end="", file=sys.stderr if rich_to_stderr else sys.stdout)
+            (sys.stderr if rich_to_stderr else sys.stdout).flush()
             choice = input().lower()
             if not choice:
                 choice = default_choice
@@ -101,21 +100,25 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False):
                 print(command)
                 sys.exit(0)
             else:
-                print("[Cancelled]", file=sys.stderr)
+                print("[Cancelled]", file=sys.stderr if rich_to_stderr else sys.stdout)
                 sys.exit(1)
         # If not eval_mode and stateful, warn and offer clipboard
         if is_stateful:
-            prompt_text = (
-                f"[STATEFUL COMMAND] '{command}' changes shell state. "
-                "To execute seamlessly, install the ai shell integration (see setup). "
-                "Copy to clipboard instead? [Y/n]: "
-            )
-            console.print(Text(prompt_text, style="yellow bold"), end="")
-            choice = input().lower()
-            if choice != 'n':
-                copy_to_clipboard(command)
-                console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-            return
+            if eval_mode:
+                # In eval_mode, treat stateful commands like normal: prompt to execute, not copy
+                pass  # Already handled above
+            else:
+                prompt_text = (
+                    f"[STATEFUL COMMAND] '{command}' changes shell state. "
+                    "To execute seamlessly, install the ai shell integration (see setup). "
+                    "Copy to clipboard instead? [Y/n]: "
+                )
+                console.print(Text(prompt_text, style="yellow bold"), end="")
+                choice = input().lower()
+                if choice != 'n':
+                    copy_to_clipboard(command)
+                    console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
+                return
         # Otherwise, normal risky/safe command logic
         confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
         default_choice = "n" if is_risky else "y"
