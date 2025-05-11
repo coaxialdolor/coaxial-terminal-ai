@@ -24,6 +24,10 @@ if __name__ == "__main__" and (__package__ is None or __package__ == ""):
 
 def main():
     """Main entry point for the TerminalAI CLI."""
+    with open('argv_debug.txt', 'w') as f:
+        f.write(str(sys.argv) + '\n')
+    print('[DEBUG] sys.argv at entry:', sys.argv)
+    # Debug mode is only supported via the --debug flag.
     args = parse_args()
 
     # Check for version flag
@@ -87,6 +91,8 @@ def main():
 
     # Extract and handle commands from the response
     commands = extract_commands(response)
+    if getattr(args, 'debug', False):
+        print("[DEBUG] Extracted commands:", commands)
     if commands:
         handle_commands(commands, auto_confirm=args.yes, eval_mode=getattr(args, 'eval_mode', False), rich_to_stderr=rich_to_stderr)
 

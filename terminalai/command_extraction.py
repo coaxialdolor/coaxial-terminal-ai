@@ -149,18 +149,20 @@ def extract_commands(ai_response, max_commands=None):
             # Skip blank lines and comments
             if not line.strip() or line.strip().startswith('#'):
                 continue
-            if is_likely_command(line):
-                commands.append(line.strip())
-                # If we have a max limit and reached it, return early
-                if max_commands and len(commands) >= max_commands:
-                    # Deduplicate before returning
-                    seen = set()
-                    result = []
-                    for cmd in commands:
-                        if cmd and cmd not in seen:
-                            seen.add(cmd)
-                            result.append(cmd)
-                    return result
+            # More permissive: treat any non-empty, non-comment line as a command unless it looks like a pure English sentence
+            if not re.match(r'^[A-Za-z0-9_\-\.]+(\s+.+)?$', line.strip()):
+                continue
+            commands.append(line.strip())
+            # If we have a max limit and reached it, return early
+            if max_commands and len(commands) >= max_commands:
+                # Deduplicate before returning
+                seen = set()
+                result = []
+                for cmd in commands:
+                    if cmd and cmd not in seen:
+                        seen.add(cmd)
+                        result.append(cmd)
+                return result
 
     # Deduplicate, preserve order
     seen = set()

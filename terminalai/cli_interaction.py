@@ -67,6 +67,12 @@ def parse_args():
         help="Enter persistent AI chat mode (does not exit after one response)"
     )
 
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help=argparse.SUPPRESS
+    )
+
     return parser.parse_args()
 
 def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
@@ -345,7 +351,7 @@ def interactive_mode(chat_mode=False):
             if not chat_mode:
                 sys.exit(0)
 
-        except (ValueError, TypeError, ConnectionError, RuntimeError, KeyboardInterrupt) as e:
+        except (ValueError, TypeError, OSError) as e:
             # Catch common user/AI errors, but not all exceptions
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
             # Log error details for debugging
@@ -356,6 +362,7 @@ def interactive_mode(chat_mode=False):
             console.print(f"[bold red]Unexpected error: {str(e)}[/bold red]")
             import traceback
             traceback.print_exc()
+            raise
 
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
