@@ -169,86 +169,26 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
         elif choice == "a":
             # Execute all commands in sequence
             for cmd in commands:
-                if is_stateful_command(cmd):
-                    is_cmd_risky = is_risky_command(cmd)
-
-                    if eval_mode or shell_integration_active:
-                        # Always require extra confirmation for risky commands
-                        if is_cmd_risky:
-                            prompt_text = f"[RISKY][STATEFUL COMMAND] The command '{cmd}' is risky and changes shell state. Execute? [y/N]: "
-                            console.print(Text(prompt_text, style="red bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice.lower() != "y":
-                                console.print("[Cancelled]")
-                                sys.exit(1)
-                        else:
-                            prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Execute? [Y/n]: "
-                            console.print(Text(prompt_text, style="yellow bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice.lower() != "y":
-                                console.print("[Cancelled]")
-                                sys.exit(1)
-                        print(cmd)
-                        sys.exit(0)
-                    else:
-                        prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Copy to clipboard? [Y/n]: "
-                        console.print(Text(prompt_text, style="yellow bold"), end="")
-                        subchoice = input().lower()
-                        if subchoice.lower() != "n":
-                            copy_to_clipboard(cmd)
-                            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                else:
-                    if is_risky_command(cmd):
-                        console.print(Text(f"[RISKY] Execute risky command '{cmd}'? [y/N]: ", style="red bold"), end="")
-                        subchoice = input().lower()
-                        if subchoice != "y":
-                            continue
-                    run_command(cmd)
+                is_cmd_risky = is_risky_command(cmd)
+                if is_cmd_risky:
+                    console.print(Text(f"[RISKY] Execute risky command '{cmd}'? [y/N]: ", style="red bold"), end="")
+                    subchoice = input().lower()
+                    if subchoice != "y":
+                        continue
+                run_command(cmd)
         elif choice.isdigit():
             # Execute the selected command
             idx = int(choice) - 1
             if 0 <= idx < len(commands):
                 cmd = commands[idx]
-
-                if is_stateful_command(cmd):
-                    is_cmd_risky = is_risky_command(cmd)
-
-                    if eval_mode or shell_integration_active:
-                        if is_cmd_risky:
-                            prompt_text = f"[RISKY][STATEFUL COMMAND] The command '{cmd}' is risky and changes shell state. Execute? [y/N]: "
-                            console.print(Text(prompt_text, style="red bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice.lower() != "y":
-                                console.print("[Cancelled]")
-                                sys.exit(1)
-                        else:
-                            prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Execute? [Y/n]: "
-                            console.print(Text(prompt_text, style="yellow bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice.lower() != "y":
-                                console.print("[Cancelled]")
-                                sys.exit(1)
-                        print(cmd)
-                        sys.exit(0)
-                    else:
-                        prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Copy to clipboard? [Y/n]: "
-                        console.print(Text(prompt_text, style="yellow bold"), end="")
-                        subchoice = input().lower()
-                        if subchoice.lower() != "n":
-                            copy_to_clipboard(cmd)
-                            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
+                is_cmd_risky = is_risky_command(cmd)
+                if is_cmd_risky:
+                    console.print(Text(f"[RISKY] Execute risky command '{cmd}'? [y/N]: ", style="red bold"), end="")
+                    subchoice = input().lower()
+                    if subchoice == "y":
+                        run_command(cmd)
                 else:
-                    is_cmd_risky = is_risky_command(cmd)
-                    if is_cmd_risky:
-                        console.print(Text(f"[RISKY] Execute risky command '{cmd}'? [y/N]: ", style="red bold"), end="")
-                        subchoice = input().lower()
-                        if subchoice == "y":
-                            run_command(cmd)
-                    else:
-                        console.print(Text(f"Execute '{cmd}'? [Y/n]: ", style="green"), end="")
-                        subchoice = input().lower()
-                        if subchoice.lower() != "n":
-                            run_command(cmd)
+                    run_command(cmd)
             else:
                 console.print(f"[red]Invalid choice: {choice}[/red]")
 
