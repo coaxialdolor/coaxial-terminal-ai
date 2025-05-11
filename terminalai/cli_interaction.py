@@ -89,63 +89,8 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
 
     n_commands = len(commands)
 
-    if n_commands == 1:
-        command = commands[0]
-        is_stateful = is_stateful_command(command)
-        is_risky = is_risky_command(command)
-        # If eval_mode or shell integration active and user confirms, print only the command and exit
-        if eval_mode or shell_integration_active:
-            # Prompt for confirmation (unless auto_confirm)
-            if is_risky:
-                confirm_msg = "Execute? [y/N]: "
-                default_choice = "n"
-            else:
-                confirm_msg = "Execute? [Y/n]: "
-                default_choice = "y"
-            style = "yellow" if is_risky else "green"
-            # Print prompt to stderr if rich_to_stderr, else stdout
-            print(confirm_msg, end="", file=sys.stderr if rich_to_stderr else sys.stdout)
-            (sys.stderr if rich_to_stderr else sys.stdout).flush()
-            choice = input().lower()
-            if not choice:
-                choice = default_choice
-            if choice == "y":
-                print(command)
-                sys.exit(0)
-            else:
-                print("[Cancelled]", file=sys.stderr if rich_to_stderr else sys.stdout)
-                sys.exit(1)
-        # If not eval_mode and not shell integration, warn and offer clipboard for stateful
-        if is_stateful:
-            prompt_text = (
-                f"[STATEFUL COMMAND] '{command}' changes shell state. "
-                "To execute seamlessly, install the ai shell integration (see setup). "
-                "Copy to clipboard instead? [Y/n]: "
-            )
-            console.print(Text(prompt_text, style="yellow bold"), end="")
-            choice = input().lower()
-            if choice != 'n':
-                copy_to_clipboard(command)
-                console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-            return
-        # Otherwise, normal risky/safe command logic
-        confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
-        default_choice = "n" if is_risky else "y"
-        if auto_confirm and not is_risky:
-            console.print(f"[green]Auto-executing: {command}[/green]")
-            run_command(command)
-            return
-        style = "yellow" if is_risky else "green"
-        console.print(Text(confirm_msg, style=style), end="")
-        choice = input().lower()
-        if not choice:
-            choice = default_choice
-        if choice == "y":
-            run_command(command)
-        return
-
-    elif n_commands > 1:
-        # Always enumerate and prompt for selection if multiple commands
+    # Always enumerate and prompt for selection if more than one command
+    if n_commands > 1:
         cmd_list = []
         for i, cmd in enumerate(commands, 1):
             is_risky_cmd = is_risky_command(cmd)
@@ -167,7 +112,6 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
         if choice == "q":
             return
         elif choice == "a":
-            # Execute all commands in sequence
             for cmd in commands:
                 is_cmd_risky = is_risky_command(cmd)
                 if is_cmd_risky:
@@ -176,8 +120,8 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                     if subchoice != "y":
                         continue
                 run_command(cmd)
+            return  # Always return after handling 'a'
         elif choice.isdigit():
-            # Execute the selected command
             idx = int(choice) - 1
             if 0 <= idx < len(commands):
                 cmd = commands[idx]
@@ -187,10 +131,66 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                     subchoice = input().lower()
                     if subchoice == "y":
                         run_command(cmd)
+                    else:
+                        console.print("[Cancelled]")
+                        return
                 else:
                     run_command(cmd)
             else:
                 console.print(f"[red]Invalid choice: {choice}[/red]")
+            return
+
+    # Single command logic
+    command = commands[0]
+    is_stateful = is_stateful_command(command)
+    is_risky = is_risky_command(command)
+    if eval_mode or shell_integration_active:
+        if is_risky:
+            confirm_msg = "Execute? [y/N]: "
+            default_choice = "n"
+        else:
+            confirm_msg = "Execute? [Y/n]: "
+            default_choice = "y"
+        style = "yellow" if is_risky else "green"
+        print(confirm_msg, end="", file=sys.stderr if rich_to_stderr else sys.stdout)
+        (sys.stderr if rich_to_stderr else sys.stdout).flush()
+        choice = input().lower()
+        if not choice:
+            choice = default_choice
+        if choice == "y":
+            print(command)
+            sys.exit(0)
+        else:
+            print("[Cancelled]", file=sys.stderr if rich_to_stderr else sys.stdout)
+            return  # Never sys.exit(1) on cancel
+    if is_stateful:
+        prompt_text = (
+            f"[STATEFUL COMMAND] '{command}' changes shell state. "
+            "To execute seamlessly, install the ai shell integration (see setup). "
+            "Copy to clipboard instead? [Y/n]: "
+        )
+        console.print(Text(prompt_text, style="yellow bold"), end="")
+        choice = input().lower()
+        if choice != 'n':
+            copy_to_clipboard(command)
+            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
+        return
+    confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
+    default_choice = "n" if is_risky else "y"
+    if auto_confirm and not is_risky:
+        console.print(f"[green]Auto-executing: {command}[/green]")
+        run_command(command)
+        return
+    style = "yellow" if is_risky else "green"
+    console.print(Text(confirm_msg, style=style), end="")
+    choice = input().lower()
+    if not choice:
+        choice = default_choice
+    if choice == "y":
+        run_command(command)
+    else:
+        console.print("[Cancelled]")
+    return
 
 def run_command(command):
     """Execute a shell command with error handling."""
@@ -297,6 +297,9 @@ def interactive_mode(chat_mode=False):
             console.print(f"[bold red]Unexpected error: {str(e)}[/bold red]")
             import traceback
             traceback.print_exc()
+        # If not in chat_mode, exit after one question/command
+        if not chat_mode:
+            sys.exit(0)
 
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
