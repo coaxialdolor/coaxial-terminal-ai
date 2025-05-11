@@ -39,14 +39,39 @@ ai setup
 
 ## 4. Understanding Stateful Command Execution
 
-For commands like `cd` or `export` that change your shell's state, TerminalAI
-will offer to copy the command to your clipboard. You can then paste and run it.
-This is the primary method for handling such commands.
+There are now two ways to handle commands that change your shell's state (like `cd` or `export`):
 
-**(Optional) Shell Integration for Advanced Users:**
-* You can still install a shell integration via option `7` in the `ai setup` menu.
-* This is for advanced users who might prefer a dedicated shell function.
-* Note: The primary method is copy-to-clipboard, and TerminalAI no longer outputs the specific marker (`#TERMINALAI_SHELL_COMMAND:`) that this shell function traditionally relied on.
+### A. Seamless Execution via ai Shell Integration (Advanced/Recommended)
+
+- Run `ai setup` and select option 7 to install the ai shell integration.
+- This adds a shell function named `ai` to your shell config (e.g., `.zshrc` or `.bashrc`).
+- After restarting your shell or sourcing your config, you can use `ai` as before:
+
+```sh
+aio() {
+    # Bypass eval for interactive/chat/setup modes
+    if [ $# -eq 0 ] || [ "$1" = "setup" ] || [ "$1" = "--chat" ] || [ "$1" = "-c" ] || [ "$1" = "ai-c" ]; then
+        command ai "$@"
+    else
+        local output
+        output=$(command ai --eval-mode "$@")
+        local ai_status=$?
+        if [ $ai_status -eq 0 ] && [ -n "$output" ]; then
+            eval "$output"
+        fi
+    fi
+}
+```
+
+- This ensures that interactive and chat modes (like `ai`, `ai setup`, `ai --chat`, `ai -c`, and `ai-c`) work as expected, and only normal queries use eval mode for seamless stateful command execution.
+
+### B. Copy to Clipboard (Default)
+
+When TerminalAI suggests a stateful command, it will:
+- Identify the command as stateful.
+- Prompt you to copy the command to your clipboard (e.g., `[STATEFUL COMMAND] The command 'cd my_folder' changes shell state. Copy to clipboard to run manually? [Y/n]`).
+- If you choose 'Y', the command is copied to your clipboard.
+- You can then paste and run the command directly in your terminal.
 
 ## 5. Start Using TerminalAI
 
