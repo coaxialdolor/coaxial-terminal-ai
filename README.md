@@ -197,3 +197,29 @@ For detailed usage instructions and examples:
 ```sh
 ai --help
 ```
+
+## Improved Shell Integration and Command Formatting
+
+- With the latest shell integration, stateful commands (like `cd`, `export`, etc.) are now executable in all modes (including interactive and multi-command selection) if the integration is installed.
+- The AI is instructed to always put each command in its own code block, with no comments or explanations inside. Explanations must be outside code blocks.
+- If the AI puts multiple commands in a single code block, TerminalAI will still extract and show each as a separate command for selection and execution.
+
+### Examples
+
+**Correct (multiple commands):**
+```bash
+ls
+```
+```bash
+ls -l
+```
+Explanation: The first command lists files, the second lists them in long format.
+
+**Incorrect:**
+```bash
+# List files
+ls
+# List files in long format
+ls -l
+```
+(Never put comments or multiple commands in a single code block.)
