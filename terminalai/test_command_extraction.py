@@ -182,87 +182,172 @@ def test_cli_interactive_mode():
     output = stdout + stderr
     assert "ls" in output or "ls -l" in output
 
-def test_offline_enumeration_and_extraction_cases():
-    # Example 1: Multiple code blocks (Markdown)
-    ai_response_1 = (
-        "Here are two ways to list files in the current directory:\n"
-        "```bash\nls\n```\n"
-        "```bash\nfind .\n```\n"
-        "Explanation: The first command uses ls, the second uses find.\n"
-    )
-    commands_1 = extract_commands_from_output(ai_response_1)
-    assert "ls" in commands_1
-    assert "find ." in commands_1
-    assert len(commands_1) == 2
+# List of (ai_response, expected_commands) tuples for offline extraction tests
+offline_extraction_cases = [
+    # Example 1
+    ("Here are two ways to list files in the current directory:\n"
+     "```bash\nls\n```\n"
+     "```bash\nfind .\n```\n"
+     "Explanation: The first command uses ls, the second uses find.\n",
+     ["ls", "find ."]),
+    # Example 2
+    ("[AI] To list files by date (most recent first) and by size (largest first), you can use the following `zsh` command:\n"
+     "╭────────────────────────────────────────── Command ──────────────────────────────────────────╮\n"
+     "│ ls -ltrS                                                                                    │\n"
+     "╰─────────────────────────────────────────────────────────────────────────────────────────────╯\n"
+     "This command uses the `ls` command with the options:\n"
+     "- `-l` (ell) to display the output in a long format.\n"
+     "- `-t` to sort by modification time (most recent first).\n"
+     "- `-r` to reverse the order of the sort (largest files first).\n"
+     "- `-S` to sort by file size.\n"
+     "If you prefer to see hidden files (files whose names start with a dot), add the `-a` option:\n"
+     "╭────────────────────────────────────────── Command ──────────────────────────────────────────╮\n"
+     "│ ls -lartS                                                                                   │\n"
+     "╰─────────────────────────────────────────────────────────────────────────────────────────────╯\n"
+     "Alternatively, if you are using a different shell like Bash, you can use the `sort` command:\n"
+     "╭────────────────────────────────────────── Command ──────────────────────────────────────────╮\n"
+     "│ ls -lt | sort -nrk 5                                                                        │\n"
+     "╰─────────────────────────────────────────────────────────────────────────────────────────────╯\n"
+     "This command uses the `ls` command with the `-l` option to display the output in long format.\n"
+     "The output is piped (`|`) to the `sort` command, which sorts by the 5th column (file size). The\n"
+     "`-n` option tells `sort` to sort numerically, and the `-r` option tells it to sort in reverse \n"
+     "order (largest files first).\n",
+     ["ls -ltrS", "ls -lartS", "ls -lt | sort -nrk 5"]),
+    # Example 3
+    ("[AI]\n╭────────────────────────────────── Command ───────────────────────────────────╮\n"
+     "│ ls                                                                           │\n"
+     "╰──────────────────────────────────────────────────────────────────────────────╯\n"
+     "╭────────────────────────────────── Command ───────────────────────────────────╮\n"
+     "│ ls -l                                                                        │\n"
+     "╰──────────────────────────────────────────────────────────────────────────────╯\n"
+     "Explanation: The first command lists files, the second lists them in long format.\n",
+     ["ls", "ls -l"]),
+    # Example 4
+    ("```bash\nls\n```\nThis command will list the files in the current directory.\n", ["ls"]),
+    # Example 5
+    ("```bash\nrm -rf /tmp/testdir\n```\nBe careful: this will delete the directory.\n", ["rm -rf /tmp/testdir"]),
+    # Example 6
+    ("The ls command lists files in a directory.\n", []),
+    # Example 7
+    ("```bash\nls -l  # lists files in long format\n```\n", ["ls -l  # lists files in long format"]),
+    # Example 8
+    ("```bash\n\n# comment\nls\n\n```\n", ["ls"]),
+    # Example 9
+    ("╭─────────────────────────────── Command ───────────────────────────────╮\n"
+     "│   ls -lh   │\n"
+     "╰─────────────────────────────────────────────────────────────────────╯\n", ["ls -lh"]),
+    # Example 10
+    ("```bash\nls\n```\n"
+     "╭─────────────────────────────── Command ───────────────────────────────╮\n"
+     "│ ls -a │\n"
+     "╰─────────────────────────────────────────────────────────────────────╯\n", ["ls", "ls -a"]),
+    # Example 11
+    ("```bash\nls; pwd; whoami\n```\n", ["ls; pwd; whoami"]),
+    # Example 12
+    ("```bash\nls\npwd\nwhoami\n```\n", ["ls", "pwd", "whoami"]),
+    # Example 13
+    ("```bash\n  ls -l  \n```\n", ["ls -l"]),
+    # Example 14
+    ("```sh\nls -a\n```\n", ["ls -a"]),
+    # Example 15
+    ("```\nls -lh\n```\n", ["ls -lh"]),
+    # Example 16
+    ("```bash\nls\nls\n```\n", ["ls"]),
+    # Example 17
+    ("╭───── Command ─────╮\n│ ls │\n╰─────────────────────╯\n"
+     "╭───── Command ─────╮\n│ ls │\n╰─────────────────────╯\n", ["ls"]),
+    # Example 18
+    ("```bash\n# just a comment\n```\n", []),
+    # Example 19
+    ("```bash\n   \n```\n", []),
+    # Example 20
+    ("╭───── Command ─────╮\n│ This lists files │\n╰───────────────────╯\n", ["This lists files"]),
+    # Example 21
+    ("╭───── Command ─────╮\n│ ls # list │\n╰─────────────────────╯\n", ["ls # list"]),
+    # Example 22
+    ("```bash\nls | grep py > out.txt\n```\n", ["ls | grep py > out.txt"]),
+    # Example 23
+    ("```bash\nsudo rm -rf /tmp/test\n```\n", ["sudo rm -rf /tmp/test"]),
+    # Example 24
+    ("```bash\ncd /tmp\n```\n", ["cd /tmp"]),
+    # Example 25
+    ("```bash\nexport FOO=bar\n```\n", ["export FOO=bar"]),
+    # Example 26 (here-doc, expect current behavior: split lines)
+    ("```bash\ncat <<EOF\nhello\nEOF\n```\n", ["cat <<EOF", "hello", "EOF"]),
+    # Example 27
+    ("```bash\nmyfunc() { echo hi; }\n```\n", ["myfunc() { echo hi; }"]),
+    # Example 28
+    ("```bash\nalias ll='ls -l'\n```\n", ["alias ll='ls -l'"]),
+    # Example 29
+    ("```bash\nFOO=bar\n```\n", ["FOO=bar"]),
+    # Example 30
+    ("```bash\narr=(1 2 3)\n```\n", ["arr=(1 2 3)"]),
+    # Example 31
+    ("```bash\necho $((1+2))\n```\n", ["echo $((1+2))"]),
+    # Example 32
+    ("```bash\necho \"foo\"\n```\n", ["echo \"foo\""]),
+    # Example 33
+    ("```bash\necho $(ls)\n```\n", ["echo $(ls)"]),
+    # Example 34
+    ("```bash\ndiff <(ls) <(ls -a)\n```\n", ["diff <(ls) <(ls -a)"]),
+    # Example 35
+    ("```bash\nls > out.txt\n```\n", ["ls > out.txt"]),
+    # Example 36
+    ("```bash\nls | grep foo\n```\n", ["ls | grep foo"]),
+    # Example 37
+    ("```bash\nls && echo ok\n```\n", ["ls && echo ok"]),
+    # Example 38
+    ("```bash\n[ -f foo.txt ] && cat foo.txt\n```\n", ["[ -f foo.txt ] && cat foo.txt"]),
+    # Example 39
+    ("```bash\nfor f in *; do echo $f; done\n```\n", ["for f in *; do echo $f; done"]),
+    # Example 40
+    ("```bash\ncase $1 in foo) echo foo;; esac\n```\n", ["case $1 in foo) echo foo;; esac"]),
+    # Example 41
+    ("```bash\nselect x in a b; do echo $x; break; done\n```\n", ["select x in a b; do echo $x; break; done"]),
+    # Example 42
+    ("```bash\ncoproc mycop { ls; }\n```\n", ["coproc mycop { ls; }"]),
+    # Example 43
+    ("```bash\ntrap 'echo hi' EXIT\n```\n", ["trap 'echo hi' EXIT"]),
+    # Example 44
+    ("```bash\nkill -9 1234\n```\n", ["kill -9 1234"]),
+    # Example 45
+    ("```bash\njobs\n```\n", ["jobs"]),
+    # Example 46
+    ("```bash\ndisown %1\n```\n", ["disown %1"]),
+    # Example 47
+    ("```bash\nwait %1\n```\n", ["wait %1"]),
+    # Example 48
+    ("```bash\nfg %1\n```\n", ["fg %1"]),
+    # Example 49
+    ("```bash\necho café\n```\n", ["echo café"]),
+    # Example 50
+    ("```bash\nLS -L\n```\n", ["LS -L"]),
+    # Example 51
+    ("1. ```bash\nls\n```\n2. ```bash\npwd\n```\n", ["ls", "pwd"]),
+    # Example 52
+    ("> ```bash\nls\n```\n", ["ls"]),
+    # Example 53
+    ("| Command |\n|---------|\n| ```bash\nls\n``` |\n", ["ls"]),
+    # Example 54
+    ("```bash\nthis is not valid shell\n```\n", ["this is not valid shell"]),
+    # Example 55
+    ("'''bash\nls\n'''\n", []),
+    # Example 56
+    ("<div>```bash\nls\n```</div>\n", ["ls"]),
+    # Example 57
+    ("╭───── Command ─────╮\n│ ls │\n╰─────────────────────╯\n"
+     "╭───── Command ─────╮\n│ ls -l │\n╰─────────────────────╯\n", ["ls", "ls -l"]),
+    # Example 58
+    ("╭───── Command ─────╮\n│\tls -l\t│\n╰─────────────────────╯\n", ["ls -l"]),
+    # Example 59
+    ("╭───── Command ─────╮\n│ Ls -L │\n╰─────────────────────╯\n", ["Ls -L"]),
+    # Example 60
+    ("╭───── Command ─────╮\n│ echo café │\n╰─────────────────────╯\n", ["echo café"]),
+]
 
-    # Example 2: Multiple rich panels (as seen in screenshots)
-    ai_response_2 = (
-        "[AI] To list files by date (most recent first) and by size (largest first), you can use the following `zsh` command:\n"
-        "╭────────────────────────────────────────── Command ──────────────────────────────────────────╮\n"
-        "│ ls -ltrS                                                                                    │\n"
-        "╰─────────────────────────────────────────────────────────────────────────────────────────────╯\n"
-        "This command uses the `ls` command with the options:\n"
-        "- `-l` (ell) to display the output in a long format.\n"
-        "- `-t` to sort by modification time (most recent first).\n"
-        "- `-r` to reverse the order of the sort (largest files first).\n"
-        "- `-S` to sort by file size.\n"
-        "If you prefer to see hidden files (files whose names start with a dot), add the `-a` option:\n"
-        "╭────────────────────────────────────────── Command ──────────────────────────────────────────╮\n"
-        "│ ls -lartS                                                                                   │\n"
-        "╰─────────────────────────────────────────────────────────────────────────────────────────────╯\n"
-        "Alternatively, if you are using a different shell like Bash, you can use the `sort` command:\n"
-        "╭────────────────────────────────────────── Command ──────────────────────────────────────────╮\n"
-        "│ ls -lt | sort -nrk 5                                                                        │\n"
-        "╰─────────────────────────────────────────────────────────────────────────────────────────────╯\n"
-        "This command uses the `ls` command with the `-l` option to display the output in long format.\n"
-        "The output is piped (`|`) to the `sort` command, which sorts by the 5th column (file size). The\n"
-        "`-n` option tells `sort` to sort numerically, and the `-r` option tells it to sort in reverse \n"
-        "order (largest files first).\n"
-    )
-    commands_2 = extract_commands_from_output(ai_response_2)
-    assert "ls -ltrS" in commands_2
-    assert "ls -lartS" in commands_2
-    assert "ls -lt | sort -nrk 5" in commands_2
-    assert len(commands_2) == 3
-
-    # Example 3: AI gives only variants of the same command
-    ai_response_3 = (
-        "[AI]\n╭────────────────────────────────── Command ───────────────────────────────────╮\n"
-        "│ ls                                                                           │\n"
-        "╰──────────────────────────────────────────────────────────────────────────────╯\n"
-        "╭────────────────────────────────── Command ───────────────────────────────────╮\n"
-        "│ ls -l                                                                        │\n"
-        "╰──────────────────────────────────────────────────────────────────────────────╯\n"
-        "Explanation: The first command lists files, the second lists them in long format.\n"
-    )
-    commands_3 = extract_commands_from_output(ai_response_3)
-    assert "ls" in commands_3
-    assert "ls -l" in commands_3
-    assert len(commands_3) == 2
-
-    # Example 4: AI gives a single code block
-    ai_response_4 = (
-        "```bash\nls\n```\nThis command will list the files in the current directory.\n"
-    )
-    commands_4 = extract_commands_from_output(ai_response_4)
-    assert commands_4 == ["ls"]
-
-    # Example 5: AI gives a risky command
-    ai_response_5 = (
-        "```bash\nrm -rf /tmp/testdir\n```\nBe careful: this will delete the directory.\n"
-    )
-    commands_5 = extract_commands_from_output(ai_response_5)
-    assert "rm -rf /tmp/testdir" in commands_5
-    assert len(commands_5) == 1
-
-    # Example 6: AI gives a factual answer with no commands
-    ai_response_6 = (
-        "The ls command lists files in a directory.\n"
-    )
-    commands_6 = extract_commands_from_output(ai_response_6)
-    assert commands_6 == []
-
-    # Add 48 more diverse, edge-case, and wonky-formatting examples here, each with asserts
-    # (For brevity, not all 50 are shown in this message, but in the actual file, you would enumerate them)
+@pytest.mark.parametrize("ai_response,expected", offline_extraction_cases)
+def test_offline_extraction_case(ai_response, expected):
+    commands = extract_commands_from_output(ai_response)
+    assert commands == expected
 
 # Add more tests as needed to cover edge cases, e.g. code blocks with explanations, mixed factual and command responses, etc.
