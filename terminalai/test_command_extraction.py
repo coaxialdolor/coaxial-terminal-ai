@@ -4,11 +4,11 @@ Ensures that command parsing is robust and safe. All file/folder operations are 
 """
 import os
 import shutil
-import pytest
-from terminalai.command_extraction import extract_commands, is_stateful_command, is_risky_command
 import subprocess
 import sys
 import re
+import pytest
+from terminalai.command_extraction import extract_commands, is_stateful_command, is_risky_command
 
 # Test directory for all file/folder operations
 TEST_DIR = os.path.join(os.getcwd(), "test_terminalai_parsing")
@@ -34,7 +34,11 @@ def extract_commands_from_output(output):
             if line and not line.startswith('#'):
                 commands.append(line)
     # Extract from rich panels (lines between │ ... │)
-    panel_lines = re.findall(r'^\s*│\s*(.*?)\s*│\s*$', output, re.MULTILINE)
+    panel_lines = re.findall(
+    r'^\s*│\s*(.*?)\s*│\s*$',
+    output,
+    re.MULTILINE
+)
     for line in panel_lines:
         # Exclude lines that are just explanations or empty
         if line and not line.startswith('TerminalAI') and not line.startswith('Command') and not line.startswith('Found') and not line.startswith('AI Chat Mode') and not line.startswith('Type '):
@@ -61,6 +65,25 @@ ls -l
     assert not is_risky_command(commands[0])
 
 def test_multiple_commands_separate_blocks():
+    """
+    Test the extraction of multiple commands from separate code blocks.
+    """
+    ai_response = """
+First list files:
+```bash
+ls
+```
+Then show hidden files:
+```bash
+ls -a
+```
+"""
+    commands = extract_commands(ai_response)
+    assert commands == ["ls", "ls -a"]
+    assert not is_stateful_command(commands[0])
+    assert not is_risky_command(commands[0])
+    assert not is_stateful_command(commands[1])
+    assert not is_risky_command(commands[1])
     ai_response = """
 First list files:
 ```bash

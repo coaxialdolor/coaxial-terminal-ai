@@ -292,7 +292,7 @@ def interactive_mode(chat_mode=False):
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
             import traceback
             traceback.print_exc()
-        except Exception as e:
+        except RuntimeError as e:
             # Catch-all for truly unexpected errors (should be rare)
             console.print(f"[bold red]Unexpected error: {str(e)}[/bold red]")
             import traceback
