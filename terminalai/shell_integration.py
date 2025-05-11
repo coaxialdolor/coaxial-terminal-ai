@@ -100,7 +100,8 @@ def install_shell_integration():
 # This shell function enables seamless stateful command execution via eval $(ai ...)
 # Prompts and errors from the Python script are sent to stderr and are visible in the terminal.
 ai() {{
-    if [ $# -eq 0 ] || [ "$1" = "setup" ]; then
+    # Bypass eval for interactive/chat/setup modes
+    if [ $# -eq 0 ] || [ "$1" = "setup" ] || [ "$1" = "--chat" ] || [ "$1" = "-c" ] || [ "$1" = "ai-c" ]; then
         {ai_path} "$@"
     else
         local output

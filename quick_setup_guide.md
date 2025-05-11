@@ -47,12 +47,23 @@ There are now two ways to handle commands that change your shell's state (like `
 - This adds a shell function named `ai` to your shell config (e.g., `.zshrc` or `.bashrc`).
 - After restarting your shell or sourcing your config, you can use `ai` as before:
 
+```sh
+aio() {
+    # Bypass eval for interactive/chat/setup modes
+    if [ $# -eq 0 ] || [ "$1" = "setup" ] || [ "$1" = "--chat" ] || [ "$1" = "-c" ] || [ "$1" = "ai-c" ]; then
+        command ai "$@"
+    else
+        local output
+        output=$(command ai --eval-mode "$@")
+        local ai_status=$?
+        if [ $ai_status -eq 0 ] && [ -n "$output" ]; then
+            eval "$output"
+        fi
+    fi
+}
 ```
-ai "cd my_folder && export VAR=1"
-```
-- If you confirm the command, it will be executed in your current shell, and state changes will apply.
-- If you cancel, nothing is executed.
-- This works for Bash/Zsh. PowerShell support for seamless mode is not yet implemented.
+
+- This ensures that interactive and chat modes (like `ai`, `ai setup`, `ai --chat`, `ai -c`, and `ai-c`) work as expected, and only normal queries use eval mode for seamless stateful command execution.
 
 ### B. Copy to Clipboard (Default)
 

@@ -61,6 +61,12 @@ def parse_args():
         help=argparse.SUPPRESS
     )
 
+    parser.add_argument(
+        "--chat",
+        action="store_true",
+        help="Enter persistent AI chat mode (does not exit after one response)"
+    )
+
     return parser.parse_args()
 
 def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
@@ -254,8 +260,8 @@ def run_command(command):
     if not success:
         console.print(f"[bold red]Command failed: {command}[/bold red]")
 
-def interactive_mode():
-    """Run TerminalAI in interactive mode."""
+def interactive_mode(chat_mode=False):
+    """Run TerminalAI in interactive mode. If chat_mode is True, stay in a loop."""
     from terminalai.config import load_config
     from rich.console import Console
     from rich.text import Text
@@ -265,10 +271,17 @@ def interactive_mode():
     config = load_config()
     console = Console()
 
-    console.print(Panel.fit(
-        Text("TerminalAI: What is your question? (Type 'exit' to quit)", style="bold cyan"),
-        border_style="cyan"
-    ))
+    if chat_mode:
+        console.print(Panel.fit(
+            Text("TerminalAI AI Chat Mode: You are now chatting with the AI. Type 'exit' to quit.", style="bold magenta"),
+            border_style="magenta"
+        ))
+        console.print("[dim]Type 'exit', 'quit', or 'q' to return to your shell.[/dim]")
+    else:
+        console.print(Panel.fit(
+            Text("TerminalAI: What is your question? (Type 'exit' to quit)", style="bold cyan"),
+            border_style="cyan"
+        ))
 
     while True:
         # Add visual separation between interactions
@@ -328,6 +341,9 @@ def interactive_mode():
 
                 # If we get here, there were no stateful commands or user chose not to copy them
                 handle_commands(commands, auto_confirm=False)
+            # Always exit after showing a response and handling commands, unless in chat_mode
+            if not chat_mode:
+                sys.exit(0)
 
         except (ValueError, TypeError, ConnectionError, RuntimeError, KeyboardInterrupt) as e:
             # Catch common user/AI errors, but not all exceptions

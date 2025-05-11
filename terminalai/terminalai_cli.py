@@ -52,8 +52,8 @@ def main():
         sys.exit(0)
 
     # Run in interactive mode if no query provided
-    if not args.query:
-        interactive_mode()
+    if not args.query or getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c'):
+        interactive_mode(chat_mode=True)
         sys.exit(0)
 
     # Get AI provider
