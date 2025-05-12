@@ -263,41 +263,79 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
         elif choice == "a":
             if eval_mode:
                 cmds_to_eval = []
+                confirm_remaining_non_risky = False # Flag for 'Yes to All'
+
                 for i, cmd_item in enumerate(commands):
                     item_is_risky = is_risky_command(cmd_item)
                     item_is_stateful = is_stateful_command(cmd_item) # Required for prompt text
 
-                    if auto_confirm and not item_is_risky:
+                    # If 'Yes to All' was chosen and current cmd is not risky, auto-confirm
+                    if confirm_remaining_non_risky and not item_is_risky:
                         cmds_to_eval.append(cmd_item)
-                        print(f"[Auto-confirmed for eval: {cmd_item}]", file=sys.stderr)
+                        print(f"[Auto-confirmed (A): {cmd_item}]", file=sys.stderr)
                         continue
 
+                    # Auto-confirm non-risky if -y is used (and not already handled by confirm_remaining)
+                    if auto_confirm and not item_is_risky:
+                        cmds_to_eval.append(cmd_item)
+                        print(f"[Auto-confirmed (-y): {cmd_item}]", file=sys.stderr)
+                        continue
+
+                    # --- Prompting logic starts here ---
                     prompt_parts = [f"Cmd {i+1}/{len(commands)} ('{cmd_item}'):"]
                     if item_is_risky: prompt_parts.append(" [RISKY]")
-                    if item_is_stateful: prompt_parts.append(" [STATEFUL]") # Informative
+                    if item_is_stateful: prompt_parts.append(" [STATEFUL]")
+                    if confirm_remaining_non_risky: prompt_parts.append(" ['A' previously selected]") # Indicate 'A' status
+
+                    # Use ANSI codes for color
+                    color_reset = "\033[0m"
+                    color_bold_green = "\033[1;32m"
+                    color_bold_yellow = "\033[1;33m"
+                    color_bold_red = "\033[1;31m"
+                    color_bold_cyan = "\033[1;36m"
+                    color_dim = "\033[2m"
+
+                    prompt_base = "".join(prompt_parts) + " Execute? "
+                    options_text = (
+                        f"{color_dim}[{color_reset}{color_bold_green}Y{color_reset}{color_dim}]{color_reset}es {color_dim}/{color_reset} "
+                        f"{color_dim}[{color_reset}{color_bold_yellow}N{color_reset}{color_dim}]{color_reset}o {color_dim}/{color_reset} "
+                        f"{color_dim}[{color_reset}{color_bold_cyan}A{color_reset}{color_dim}]{color_reset}ll remaining non-risky {color_dim}/{color_reset} " # Added 'A' option
+                        f"{color_dim}[{color_reset}{color_bold_red}Q{color_reset}{color_dim}]{color_reset}uit: " # Changed to Q/Quit
+                    )
 
                     if item_is_risky:
-                        prompt_text, default_choice_a = "".join(prompt_parts) + " Execute? [y/N/q(uit_all)]: ", "n"
+                        # Default N for risky commands
+                        # Note: 'A' behaves like 'y' for the *current* risky command if selected.
+                        prompt_formatted = prompt_base + options_text
+                        default_choice_a = "n"
                     else:
-                        prompt_text, default_choice_a = "".join(prompt_parts) + " Execute? [Y/n/q(uit_all)]: ", "y"
+                        # Default Y for non-risky commands
+                        prompt_formatted = prompt_base + options_text
+                        default_choice_a = "y"
 
-                    print(prompt_text, end="", file=sys.stderr); sys.stderr.flush()
-                    subchoice_a = input().lower() or default_choice_a
+                    print(prompt_formatted, end="", file=sys.stderr); sys.stderr.flush()
+                    # Read choice - strip whitespace and take the first char if multiple entered
+                    raw_choice = input().strip()
+                    subchoice_a = (raw_choice[0].lower() if raw_choice else "") or default_choice_a
 
-                    if subchoice_a == 'y':
+                    if subchoice_a == 'y' or subchoice_a == 'a': # Treat 'a' as 'y' for the current one
                         cmds_to_eval.append(cmd_item)
+                        if subchoice_a == 'a':
+                            confirm_remaining_non_risky = True # Set flag for subsequent loops
                     elif subchoice_a == 'q':
-                        print("[Cancelled All]", file=sys.stderr)
-                        sys.exit(1)
-                    else: # 'n' or other
+                        print("[Quit All]", file=sys.stderr)
+                        # Exit with error only if *no* commands were confirmed before quitting
+                        exit_code = 1 if not cmds_to_eval else 0
+                        if cmds_to_eval:
+                           print("\n".join(cmds_to_eval)) # Output confirmed commands before quitting
+                        sys.exit(exit_code)
+                    else: # 'n' or other invalid input defaults to skip
                         print(f"[Skipped cmd: {cmd_item}]", file=sys.stderr)
 
+                # After loop completes
                 if cmds_to_eval:
                     print("\n".join(cmds_to_eval))
                     sys.exit(0)
-                else:
-                    print("[No commands selected for execution]", file=sys.stderr)
-                    sys.exit(1)
             else: # Not eval_mode, for 'a'
                 # Original logic for non-eval 'a' - uses console.print and run_command
                 for cmd_val_non_eval in commands:

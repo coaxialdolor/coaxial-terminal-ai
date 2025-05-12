@@ -111,52 +111,35 @@ def extract_commands(ai_response, max_commands=None):
     if is_likely_factual:
         return []
 
-    # Use a stricter regex that requires bash or sh language identifier
-    # Group 1 captures the language (bash/sh), Group 2 captures the content
-    code_blocks_with_lang = re.findall(r'```(bash|sh)\n?([\s\S]*?)```', ai_response)
+    # Regex to find all code blocks (bash, sh, or unspecified)
+    # Made the \n after ``` optional
+    # This version allows unspecified language, which might be too broad, but aligns with original attempts
+    code_blocks = re.findall(r'```(?:bash|sh)?\n?([\s\S]*?)```', ai_response)
 
-    # Split sections based on the full code block pattern (including lang)
-    # Note: Adjusting split might be complex, focusing on findall results first.
-    # sections = re.split(r'```(?:bash|sh)\n[\s\S]*?```', ai_response)
+    # sections = re.split(r'```(?:bash|sh)?\n[\s\S]*?```', ai_response) # Context logic would use this
 
-    for lang, block in code_blocks_with_lang:
-        # Context checking logic remains the same...
-        # ... (skip_patterns and related logic) - Apply context logic if needed
-        # Example context check (needs sections logic to be robust):
-        # context_before = "" # Placeholder - proper context extraction needed if used
-        # should_skip = False
-        # for pattern in skip_patterns:
-        #     search_context = context_before[-100:] if len(context_before) > 100 else context_before
-        #     if re.search(pattern, search_context):
-        #         should_skip = True
-        #         break
-        # if should_skip:
-        #     continue
+    for block in code_blocks: # Reverted from code_blocks_with_lang
+        # Context checking logic placeholder (was not fully implemented in the multi-line attempt)
+        # ...
 
-        block_content = block.strip()
-        if not block_content:
-            continue
-
-        # Find the first non-empty, non-comment line to check with is_likely_command
-        first_code_line = ""
-        for line in block_content.splitlines():
+        # Original line-by-line processing logic:
+        for line in block.splitlines():
             stripped_line = line.strip()
-            if stripped_line and not stripped_line.startswith('#'):
-                first_code_line = stripped_line
-                break # Found the first actual code line
-
-        # If a code line was found and it looks like a command, add the whole block
-        if first_code_line and is_likely_command(first_code_line):
-            commands.append(block_content) # Add the whole block
-            if max_commands and len(commands) >= max_commands:
-                # Deduplicate and return early
-                seen = set()
-                result = []
-                for cmd_item in commands:
-                    if cmd_item and cmd_item not in seen:
-                        seen.add(cmd_item)
-                        result.append(cmd_item)
-                return result
+            # Skip blank lines and comments
+            if not stripped_line or stripped_line.startswith('#'):
+                continue
+            if is_likely_command(stripped_line):
+                commands.append(stripped_line)
+                # If we have a max limit and reached it, return early
+                if max_commands and len(commands) >= max_commands:
+                    # Deduplicate before returning
+                    seen = set()
+                    result = []
+                    for cmd_item in commands:
+                        if cmd_item and cmd_item not in seen:
+                            seen.add(cmd_item)
+                            result.append(cmd_item)
+                    return result
 
     # Final deduplication
     seen = set()
