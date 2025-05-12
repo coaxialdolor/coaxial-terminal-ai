@@ -231,168 +231,195 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
     # === Multiple Command Logic ===
     else:
         cmd_list = []
-        for i, cmd in enumerate(commands, 1):
-            is_risky_cmd = is_risky_command(cmd)
-            is_stateful_cmd = is_stateful_command(cmd)
-            cmd_text = f"[cyan]{i}[/cyan]: [white]{cmd}[/white]"
+        for i, cmd_text_item in enumerate(commands, 1): # Renamed cmd to cmd_text_item
+            is_risky_cmd = is_risky_command(cmd_text_item)
+            is_stateful_cmd = is_stateful_command(cmd_text_item)
+            cmd_display_text = f"[cyan]{i}[/cyan]: [white]{cmd_text_item}[/white]" # Renamed cmd_text to cmd_display_text
             if is_risky_cmd:
-                cmd_text += " [bold red][RISKY][/bold red]"
+                cmd_display_text += " [bold red][RISKY][/bold red]"
             if is_stateful_cmd:
-                cmd_text += " [bold yellow][STATEFUL][/bold yellow]"
-            cmd_list.append(cmd_text)
+                cmd_display_text += " [bold yellow][STATEFUL][/bold yellow]"
+            cmd_list.append(cmd_display_text)
         console.print(Panel(
-            "\n".join(cmd_list),
+            "\\n".join(cmd_list),
             title=f"Found {n_commands} commands",
             border_style="blue"
         ))
-        console.print(Text("Enter command number, 'a' for all, or 'q' to quit: ", style="bold cyan"), end="")
+        # Prompt to stderr if in eval_mode, otherwise use console (respecting rich_to_stderr)
+        prompt_message = "Enter command number, 'a' for all, or 'q' to quit: "
+        if eval_mode:
+            print(prompt_message, end="", file=sys.stderr)
+            sys.stderr.flush()
+        else:
+            console.print(Text(prompt_message, style="bold cyan"), end="")
         choice = input().lower()
 
         if choice == "q":
+            if eval_mode:
+                print("[Cancelled]", file=sys.stderr)
+                sys.exit(1) # Signal cancellation in eval_mode
             return
-        elif choice == "a":
-            for cmd in commands:
-                if is_stateful_command(cmd):
-                    is_cmd_risky = is_risky_command(cmd)
 
-                    if eval_mode or shell_integration_active:
-                        # Always require extra confirmation for risky commands
-                        if is_cmd_risky:
-                            prompt_text = (
-                                f"[RISKY][STATEFUL COMMAND] '{cmd}' is risky and changes "
-                                "shell state. Execute? [y/N]: "
-                            )
-                            console.print(Text(prompt_text, style="red bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice.lower() != "y":
-                                console.print("[Cancelled]")
-                                sys.exit(1)
-                        else:
-                            prompt_text = (
-                                f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
-                                "Execute? [Y/n]: "
-                            )
-                            console.print(Text(prompt_text, style="yellow bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice.lower() != "y":
-                                console.print("[Cancelled]")
-                                sys.exit(1)
-                        print(cmd)
-                        sys.exit(0)
+        elif choice == "a":
+            if eval_mode:
+                cmds_to_eval = []
+                for i, cmd_item in enumerate(commands):
+                    item_is_risky = is_risky_command(cmd_item)
+                    item_is_stateful = is_stateful_command(cmd_item) # Required for prompt text
+
+                    if auto_confirm and not item_is_risky:
+                        cmds_to_eval.append(cmd_item)
+                        print(f"[Auto-confirmed for eval: {cmd_item}]", file=sys.stderr)
+                        continue
+
+                    prompt_parts = [f"Cmd {i+1}/{len(commands)} ('{cmd_item}'):"]
+                    if item_is_risky: prompt_parts.append(" [RISKY]")
+                    if item_is_stateful: prompt_parts.append(" [STATEFUL]") # Informative
+
+                    if item_is_risky:
+                        prompt_text, default_choice_a = "".join(prompt_parts) + " Execute? [y/N/q(uit_all)]: ", "n"
                     else:
+                        prompt_text, default_choice_a = "".join(prompt_parts) + " Execute? [Y/n/q(uit_all)]: ", "y"
+
+                    print(prompt_text, end="", file=sys.stderr); sys.stderr.flush()
+                    subchoice_a = input().lower() or default_choice_a
+
+                    if subchoice_a == 'y':
+                        cmds_to_eval.append(cmd_item)
+                    elif subchoice_a == 'q':
+                        print("[Cancelled All]", file=sys.stderr)
+                        sys.exit(1)
+                    else: # 'n' or other
+                        print(f"[Skipped cmd: {cmd_item}]", file=sys.stderr)
+
+                if cmds_to_eval:
+                    print("\\n".join(cmds_to_eval))
+                    sys.exit(0)
+                else:
+                    print("[No commands selected for execution]", file=sys.stderr)
+                    sys.exit(1)
+            else: # Not eval_mode, for 'a'
+                # Original logic for non-eval 'a' - uses console.print and run_command
+                for cmd_val_non_eval in commands:
+                    is_stateful_cmd_val = is_stateful_command(cmd_val_non_eval)
+                    is_risky_cmd_val = is_risky_command(cmd_val_non_eval)
+                    if is_stateful_cmd_val:
                         prompt_text = (
-                            f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
+                            f"[STATEFUL COMMAND] '{cmd_val_non_eval}' changes shell state. "
                             "Copy to clipboard? [Y/n]: "
                         )
                         console.print(Text(prompt_text, style="yellow bold"), end="")
                         subchoice = input().lower()
                         if subchoice.lower() != "n":
-                            copy_to_clipboard(cmd)
+                            copy_to_clipboard(cmd_val_non_eval)
                             console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                else:
-                    if is_risky_command(cmd):
-                        console.print(Text(f"[RISKY] Execute risky command '{cmd}'? [y/N]: ", style="red bold"), end="")
-                        subchoice = input().lower()
-                        if subchoice != "y":
-                            continue
-                    run_command(cmd)
+                    else: # Not stateful, not eval_mode, in 'a'
+                        if auto_confirm and not is_risky_cmd_val:
+                            console.print(f"[green]Auto-executing: {cmd_val_non_eval}[/green]")
+                            run_command(cmd_val_non_eval)
+                        elif is_risky_cmd_val:
+                            console.print(Text(f"[RISKY] Execute risky command '{cmd_val_non_eval}'? [y/N]: ", style="red bold"), end="")
+                            subchoice = input().lower()
+                            if subchoice == "y":
+                                run_command(cmd_val_non_eval)
+                            else:
+                                console.print(f"[Skipped: {cmd_val_non_eval}]")
+                        else: # Not risky, not auto_confirm
+                            console.print(Text(f"Execute command '{cmd_val_non_eval}'? [Y/n]: ", style="green"), end="")
+                            subchoice = input().lower() or "y"
+                            if subchoice == "y":
+                                run_command(cmd_val_non_eval)
+                            else:
+                                console.print(f"[Skipped: {cmd_val_non_eval}]")
+                return # Return after processing 'a' in non-eval mode
+
         elif choice.isdigit():
             idx = int(choice) - 1
             if 0 <= idx < len(commands):
                 cmd = commands[idx]
-                if is_stateful_command(cmd):
-                    is_cmd_risky = is_risky_command(cmd)
+                is_cmd_risky = is_risky_command(cmd)
+                is_cmd_stateful = is_stateful_command(cmd)
 
-                    if eval_mode or shell_integration_active:
-                        if is_cmd_risky:
-                            prompt_text = (
-                                f"[RISKY][STATEFUL COMMAND] '{cmd}' is risky and changes "
-                                "shell state. Execute? [y/N]: "
-                            )
-                            console.print(Text(prompt_text, style="red bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice.lower() != "y":
-                                console.print("[Cancelled]")
-                                sys.exit(1)
-                        else:
-                            prompt_text = (
-                                f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
-                                "Execute? [Y/n]: "
-                            )
-                            console.print(Text(prompt_text, style="yellow bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice.lower() != "y":
-                                console.print("[Cancelled]")
-                                sys.exit(1)
-                        print(cmd)
+                if eval_mode:
+                    # In eval_mode, all prompts to stderr, command to stdout, then exit.
+                    if auto_confirm and not is_cmd_risky: # Applies to both stateful and non-stateful
+                        print(cmd) # Auto-confirmed non-risky command
                         sys.exit(0)
                     else:
-                        prompt_text = (
+                        # Needs confirmation (either risky, or not auto_confirm)
+                        prompt_parts = []
+                        if is_cmd_risky: prompt_parts.append("[RISKY]")
+                        if is_cmd_stateful: prompt_parts.append("[STATEFUL COMMAND]")
+
+                        base_prompt = "".join(prompt_parts) + f" Execute command '{cmd}'?"
+                        if is_cmd_risky:
+                            confirm_prompt_text, default_choice_num = base_prompt + " [y/N]: ", "n"
+                        else: # Not risky (but needs confirmation, so -y not used or it's stateful)
+                            confirm_prompt_text, default_choice_num = base_prompt + " [Y/n]: ", "y"
+
+                        print(confirm_prompt_text, end="", file=sys.stderr); sys.stderr.flush()
+                        subchoice_num = input().lower() or default_choice_num
+
+                        if subchoice_num == "y":
+                            print(cmd)
+                            sys.exit(0)
+                        else:
+                            print("[Cancelled]", file=sys.stderr)
+                            sys.exit(1)
+                else: # Not eval_mode (interactive, direct query without shell integration)
+                    if is_cmd_stateful:
+                        prompt_text_ne = (
                             f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
                             "Copy to clipboard? [Y/n]: "
                         )
-                        console.print(Text(prompt_text, style="yellow bold"), end="")
-                        subchoice = input().lower()
-                        if subchoice.lower() != "n":
+                        console.print(Text(prompt_text_ne, style="yellow bold"), end="")
+                        subchoice_ne = input().lower()
+                        if subchoice_ne.lower() != "n":
                             copy_to_clipboard(cmd)
                             console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                else:
-                    run_command(cmd)
-            else:
+                    else: # Not stateful, not eval_mode
+                        if auto_confirm and not is_cmd_risky:
+                            console.print(f"[green]Auto-executing: {cmd}[/green]")
+                            run_command(cmd)
+                        else:
+                            if is_cmd_risky:
+                                console.print(Text(f"[RISKY] Execute command '{cmd}'? [y/N]: ", style="red bold"), end="")
+                                default_choice_ne_r = "n"
+                            else:
+                                console.print(Text(f"Execute command '{cmd}'? [Y/n]: ", style="green"), end="")
+                                default_choice_ne_r = "y"
+                            subchoice_ne_r = input().lower() or default_choice_ne_r
+                            if subchoice_ne_r == "y":
+                                run_command(cmd)
+                            else:
+                                console.print("[Cancelled]")
+            else: # Invalid index
+                # Use console for this error message as it could be non-eval mode
                 console.print(f"[red]Invalid choice: {choice}[/red]")
+
+            # After handling a numbered choice (or invalid), return from handle_commands.
+            # If eval_mode, sys.exit would have occurred. If not eval_mode, this return is correct.
             return
 
-    # Single command logic
-    command = commands[0]
-    is_stateful = is_stateful_command(command)
-    is_risky = is_risky_command(command)
-    if eval_mode or shell_integration_active:
-        if is_risky:
-            confirm_msg = "Execute? [y/N]: "
-            default_choice = "n"
-        else:
-            confirm_msg = "Execute? [Y/n]: "
-            default_choice = "y"
-        style = "yellow" if is_risky else "green"
-        print(confirm_msg, end="", file=sys.stderr if rich_to_stderr else sys.stdout)
-        (sys.stderr if rich_to_stderr else sys.stdout).flush()
-        choice = input().lower()
-        if not choice:
-            choice = default_choice
-        if choice == "y":
-            print(command)
-            sys.exit(0)
-        else:
-            print("[Cancelled]", file=sys.stderr if rich_to_stderr else sys.stdout)
-            return  # Never sys.exit(1) on cancel
-    if is_stateful:
-        prompt_text = (
-            f"[STATEFUL COMMAND] '{command}' changes shell state. "
-            "To execute seamlessly, install the ai shell integration (see setup). "
-            "Copy to clipboard instead? [Y/n]: "
-        )
-        console.print(Text(prompt_text, style="yellow bold"), end="")
-        choice = input().lower()
-        if choice != 'n':
-            copy_to_clipboard(command)
-            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-        return
-    confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
-    default_choice = "n" if is_risky else "y"
-    if auto_confirm and not is_risky:
-        console.print(f"[green]Auto-executing: {command}[/green]")
-        run_command(command)
-        return
-    style = "yellow" if is_risky else "green"
-    console.print(Text(confirm_msg, style=style), end="")
-    choice = input().lower()
-    if not choice:
-        choice = default_choice
-    if choice == "y":
-        run_command(command)
-    else:
-        console.print("[Cancelled]")
-    return
+    # Fallback for single command logic - This section should not be reached if n_commands > 1 handled above.
+    # The original single command logic remains below this multi-command block.
+    # However, the original code had some single command logic duplicated *after* the multi-command block.
+    # That needs to be reviewed to ensure it's not dead code or causing issues.
+    # For now, assuming the multi-command block correctly returns or exits.
+
+    # The following block seems to be a duplicate or misplaced version of single command logic.
+    # It should ideally be part of the `if n_commands == 1:` block or removed if redundant.
+    # Given the structure, if n_commands > 1, the function should have returned or exited within the 'else' block above.
+    # Thus, this bottom part is likely only reachable if n_commands == 1, but that's handled at the top.
+    # This looks like leftover code. I will remove it to prevent confusion.
+    # --- Start of potentially redundant block to remove ---
+    # command = commands[0]
+    # is_stateful = is_stateful_command(command)
+    # is_risky = is_risky_command(command)
+    # if eval_mode or shell_integration_active: # This condition is too broad if shell_integration_active but not eval_mode
+    # ... (rest of this block)
+    # --- End of potentially redundant block ---
+    return # Should be a clear return if not exited for eval_mode.
 
 def run_command(command):
     """Execute a shell command with error handling."""
