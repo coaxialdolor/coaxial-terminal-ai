@@ -59,22 +59,47 @@ See the [Quick Setup Guide](quick_setup_guide.md) for more detailed instructions
 
 ## Usage Examples
 
-**Single Interaction Mode:** Ask one question, get an answer/commands, then return to shell.
+**1. Single Interaction Mode (`ai`):** Ask one question, get an answer/commands, then return to shell.
+   Flags like `-v` or `-l` can be used here.
 ```sh
+# Basic usage
 ai
 AI:(mistral)> how do I list files by size?
-# ... AI response and command prompt ...
-# (Returns to shell after handling)
+
+# Request a long response
+ai -l
+AI:(mistral)> explain the history of Unix shells in detail
 ```
 
-**Direct Query Mode:** Provide the query directly.
+**2. Direct Query Mode (`ai "..."`):** Provide the query directly. This is where most flags are useful.
 ```sh
+# Simple query
 ai "find all python files modified in the last day"
+
+# Auto-confirm non-risky command execution
+ai -y "show current disk usage"
+# (Example: If AI suggests 'df -h', it will run without a [Y/n] prompt)
+
+# Request verbose output
+ai -v "explain the concept of inodes"
+
+# Request long output
+ai -l "explain the difference between TCP and UDP"
+
+# Combine flags: Auto-confirm and Verbose
+ai -y -v "create a new directory called 'test_project' and list its contents"
+# (Example: If AI suggests 'mkdir test_project && ls test_project', it will run without a prompt)
 ```
 
-**Chat Mode:** Have a persistent conversation.
+**3. Chat Mode (`ai --chat` or `ai -c`):** Have a persistent conversation.
 ```sh
+# Start a normal chat
 ai --chat
+# Or use the alias 'ai-c' if configured via shell integration setup
+# ai -c
+
+# Start chat requesting verbose responses by default
+ai -c -v
 AI:(mistral)> Tell me about this project.
 # ... AI response ...
 AI:(mistral)> how can I contribute?
@@ -82,21 +107,21 @@ AI:(mistral)> how can I contribute?
 # (Type 'exit' or 'q' to quit chat)
 ```
 
-**Configuration Menu:**
+**4. Setup Menu (`ai setup`):** Configure providers, API keys, and shell integration.
 ```sh
 ai setup
 ```
 
-**Command Flags:**
+**5. Show Version (`ai --version`):**
 ```sh
-# Auto-confirm non-risky commands
-ai -y "create a backup folder"
+ai --version
+# Output: TerminalAI version X.Y.Z
+```
 
-# Request more detailed responses
-ai -v "explain symbolic links"
-
-# Get longer, more comprehensive answers
-ai -l "explain the difference between TCP and UDP"
+**6. Show Help (`ai --help` or `ai -h`):**
+```sh
+ai --help
+# Output: Detailed help message
 ```
 
 ## Handling Stateful Commands (`cd`, `export`, etc.)

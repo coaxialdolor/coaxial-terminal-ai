@@ -31,77 +31,118 @@ def parse_args():
     description_text = """TerminalAI: Your command-line AI assistant.
 Ask questions or request commands in natural language.
 
-Modes:
-  ai "query"   : Ask a question directly, get a response, then exit.
-  ai           : Enter single-interaction mode (ask, respond, exit).
-  ai --chat/-c : Enter persistent chat mode.
+-----------------------------------------------------------------------
+MODES OF OPERATION & EXAMPLES:
+-----------------------------------------------------------------------
+1. Direct Query: Ask a question directly, get a response, then exit.
+   Syntax: ai [flags] "query"
+   Examples:
+     ai "list files ending in .py"
+     ai -v "explain the concept of inodes"
+     ai -y "show current disk usage"
+     ai -y -v "create a new directory called 'test_project' and enter it"
 
-Command Handling:
-- Non-stateful commands (ls, grep) run after [Y/n] confirmation.
-- Stateful commands (cd, export) prompt to copy to clipboard [Y/n].
-- If Shell Integration is installed (via 'ai setup'):
-  Stateful commands in Direct Query mode (ai "...") run directly after [Y/n].
-  Interactive modes (ai, ai --chat) still use copy-to-clipboard.
-- Risky commands (rm, sudo) always require explicit 'y' confirmation.
+2. Single Interaction: Enter a prompt, get one response, then exit.
+   Syntax: ai [flags]
+   Examples:
+     ai
+       AI:(provider)> your question here
+     ai -l
+       AI:(provider)> explain git rebase in detail
 
-AI Formatting:
-- Provide commands in separate ```bash blocks.
+3. Persistent Chat: Keep conversation history until 'exit'/'q'.
+   Syntax: ai --chat [flags]  OR  ai -c [flags]
+   Examples:
+     ai --chat
+     ai -c -v  (start chat in verbose mode)
+
+-----------------------------------------------------------------------
+COMMAND HANDLING:
+-----------------------------------------------------------------------
+- Confirmation:  Commands require [Y/n] confirmation before execution.
+                 Risky commands (rm, sudo) require explicit 'y'.
+- Stateful cmds: Commands like 'cd' or 'export' that change shell state
+                 will prompt to copy to clipboard [Y/n].
+- Integration:   If Shell Integration is installed (via 'ai setup'):
+                   Stateful commands *only* in Direct Query mode (ai "...")
+                   will execute directly in the shell after confirmation.
+                   Interactive modes (ai, ai --chat) still use copy.
+
+-----------------------------------------------------------------------
+AVAILABLE FLAGS:
+-----------------------------------------------------------------------
+  [query]           Your question or request (used in Direct Query mode).
+  -h, --help        Show this help message and exit.
+  -y, --yes         Auto-confirm execution of non-risky commands.
+                     Effective in Direct Query mode or with Shell Integration.
+                     Example: ai -y "show disk usage"
+  -v, --verbose     Request a more detailed response from the AI.
+                     Example: ai -v "explain RAID levels"
+                     Example (chat): ai -c -v
+  -l, --long        Request a longer, more comprehensive response from AI.
+                     Example: ai -l "explain git rebase workflow"
+  --setup           Run the interactive setup wizard.
+  --version         Show program's version number and exit.
+
+-----------------------------------------------------------------------
+AI FORMATTING EXPECTATIONS:
+-----------------------------------------------------------------------
+- Provide commands in separate ```bash code blocks.
 - Keep explanations outside code blocks."""
-    epilog_text = """For setup and configuration, run 'ai setup'.
+    epilog_text = """For full configuration, run 'ai setup'.
 Project: https://github.com/coaxialdolor/terminalai"""
     parser = argparse.ArgumentParser(
         description=description_text,
         epilog=epilog_text,
-        # Using RawTextHelpFormatter to preserve newlines in description and epilog
         formatter_class=argparse.RawTextHelpFormatter
     )
 
     parser.add_argument(
         "query",
         nargs="?",
-        help="Your question or request"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "-y", "--yes",
         action="store_true",
-        help="Automatically confirm execution of non-risky commands"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "-v", "--verbose",
         action="store_true",
-        help="Request a more detailed response from the AI"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "-l", "--long",
         action="store_true",
-        help="Request a longer, more comprehensive response"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "--setup",
         action="store_true",
-        help="Run the setup wizard"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "--version",
         action="store_true",
-        help="Show version information"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "--eval-mode",
         action="store_true",
-        help=argparse.SUPPRESS  # This argument is for internal use
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "--chat",
         action="store_true",
-        help="Enter persistent AI chat mode (does not exit after one response)"
+        help=argparse.SUPPRESS
     )
 
     return parser.parse_args()
@@ -122,29 +163,36 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
         command = commands[0]
         is_stateful = is_stateful_command(command)
         is_risky = is_risky_command(command)
-        # If eval_mode or shell integration active and user confirms, print only the command and exit
+        # If eval_mode or shell integration active, prepare for potential direct execution
         if eval_mode or shell_integration_active:
-            # Prompt for confirmation (unless auto_confirm)
+            # Auto-confirm non-risky commands if -y is used
+            if auto_confirm and not is_risky:
+                print(command) # Output command for eval
+                sys.exit(0)
+
+            # Otherwise, prompt for confirmation
             if is_risky:
                 confirm_msg = "Execute? [y/N]: "
                 default_choice = "n"
-            else:
+            else: # Not risky, but -y was not used or not applicable
                 confirm_msg = "Execute? [Y/n]: "
                 default_choice = "y"
             style = "yellow" if is_risky else "green"
-            # Print prompt to stderr if rich_to_stderr, else stdout
-            print(confirm_msg, end="", file=sys.stderr if rich_to_stderr else sys.stdout)
-            (sys.stderr if rich_to_stderr else sys.stdout).flush()
+            # Print prompt to stderr (so it doesn't get eval'd)
+            print(confirm_msg, end="", file=sys.stderr)
+            sys.stderr.flush()
             choice = input().lower()
             if not choice:
                 choice = default_choice
             if choice == "y":
-                print(command)
+                print(command) # Output command for eval
                 sys.exit(0)
             else:
-                print("[Cancelled]", file=sys.stderr if rich_to_stderr else sys.stdout)
+                print("[Cancelled]", file=sys.stderr)
                 sys.exit(1)
-        # If not eval_mode and not shell integration, warn and offer clipboard for stateful
+
+        # --- Fallback for non-eval mode / no shell integration ---
+        # Warn and offer clipboard for stateful commands
         if is_stateful:
             prompt_text = (
                 f"[STATEFUL COMMAND] '{command}' changes shell state. "
@@ -157,13 +205,14 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                 copy_to_clipboard(command)
                 console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
             return
-        # Otherwise, normal risky/safe command logic
-        confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
-        default_choice = "n" if is_risky else "y"
+        # Otherwise, normal confirmation logic for non-stateful/non-eval commands
         if auto_confirm and not is_risky:
             console.print(f"[green]Auto-executing: {command}[/green]")
             run_command(command)
             return
+
+        confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
+        default_choice = "n" if is_risky else "y"
         style = "yellow" if is_risky else "green"
         console.print(Text(confirm_msg, style=style), end="")
         choice = input().lower()

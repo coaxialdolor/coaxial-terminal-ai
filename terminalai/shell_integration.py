@@ -103,22 +103,23 @@ ai() {{
     export TERMINALAI_SHELL_INTEGRATION=1
     # Bypass eval for interactive/chat/setup/help/version modes
     if [ $# -eq 0 ] || \
-       [ \"$1\" = \"setup\" ] || \
-       [ \"$1\" = \"--chat\" ] || \
-       [ \"$1\" = \"-c\" ] || \
-       [ \"$1\" = \"--help\" ] || \
-       [ \"$1\" = \"--version\" ] || \
-       [ \"$(basename \"$0\")\" = \"ai-c\" ]; then
-        command ai \"$@\"
+       [ "$1" = "setup" ] || \
+       [ "$1" = "--chat" ] || \
+       [ "$1" = "-c" ] || \
+       [ "$1" = "--help" ] || \
+       [ "$1" = "-h" ] || \
+       [ "$1" = "--version" ] || \
+       [ "$(basename "$0")" = "ai-c" ]; then
+        command ai "$@"
     else
         # Use eval mode for direct queries to handle potential stateful commands
         local output
         # Run with --eval-mode and capture stdout
-        output=$(command ai --eval-mode \"$@\")
+        output=$(command ai --eval-mode "$@")
         local ai_status=$?
         # If the command succeeded and produced output, evaluate it
-        if [ $ai_status -eq 0 ] && [ -n \"$output\" ]; then
-            eval \"$output\"
+        if [ $ai_status -eq 0 ] && [ -n "$output" ]; then
+            eval "$output"
         fi
         # Return the original status code of the 'ai' command itself
         return $ai_status
