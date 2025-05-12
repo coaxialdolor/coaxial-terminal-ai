@@ -160,70 +160,76 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
 
     n_commands = len(commands)
 
+    # === Single Command Logic ===
     if n_commands == 1:
         command = commands[0]
         is_stateful = is_stateful_command(command)
         is_risky = is_risky_command(command)
-        # If eval_mode or shell integration active, prepare for potential direct execution
-        if eval_mode or shell_integration_active:
-            # Auto-confirm non-risky commands if -y is used
+
+        # A. Handle eval_mode pathway STRICTLY first.
+        # Only enter this block if specifically running in eval_mode for shell function.
+        if eval_mode:
+            # A.1 Auto-confirm non-risky commands if -y is used IN eval_mode
             if auto_confirm and not is_risky:
-                print(command) # Output command for eval
-                sys.exit(0)
+                print(command) # Output command to stdout for shell function to eval
+                sys.exit(0) # Exit successfully after printing command
 
-            # Otherwise, prompt for confirmation
+            # A.2 Otherwise, prompt for confirmation (to stderr)
             if is_risky:
-                confirm_msg = "Execute? [y/N]: "
-                default_choice = "n"
-            else: # Not risky, but -y was not used or not applicable
-                confirm_msg = "Execute? [Y/n]: "
-                default_choice = "y"
+                confirm_msg, default_choice = "Execute? [y/N]: ", "n"
+            else: # Not risky, but -y was not used
+                confirm_msg, default_choice = "Execute? [Y/n]: ", "y"
             style = "yellow" if is_risky else "green"
-            # Print prompt to stderr (so it doesn't get eval'd)
-            print(confirm_msg, end="", file=sys.stderr)
-            sys.stderr.flush()
-            choice = input().lower()
-            if not choice:
-                choice = default_choice
-            if choice == "y":
-                print(command) # Output command for eval
-                sys.exit(0)
-            else:
-                print("[Cancelled]", file=sys.stderr)
-                sys.exit(1)
+            # Print prompt to stderr so it's visible but not captured by shell eval
+            print(confirm_msg, end="", file=sys.stderr); sys.stderr.flush()
+            choice = input().lower() or default_choice # Read choice from stdin
 
-        # --- Fallback for non-eval mode / no shell integration ---
-        # Warn and offer clipboard for stateful commands
-        if is_stateful:
+            if choice == "y":
+                print(command) # Output command to stdout for shell function to eval
+                sys.exit(0) # Exit successfully after printing command
+            else:
+                print("[Cancelled]", file=sys.stderr) # Notify user on stderr
+                sys.exit(1) # Exit with error if cancelled IN eval_mode to signal failure
+
+        # B. Handle NON-eval_mode pathway (covers interactive `ai` and `ai --chat`)
+        # This block is only reached if eval_mode is False.
+        elif is_stateful: # Check if the command is stateful
+            # B.1 Prompt user to copy the stateful command
             prompt_text = (
                 f"[STATEFUL COMMAND] '{command}' changes shell state. "
-                "Install shell integration (see setup) for seamless execution. "
-                "Copy to clipboard instead? [Y/n]: "
+                "Copy to clipboard? [Y/n]: " # Standard clipboard prompt
             )
             console.print(Text(prompt_text, style="yellow bold"), end="")
             choice = input().lower()
-            if choice != 'n':
+            if choice != 'n': # Default to yes (copy)
                 copy_to_clipboard(command)
                 console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-            return
-        # Otherwise, normal confirmation logic for non-stateful/non-eval commands
-        if auto_confirm and not is_risky:
-            console.print(f"[green]Auto-executing: {command}[/green]")
-            run_command(command)
+            # We do NOT exit here in interactive mode; just return to the interactive loop
+            # or let the main script exit if it was a single (non-chat) interaction.
             return
 
-        confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
-        default_choice = "n" if is_risky else "y"
-        style = "yellow" if is_risky else "green"
-        console.print(Text(confirm_msg, style=style), end="")
-        choice = input().lower()
-        if not choice:
-            choice = default_choice
-        if choice == "y":
-            run_command(command)
-        return
+        else: # C. Handle NON-eval_mode and NON-stateful command
+            # C.1 Auto-confirm non-risky if -y was used (only relevant if called non-interactively without eval)
+            if auto_confirm and not is_risky:
+                console.print(f"[green]Auto-executing: {command}[/green]")
+                run_command(command)
+                return
 
-    else:  # Multiple commands - display in a cleaner format
+            # C.2 Regular confirmation prompt for direct execution
+            if is_risky:
+                confirm_msg, default_choice = "Execute? [y/N]: ", "n"
+            else:
+                confirm_msg, default_choice = "Execute? [Y/n]: ", "y"
+            style = "yellow" if is_risky else "green"
+            console.print(Text(confirm_msg, style=style), end="")
+            choice = input().lower() or default_choice
+            if choice == "y":
+                run_command(command) # Execute using subprocess
+            # We do NOT exit here in interactive mode; just return.
+            return
+
+    # === Multiple Command Logic ===
+    else:
         cmd_list = []
         for i, cmd in enumerate(commands, 1):
             is_risky_cmd = is_risky_command(cmd)
@@ -451,7 +457,7 @@ def interactive_mode(chat_mode=False):
 
         if query.lower() in ["exit", "quit", "q"]:
             console.print("[bold cyan]Goodbye![/bold cyan]")
-            sys.exit(0)
+            break
 
         if not query:
             continue
@@ -480,23 +486,26 @@ def interactive_mode(chat_mode=False):
 
             if commands:
                 handle_commands(commands, auto_confirm=False)
-            # Always exit after showing a response and handling commands, unless in chat_mode
-            if not chat_mode:
-                sys.exit(0)
 
-        except (ValueError, TypeError, OSError, KeyboardInterrupt, SystemExit) as e:
-            # Catch common user/AI errors, but not all exceptions
+        except SystemExit: # Allow SystemExit from handle_commands (eval mode) to pass through
+            raise
+        except (ValueError, TypeError, OSError, KeyboardInterrupt) as e:
+            # Catch common user/AI errors
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
             import traceback
             traceback.print_exc()
-        except RuntimeError as e:
+        except Exception as e:
             # Catch-all for truly unexpected errors (should be rare)
             console.print(f"[bold red]Unexpected error: {str(e)}[/bold red]")
             import traceback
             traceback.print_exc()
-        # If not in chat_mode, exit after one question/command
+
+        # If NOT in chat_mode, exit after the first interaction (successful or error)
         if not chat_mode:
-            sys.exit(0)
+            break # Break the while loop
+
+    # If the loop was broken (only happens if not chat_mode), exit cleanly.
+    sys.exit(0)
 
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
