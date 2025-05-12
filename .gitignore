@@ -24,3 +24,6 @@ MANIFEST
 # Package update scripts
 update_package.py
 update_package_readme.md
+
+# Todo file
+Todo.txt

@@ -27,6 +27,21 @@ from terminalai.formatting import print_ai_answer_with_rich
 from terminalai.command_extraction import extract_commands as get_commands_interactive
 from terminalai.__init__ import __version__
 
+# System Prompt for AI Risk Assessment (Hardcoded)
+_RISK_ASSESSMENT_SYSTEM_PROMPT = """
+You are a security analysis assistant. Your sole task is to explain the potential negative consequences and risks of executing the given shell command(s) within the specified user context.
+
+Instructions:
+- When the user query starts with the exact prefix "<RISK_CONFIRMATION>", strictly follow these rules.
+- Focus exclusively on the potential dangers: data loss, system instability, security vulnerabilities, unintended modifications, or permission changes.
+- DO NOT provide instructions on how to use the command, suggest alternatives, or offer reassurances. ONLY state the risks.
+- Be specific about the impact. Refer to the *full, absolute paths* of any files or directories that would be affected, based on the provided Current Working Directory (CWD) and the command itself.
+- If a command affects the CWD (e.g., `rm -r .`), state clearly what the full path of the CWD is and that its contents will be affected.
+- If the risks are minimal or negligible for a typically safe command, state that concisely (e.g., "Minimal risk: This command lists directory contents.").
+- Keep the explanation concise and clear. Use bullet points if there are multiple distinct risks.
+- Output *only* the risk explanation, with no conversational introduction or closing.
+"""
+
 def parse_args():
     """Parse command line arguments."""
     description_text = """TerminalAI: Your command-line AI assistant.
@@ -148,9 +163,42 @@ Project: https://github.com/coaxialdolor/terminalai"""
 
     return parser.parse_args()
 
+# --- Helper Function for AI Risk Assessment ---
+
+def _get_ai_risk_assessment(command, console, provider):
+    """Gets a risk assessment for a command using a secondary AI call."""
+    if not provider:
+        return "Risk assessment requires a configured AI provider."
+
+    try:
+        cwd = os.getcwd()
+        risk_query = f"<RISK_CONFIRMATION> Explain the potential consequences and dangers of running the following command(s) if my current working directory is '{cwd}':\n---\n{command}\n---"
+
+        # Optional: Show thinking indicator
+        # with console.status("[dim]Assessing command risk...[/dim]"):
+        risk_response = provider.generate_response(
+            risk_query,
+            system_prompt=_RISK_ASSESSMENT_SYSTEM_PROMPT, # Use the hardcoded prompt
+            verbose=False # Keep assessment concise
+        )
+        # Basic cleaning - remove potential leading/trailing whitespace/newlines
+        risk_explanation = risk_response.strip()
+        if not risk_explanation:
+             return "AI returned empty risk assessment."
+        return risk_explanation
+
+    except Exception as e:
+        # Log the exception details?
+        # print(f"Error during risk assessment: {e}", file=sys.stderr)
+        return f"Risk assessment failed. Error: {e}" # Return error info
+
+# --- Main Command Handling Logic ---
+
 def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
     console = Console(file=sys.stderr if rich_to_stderr else None)
+    # Load provider here to pass to helper function if needed
+    provider = get_provider(load_config().get("default_provider", ""))
 
     # Detect shell integration
     shell_integration_active = os.environ.get("TERMINALAI_SHELL_INTEGRATION") == "1"
@@ -166,9 +214,39 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
         is_stateful = is_stateful_command(command)
         is_risky = is_risky_command(command)
 
+        # --- Insert Risk Assessment Here if is_risky ---
+        if is_risky:
+            risk_explanation = _get_ai_risk_assessment(command, console, provider)
+            console.print(Panel(
+                Text(risk_explanation, style="yellow"),
+                title="[bold red]AI Risk Assessment[/bold red]",
+                border_style="red",
+                expand=False
+            ))
+
         # A. Handle eval_mode pathway STRICTLY first.
-        # Only enter this block if specifically running in eval_mode for shell function.
         if eval_mode:
+            # --- Insert Risk Assessment Here if is_risky ---
+            # Note: Assessment must print to stderr in eval_mode
+            if is_risky:
+                # Get provider if not already loaded (might be loaded at function start)
+                if 'provider' not in locals() or not provider:
+                    provider = get_provider(load_config().get("default_provider", ""))
+
+                risk_explanation = "Risk assessment skipped (no provider)."
+                if provider:
+                     risk_explanation = _get_ai_risk_assessment(command, console, provider)
+
+                # Print panel directly to stderr for eval_mode visibility
+                # Create a temporary console writing to stderr for the panel
+                stderr_console = Console(file=sys.stderr)
+                stderr_console.print(Panel(
+                    Text(risk_explanation, style="yellow"),
+                    title="[bold red]AI Risk Assessment[/bold red]",
+                    border_style="red",
+                    expand=False
+                ))
+
             # A.1 Auto-confirm non-risky commands if -y is used IN eval_mode
             if auto_confirm and not is_risky:
                 print(command) # Output command to stdout for shell function to eval
@@ -209,6 +287,7 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
             return
 
         else: # C. Handle NON-eval_mode and NON-stateful command
+            # --- Risk Assessment already displayed above if is_risky ---
             # C.1 Auto-confirm non-risky if -y was used (only relevant if called non-interactively without eval)
             if auto_confirm and not is_risky:
                 console.print(f"[green]Auto-executing: {command}[/green]")
@@ -216,17 +295,17 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                 return
 
             # C.2 Regular confirmation prompt for direct execution
-            if is_risky:
-                confirm_msg, default_choice = "Execute? [y/N]: ", "n"
+            # Default N if risky, Y otherwise
+            default_choice_c = "n" if is_risky else "y"
+            prompt_style_c = "red bold" if is_risky else "green"
+            confirm_msg_c = f"Execute '{command}'? [{color_bold_green}Y{color_reset}/{color_bold_yellow}N{color_reset}]: " # Simplified prompt for single non-eval non-stateful
+            console.print(Text(confirm_msg_c, style=prompt_style_c), end="")
+            choice_c = input().lower() or default_choice_c
+            if choice_c == "y":
+                    run_command(command) # Execute using subprocess
             else:
-                confirm_msg, default_choice = "Execute? [Y/n]: ", "y"
-            style = "yellow" if is_risky else "green"
-            console.print(Text(confirm_msg, style=style), end="")
-            choice = input().lower() or default_choice
-            if choice == "y":
-                run_command(command) # Execute using subprocess
-            # We do NOT exit here in interactive mode; just return.
-            return
+                 console.print("[Cancelled]")
+            return # Return after single non-eval command processed or cancelled
 
     # === Multiple Command Logic ===
     else:
@@ -263,11 +342,26 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
         elif choice == "a":
             if eval_mode:
                 cmds_to_eval = []
-                confirm_remaining_non_risky = False # Flag for 'Yes to All'
-
+                confirm_remaining_non_risky = False
                 for i, cmd_item in enumerate(commands):
                     item_is_risky = is_risky_command(cmd_item)
-                    item_is_stateful = is_stateful_command(cmd_item) # Required for prompt text
+                    item_is_stateful = is_stateful_command(cmd_item)
+
+                    # --- Insert Risk Assessment Here if is_risky ---
+                    # Needs to print to stderr
+                    if item_is_risky:
+                        # Provider should be loaded at function start
+                        risk_explanation = "Risk assessment skipped (no provider)."
+                        if provider: # Check if provider was successfully loaded
+                             risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider)
+
+                        stderr_console = Console(file=sys.stderr)
+                        stderr_console.print(Panel(
+                            Text(risk_explanation, style="yellow"),
+                            title="[bold red]AI Risk Assessment[/bold red]",
+                            border_style="red",
+                            expand=False
+                        ))
 
                     # If 'Yes to All' was chosen and current cmd is not risky, auto-confirm
                     if confirm_remaining_non_risky and not item_is_risky:
@@ -337,10 +431,26 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                     print("\n".join(cmds_to_eval))
                     sys.exit(0)
             else: # Not eval_mode, for 'a'
-                # Original logic for non-eval 'a' - uses console.print and run_command
-                for cmd_val_non_eval in commands:
+                # Loop through commands for non-eval 'a'
+                for i, cmd_val_non_eval in enumerate(commands):
                     is_stateful_cmd_val = is_stateful_command(cmd_val_non_eval)
                     is_risky_cmd_val = is_risky_command(cmd_val_non_eval)
+
+                    # --- Insert Risk Assessment Here if is_risky_cmd_val ---
+                    if is_risky_cmd_val:
+                        # Provider should be loaded at function start
+                        risk_explanation = "Risk assessment skipped (no provider)."
+                        if provider: # Check if provider was successfully loaded
+                             risk_explanation = _get_ai_risk_assessment(cmd_val_non_eval, console, provider)
+
+                        console.print(Panel(
+                            Text(risk_explanation, style="yellow"),
+                            title="[bold red]AI Risk Assessment[/bold red]",
+                            border_style="red",
+                            expand=False
+                        ))
+
+                    # --- Existing non-eval 'a' logic follows ---
                     if is_stateful_cmd_val:
                         prompt_text = (
                             f"[STATEFUL COMMAND] '{cmd_val_non_eval}' changes shell state. "
@@ -378,6 +488,31 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                 is_cmd_risky = is_risky_command(cmd)
                 is_cmd_stateful = is_stateful_command(cmd)
 
+                # --- Insert Risk Assessment Here if is_cmd_risky ---
+                if is_cmd_risky:
+                    # Provider should be loaded at function start
+                    risk_explanation = "Risk assessment skipped (no provider)."
+                    if provider: # Check if provider was successfully loaded
+                         risk_explanation = _get_ai_risk_assessment(cmd, console, provider)
+
+                    # Print to stderr if in eval_mode
+                    if eval_mode:
+                        stderr_console = Console(file=sys.stderr)
+                        stderr_console.print(Panel(
+                            Text(risk_explanation, style="yellow"),
+                            title="[bold red]AI Risk Assessment[/bold red]",
+                            border_style="red",
+                            expand=False
+                        ))
+                    else:
+                        console.print(Panel(
+                            Text(risk_explanation, style="yellow"),
+                            title="[bold red]AI Risk Assessment[/bold red]",
+                            border_style="red",
+                            expand=False
+                        ))
+
+                # --- Existing numbered choice logic follows ---
                 if eval_mode:
                     # In eval_mode, all prompts to stderr, command to stdout, then exit.
                     if auto_confirm and not is_cmd_risky: # Applies to both stateful and non-stateful
