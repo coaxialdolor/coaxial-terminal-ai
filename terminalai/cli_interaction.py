@@ -304,15 +304,30 @@ def interactive_mode(chat_mode=False):
         ))
         console.print("[dim]Type 'exit', 'quit', or 'q' to return to your shell.[/dim]")
     else:
+        # Create the styled text for the panel
+        panel_text = Text()
+        panel_text.append("Terminal AI: ", style="bold cyan")
+        panel_text.append("What is your question? ", style="white")
+        panel_text.append("(Type ", style="yellow")
+        panel_text.append("exit", style="bold red")
+        panel_text.append(" or ", style="yellow")
+        panel_text.append("q", style="bold red")
+        panel_text.append(" to quit)", style="yellow")
         console.print(Panel.fit(
-            Text("TerminalAI: What is your question? (Type 'exit' to quit)", style="bold cyan"),
-            border_style="cyan"
+            panel_text,
+            border_style="cyan" # Keep border cyan
         ))
 
     while True:
         # Add visual separation between interactions
         console.print("")
-        prompt = Text("> ", style="bold green")
+        provider_name = config.get("default_provider", "Unknown") # Get provider name
+        prompt = Text()
+        prompt.append("AI:", style="bold cyan")
+        prompt.append("(", style="bold green")
+        prompt.append(provider_name, style="bold green")
+        prompt.append(")", style="bold green")
+        prompt.append("> ", style="bold cyan")
         console.print(prompt, end="")
         query = input().strip()
 
