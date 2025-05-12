@@ -70,7 +70,6 @@ def check_shell_integration():
 
 def install_shell_integration():
     """Install shell integration for seamless stateful command execution via 'ai' shell function."""
-    import shutil
     system = platform.system()
     if system in ("Darwin", "Linux"):
         config_file = get_shell_config_file()
@@ -93,27 +92,38 @@ def install_shell_integration():
         if 'function ai' in content or 'alias ai=' in content:
             print(colorize_command("Warning: An 'ai' function or alias already exists in your shell config. Please resolve this conflict before installing."))
             return False
-        ai_path = shutil.which("ai") or "ai"
-        shell_function = f"""
+        # ai_path = shutil.which("ai") or "ai" # Removed unused variable
+        # Define the shell function template with a placeholder for the ai command path
+        shell_function_template = """
 # >>> TERMINALAI SHELL INTEGRATION START
 # Added by TerminalAI (https://github.com/coaxialdolor/terminalai)
 # This shell function enables seamless stateful command execution via eval $(ai ...)
 # Prompts and errors from the Python script are sent to stderr and are visible in the terminal.
 ai() {{
-    export TERMINALAI_SHELL_INTEGRATION=1
-    if [ $# -eq 0 ] || [ "$1" = "setup" ] || [ "$1" = "--chat" ] || [ "$1" = "-c" ] || [ "$1" = "ai-c" ]; then
-        command ai "$@"
+    # Bypass eval for interactive/chat/setup/help/version modes
+    if [ $# -eq 0 ] || \\[ "$1" = "setup" ] || \\[ "$1" = "--chat" ] || \\[ "$1" = "-c" ] || \\[ "$1" = "--help" ] || \\[ "$1" = "--version" ] || \\[ "$(basename "$0")" = "ai-c" ]; then
+        {ai_command} "$@"
     else
+        # Use eval mode for direct queries to handle potential stateful commands
         local output
-        output=$(command ai --eval-mode "$@")
+        # Run with --eval-mode and capture stdout
+        # Ensure TERMINALAI_SHELL_INTEGRATION is set for the child process if needed
+        output=$(export TERMINALAI_SHELL_INTEGRATION=1; {ai_command} --eval-mode "$@")
         local ai_status=$?
+        # If the command succeeded and produced output, evaluate it
         if [ $ai_status -eq 0 ] && [ -n "$output" ]; then
             eval "$output"
         fi
+        # Return the original status code of the 'ai' command itself
+        return $ai_status
     fi
 }}
 # <<< TERMINALAI SHELL INTEGRATION END
 """
+        # Format the template with the actual command path (using 'command ai' syntax is robust)
+        # Using 'command ai' tells the shell to ignore aliases/functions and use the executable in PATH
+        shell_function = shell_function_template.format(ai_command="command ai")
+
         # Ensure block is separated by newlines
         if not content.endswith("\n"):
             content += "\n"
@@ -123,12 +133,12 @@ ai() {{
         # Copy the appropriate source command to clipboard
         shell = os.environ.get("SHELL", "")
         if "zsh" in shell:
-            source_cmd = f"source ~/.zshrc"
+            source_cmd = "source ~/.zshrc"
         elif "bash" in shell:
             if system == "Darwin" and os.path.exists(os.path.expanduser("~/.bash_profile")):
-                source_cmd = f"source ~/.bash_profile"
+                source_cmd = "source ~/.bash_profile"
             else:
-                source_cmd = f"source ~/.bashrc"
+                source_cmd = "source ~/.bashrc"
         else:
             source_cmd = f"source {config_file}"
         copy_to_clipboard(source_cmd)
