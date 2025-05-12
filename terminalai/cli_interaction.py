@@ -241,7 +241,7 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                 cmd_display_text += " [bold yellow][STATEFUL][/bold yellow]"
             cmd_list.append(cmd_display_text)
         console.print(Panel(
-            "\\n".join(cmd_list),
+            "\n".join(cmd_list),
             title=f"Found {n_commands} commands",
             border_style="blue"
         ))
@@ -293,7 +293,7 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                         print(f"[Skipped cmd: {cmd_item}]", file=sys.stderr)
 
                 if cmds_to_eval:
-                    print("\\n".join(cmds_to_eval))
+                    print("\n".join(cmds_to_eval))
                     sys.exit(0)
                 else:
                     print("[No commands selected for execution]", file=sys.stderr)
