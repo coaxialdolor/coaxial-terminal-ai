@@ -360,9 +360,12 @@ def interactive_mode(chat_mode=False):
                         if choice != 'n':  # Default to yes
                             copy_to_clipboard(cmd)
                             console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                            # Exit interactive mode to shell for the user to paste
-                            console.print("[cyan]Exiting to shell...[/cyan]")
-                            sys.exit(0)
+                            # Exit interactive mode ONLY if not in persistent chat mode
+                            if not chat_mode:
+                                console.print("[cyan]Exiting to shell...[/cyan]")
+                                sys.exit(0)
+                        # If user chose 'n' or we are in chat mode and copied,
+                        # break the inner loop over commands but continue chat if applicable
                         break
 
                 # If we get here, there were no stateful commands or user chose not to copy them
