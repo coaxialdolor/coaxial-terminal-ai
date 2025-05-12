@@ -52,13 +52,11 @@ def main():
         setup_wizard()
         sys.exit(0)
 
-    # Run in interactive mode if no query provided
-    if not args.query or getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c'):
-        try:
-            interactive_mode(chat_mode=True)
-        except SystemExit:
-            pass
-        return
+    # Run in interactive mode if no query provided or chat explicitly requested
+    is_chat_request = getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c')
+    if not args.query or is_chat_request:
+        interactive_mode(chat_mode=is_chat_request) # Pass True only if chat was explicit
+        sys.exit(0)
 
     # Get AI provider
     provider = get_provider(provider_name)

@@ -100,15 +100,28 @@ def install_shell_integration():
 # Prompts and errors from the Python script are sent to stderr and are visible in the terminal.
 ai() {
     export TERMINALAI_SHELL_INTEGRATION=1
-    if [ $# -eq 0 ] || [ "$1" = "setup" ] || [ "$1" = "--chat" ] || [ "$1" = "-c" ] || [ "$1" = "ai-c" ]; then
+    # Bypass eval for interactive/chat/setup/help/version modes
+    if [ $# -eq 0 ] || \
+       [ "$1" = "setup" ] || \
+       [ "$1" = "--chat" ] || \
+       [ "$1" = "-c" ] || \
+       [ "$1" = "--help" ] || \
+       [ "$1" = "-h" ] || \
+       [ "$1" = "--version" ] || \
+       [ "$(basename "$0")" = "ai-c" ]; then
         command ai "$@"
     else
+        # Use eval mode for direct queries to handle potential stateful commands
         local output
+        # Run with --eval-mode and capture stdout
         output=$(command ai --eval-mode "$@")
         local ai_status=$?
+        # If the command succeeded and produced output, evaluate it
         if [ $ai_status -eq 0 ] && [ -n "$output" ]; then
             eval "$output"
         fi
+        # Return the original status code of the 'ai' command itself
+        return $ai_status
     fi
 }
 # <<< TERMINALAI SHELL INTEGRATION END
