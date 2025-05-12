@@ -1,23 +1,36 @@
 # Terminal AI
 
-A package that makes your terminal AI-powered.
+**Bring the power of AI directly to your command line!**
 
-## Stateful Branch
+TerminalAI is your intelligent command-line assistant. Ask questions in natural language, get shell command suggestions, and execute them safely and interactively. It streamlines your workflow by translating your requests into actionable commands.
 
-The stateful branch is dedicated to adding state management functionality to the Terminal AI application. This will enable more sophisticated interactions and better memory management for the terminal assistant.
-
-TerminalAI is a command-line AI assistant designed to interpret user requests, suggest relevant terminal commands, and execute them interactively.
+```
+████████╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗ █████╗ ██║       █████╗ ██╗
+╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗██║      ██╔══██╗██║
+   ██║   █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║███████║██║      ███████║██║
+   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██╔══██║██║      ██╔══██║██║
+   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██║  ██║███████╗ ██║  ██║██║
+   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝ ╚═╝  ╚═╝╚═╝
+```
 
 ## Key Features
-- Installable via pip, automatically adds itself to PATH for easy use
-- Supports multiple AI providers: OpenRouter, Gemini, Mistral, and Ollama
-- Interactive mode when run without arguments
-- Intelligent command detection and execution flow
-- Smart handling of factual vs. command-based questions
-- Colored output with syntax highlighting for commands
-- `ai setup` command with menu interface for configuration
-- Handles stateful commands (like `cd`, `export`) by offering to copy them to your clipboard.
-- Optional shell integration for advanced users (less emphasized now).
+
+*   **Natural Language Interaction:** Ask questions or request actions naturally.
+*   **Intelligent Command Suggestion:** Get relevant shell commands based on your query.
+*   **Multiple AI Backends:** Supports OpenRouter, Gemini, Mistral, and local Ollama models.
+*   **Interactive Execution:** Review and confirm commands before they run.
+*   **Context-Aware:** Includes OS and current directory information in prompts to the AI.
+*   **Safe Command Handling:**
+    *   Non-stateful commands run directly after confirmation.
+    *   Risky commands require explicit confirmation.
+    *   Stateful commands (`cd`, `export`, etc.) are handled safely (see below).
+*   **Multiple Modes:**
+    *   **Direct Query (`ai "..."`):** Get a single response and command suggestions.
+    *   **Single Interaction (`ai`):** Ask one question, get a response, and return to the shell.
+    *   **Chat Mode (`ai --chat` or `ai -c`):** Persistent conversation with the AI.
+*   **Easy Configuration:** `ai setup` provides a menu for API keys and settings.
+*   **Optional Shell Integration:** For seamless execution of stateful commands in direct query mode.
+*   **Syntax Highlighting:** Uses `rich` for formatted output.
 
 ## Installation
 
@@ -26,200 +39,100 @@ TerminalAI is a command-line AI assistant designed to interpret user requests, s
 pip install coaxial-terminal-ai
 ```
 
-### Option 2: Install from source
+### Option 2: Install from Source
 ```sh
 git clone https://github.com/coaxialdolor/terminalai.git
 cd terminalai
 pip install -e .
 ```
+This automatically adds the `ai` command to your PATH.
 
 ## Quick Setup
 
-See the [Quick Setup Guide](quick_setup_guide.md) for detailed instructions.
+1.  **Install:** Use one of the methods above.
+2.  **Configure API Keys:** Run `ai setup` and select option `5` to add API keys for your chosen provider(s) (e.g., Mistral, Ollama, OpenRouter, Gemini).
+3.  **Set Default Provider:** In `ai setup`, select option `1` to choose which provider `ai` uses by default.
+4.  **(Optional) Install Shell Integration:** See "Handling Stateful Commands" below if you want direct execution for commands like `cd` when using `ai "..."`.
+5.  **Start Using:** You're ready!
 
-In brief:
-1. Install TerminalAI
-2. Run `ai setup` to configure your API keys
-3. Set your default provider
-4. Start using TerminalAI! (Shell integration is now optional and for specific use cases, see "Running Stateful Commands" section)
+See the [Quick Setup Guide](quick_setup_guide.md) for more detailed instructions.
 
-## Usage
+## Usage Examples
 
-### Interactive Mode
-Simply run `ai` without arguments to enter interactive mode:
+**Single Interaction Mode:** Ask one question, get an answer/commands, then return to shell.
 ```sh
 ai
-AI: What is your question?
-: how do I find all .txt files in this directory?
+AI:(mistral)> how do I list files by size?
+# ... AI response and command prompt ...
+# (Returns to shell after handling)
 ```
 
-### Direct Query
+**Direct Query Mode:** Provide the query directly.
 ```sh
-ai "how do I find all .txt files in this directory?"
+ai "find all python files modified in the last day"
 ```
 
-### Configuration
+**Chat Mode:** Have a persistent conversation.
 ```sh
-# Open the setup menu
+ai --chat
+AI:(mistral)> Tell me about this project.
+# ... AI response ...
+AI:(mistral)> how can I contribute?
+# ... AI response ...
+# (Type 'exit' or 'q' to quit chat)
+```
+
+**Configuration Menu:**
+```sh
 ai setup
-
-# Set a default provider directly
-ai setup --set-default mistral
-
-# Install shell integration for stateful commands
-ai setup --install-shell-integration
 ```
 
-### Command Flags
+**Command Flags:**
 ```sh
-# Auto-confirm commands (except risky ones)
-ai -y "create a temporary folder"
+# Auto-confirm non-risky commands
+ai -y "create a backup folder"
 
 # Request more detailed responses
-ai -v "explain how grep works"
+ai -v "explain symbolic links"
 
 # Get longer, more comprehensive answers
-ai -l "explain docker networking"
+ai -l "explain the difference between TCP and UDP"
 ```
 
-## Command Execution
+## Handling Stateful Commands (`cd`, `export`, etc.)
 
-When TerminalAI suggests commands:
+Commands that need to change your *current* shell's state (like changing directory with `cd` or setting environment variables with `export`) require special handling because a child process (like the `ai` script) cannot directly modify its parent shell.
 
-1. **Single Command**: You'll be prompted with a Y/N confirmation
-2. **Multiple Commands**: You'll choose which command to run by number
-3. **Risky Commands**: Always require an additional confirmation
-4. **Stateful Commands**: For commands that change shell state (like `cd`, `export`), TerminalAI will offer to copy the command to your clipboard for you to run manually.
+TerminalAI offers two ways to handle this:
 
-## Factual Questions vs. Commands
+**1. Copy to Clipboard (Default & Safest)**
 
-TerminalAI is designed to:
-- Give direct factual answers to informational questions without suggesting commands
-- Provide appropriate commands for task-based requests
+*   This method works in **all** modes (`ai`, `ai "..."`, `ai --chat`).
+*   When a stateful command is suggested, TerminalAI will prompt you to copy it:
+    ```
+    [STATEFUL COMMAND] The command 'cd /path/to/dir' changes shell state. Copy to clipboard? [Y/n]:
+    ```
+*   Press `Y` (or Enter) to copy the command.
+*   Paste (`Cmd+V` / `Ctrl+Shift+V`) the command into your shell prompt and press Enter to run it manually.
 
-Example:
-```sh
-ai "what is the capital of France?"
-[AI] Paris
+**2. Shell Integration (for `ai "..."` mode)**
 
-ai "how do I find files containing 'error' in this directory?"
-[AI]
-╭─── Command ───╮
-│ grep -r "error" . │
-╰───────────────╯
-```
+*   This method enables *direct execution* of stateful commands, but **only when using the Direct Query mode (`ai "..."`)**. It does *not* work for the interactive `ai` or `ai --chat` modes.
+*   **How it works:** It installs an `ai` shell function that wraps the `ai` command. When you run `ai "query"`, this function runs the script in a special mode (`--eval-mode`), captures the confirmed command, and executes it using the shell's `eval` command.
+*   **Installation:**
+    *   Run `ai setup`.
+    *   Choose option `7` ("Install ai shell integration").
+    *   Restart your shell or source your config file (e.g., `source ~/.zshrc`).
+*   **Usage:** Simply run `ai "change to parent directory"`. If you confirm `cd ..`, it will execute directly in your shell.
 
-## Running Stateful Commands (cd, export, etc.)
+## Contributing & Feedback
 
-Some commands, like `cd my_folder` or `export MY_VAR=value`, need to change the state of your current shell. A Python script like TerminalAI cannot directly make these changes in your active terminal session.
-
-**How TerminalAI Handles Stateful Commands:**
-
-There are now two ways to handle stateful commands:
-
-### 1. Seamless Execution via Shell Integration (Recommended for Advanced Users)
-
-You can install a shell function named `ai` that enables seamless execution of state-changing commands directly in your current shell session. This works by capturing the output of the TerminalAI executable and evaluating it in your shell using `eval $(ai ...)` automatically.
-
-**To install:**
-
-- Run `ai setup` and choose option 7: "Install ai shell integration".
-- This will add a function named `ai` to your shell config (e.g., `.zshrc` or `.bashrc`).
-- After restarting your shell or sourcing your config, you can use `ai` as before:
-
-```sh
-ai() {
-    # Bypass eval for interactive/chat/setup modes
-    if [ $# -eq 0 ] || [ "$1" = "setup" ] || [ "$1" = "--chat" ] || [ "$1" = "-c" ] || [ "$1" = "ai-c" ]; then
-        command ai "$@"
-    else
-        local output
-        output=$(command ai --eval-mode "$@")
-        local ai_status=$?
-        if [ $ai_status -eq 0 ] && [ -n "$output" ]; then
-            eval "$output"
-        fi
-    fi
-}
-```
-
-- This ensures that interactive and chat modes (like `ai`, `ai setup`, `ai --chat`, `ai -c`, and `ai-c`) work as expected, and only normal queries use eval mode for seamless stateful command execution.
-
-### 2. Copy to Clipboard (Default for Most Users)
-
-When TerminalAI suggests a stateful command, it will:
-1. Identify the command as stateful.
-2. Prompt you with an option to copy the command to your clipboard (e.g., `[STATEFUL COMMAND] The command 'cd my_folder' changes shell state. Copy to clipboard to run manually? [Y/n]`).
-3. If you choose 'Y', the command is copied to your clipboard.
-4. You can then paste (`Cmd+V` or `Ctrl+Shift+V`) and run the command directly in your terminal.
-
-This method ensures you have full control over commands that modify your shell's environment.
-
-**Safety Features:**
-- Commands are never executed without your explicit permission.
-- Risky commands (rm, chmod, etc.) require additional confirmation.
-- State-changing commands are handled by offering to copy them to your clipboard or, if you use the shell integration, by seamless execution.
-
-## Supported AI Providers
-
-TerminalAI supports the following providers:
-- **OpenRouter** - Access to various models including GPT models
-- **Mistral** - Efficient and powerful language models
-- **Gemini** - Google's AI model
-- **Ollama** - Run models locally
-
-Configure your API keys through the setup menu:
-```sh
-ai setup
-```
-
-## Safety Features
-
-- Commands are never executed without your explicit permission
-- Risky commands (rm, chmod, etc.) require additional confirmation
-- Stateful (shell state-changing) commands are handled by offering to copy them to your clipboard.
-- Safe subprocess execution for normal commands
+Suggestions, bug reports, and contributions are welcome! Please feel free to:
+*   Open an issue on [GitHub](https://github.com/coaxialdolor/terminalai).
+*   Contact the author via email (you can find the email on the GitHub profile).
 
 ## Disclaimer
 
 **TerminalAI is provided as-is without any warranties. Use at your own risk.**
 
-The developers of TerminalAI cannot be held responsible for:
-- Data loss
-- System damage
-- Any other adverse effects resulting from executing commands suggested by the AI
-
-Always review commands before executing them, especially those that modify system files or can potentially delete data. The AI assistant makes its best effort to provide appropriate commands, but it may not always suggest the optimal or safest solution for your specific environment.
-
-## Help and Documentation
-
-For detailed usage instructions and examples:
-```sh
-ai --help
-```
-
-## Improved Shell Integration and Command Formatting
-
-- With the latest shell integration, stateful commands (like `cd`, `export`, etc.) are now executable in all modes (including interactive and multi-command selection) if the integration is installed.
-- The AI is instructed to always put each command in its own code block, with no comments or explanations inside. Explanations must be outside code blocks.
-- If the AI puts multiple commands in a single code block, TerminalAI will still extract and show each as a separate command for selection and execution.
-
-### Examples
-
-**Correct (multiple commands):**
-```bash
-ls
-```
-```bash
-ls -l
-```
-Explanation: The first command lists files, the second lists them in long format.
-
-**Incorrect:**
-```bash
-# List files
-ls
-# List files in long format
-ls -l
-```
-(Never put comments or multiple commands in a single code block.)
+Always review commands suggested by the AI before executing them, especially those marked as [RISKY] or [STATEFUL]. The developers are not responsible for any data loss, system damage, or other issues that may arise from using this tool.

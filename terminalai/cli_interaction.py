@@ -1,26 +1,59 @@
 """CLI interaction functionality for TerminalAI."""
 import sys
 import argparse
+import os
 from terminalai.command_utils import run_shell_command, is_shell_command
 from terminalai.command_extraction import is_stateful_command, is_risky_command
-from terminalai.formatting import ColoredDescriptionFormatter
 from terminalai.clipboard_utils import copy_to_clipboard
-import os
+
+# Imports for rich components - moved to top level for functions that use them often
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.rule import Rule
+
+# Imports for terminalai components - moved to top level where feasible
+from terminalai.config import (
+    load_config, save_config,
+    get_system_prompt, DEFAULT_SYSTEM_PROMPT
+)
+from terminalai.shell_integration import (
+    install_shell_integration, uninstall_shell_integration,
+    check_shell_integration, get_system_context
+)
+from terminalai.ai_providers import get_provider
+from terminalai.formatting import print_ai_answer_with_rich
+from terminalai.command_extraction import extract_commands as get_commands_interactive
+from terminalai.__init__ import __version__
 
 def parse_args():
     """Parse command line arguments."""
+    description_text = """TerminalAI: Your command-line AI assistant.
+Ask questions or request commands in natural language.
+
+Modes:
+  ai "query"   : Ask a question directly, get a response, then exit.
+  ai           : Enter single-interaction mode (ask, respond, exit).
+  ai --chat/-c : Enter persistent chat mode.
+
+Command Handling:
+- Non-stateful commands (ls, grep) run after [Y/n] confirmation.
+- Stateful commands (cd, export) prompt to copy to clipboard [Y/n].
+- If Shell Integration is installed (via 'ai setup'):
+  Stateful commands in Direct Query mode (ai "...") run directly after [Y/n].
+  Interactive modes (ai, ai --chat) still use copy-to-clipboard.
+- Risky commands (rm, sudo) always require explicit 'y' confirmation.
+
+AI Formatting:
+- Provide commands in separate ```bash blocks.
+- Keep explanations outside code blocks."""
+    epilog_text = """For setup and configuration, run 'ai setup'.
+Project: https://github.com/coaxialdolor/terminalai"""
     parser = argparse.ArgumentParser(
-        description="TerminalAI: Your command-line AI assistant.\n"
-                    "Ask questions or request commands, and AI will suggest appropriate actions.\n"
-                    "- With the latest shell integration, stateful commands (like cd, export, etc.) are now executable in all modes if the integration is installed.\n"
-                    "- Each command should be in its own code block, with no comments or explanations inside. Explanations must be outside code blocks.\n"
-                    "- If the AI puts multiple commands in a single code block, TerminalAI will still extract and show each as a separate command.\n"
-                    "\nExamples of correct formatting:\n"
-                    "```bash\nls\n```\n```bash\nls -l\n```\nExplanation: The first command lists files, the second lists them in long format.\n"
-                    "Incorrect:\n"
-                    "```bash\n# List files\nls\n# List files in long format\nls -l\n```\n(Never put comments or multiple commands in a single code block.)\n",
-        epilog="For more details, visit https://github.com/coaxialdolor/terminalai",
-        formatter_class=ColoredDescriptionFormatter
+        description=description_text,
+        epilog=epilog_text,
+        # Using RawTextHelpFormatter to preserve newlines in description and epilog
+        formatter_class=argparse.RawTextHelpFormatter
     )
 
     parser.add_argument(
@@ -62,7 +95,7 @@ def parse_args():
     parser.add_argument(
         "--eval-mode",
         action="store_true",
-        help=argparse.SUPPRESS
+        help=argparse.SUPPRESS  # This argument is for internal use
     )
 
     parser.add_argument(
@@ -75,10 +108,6 @@ def parse_args():
 
 def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.text import Text
-
     console = Console(file=sys.stderr if rich_to_stderr else None)
 
     # Detect shell integration
@@ -119,7 +148,7 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
         if is_stateful:
             prompt_text = (
                 f"[STATEFUL COMMAND] '{command}' changes shell state. "
-                "To execute seamlessly, install the ai shell integration (see setup). "
+                "Install shell integration (see setup) for seamless execution. "
                 "Copy to clipboard instead? [Y/n]: "
             )
             console.print(Text(prompt_text, style="yellow bold"), end="")
@@ -183,14 +212,20 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                     if eval_mode or shell_integration_active:
                         # Always require extra confirmation for risky commands
                         if is_cmd_risky:
-                            prompt_text = f"[RISKY][STATEFUL COMMAND] The command '{cmd}' is risky and changes shell state. Execute? [y/N]: "
+                            prompt_text = (
+                                f"[RISKY][STATEFUL COMMAND] '{cmd}' is risky and changes "
+                                "shell state. Execute? [y/N]: "
+                            )
                             console.print(Text(prompt_text, style="red bold"), end="")
                             subchoice = input().lower()
                             if subchoice.lower() != "y":
                                 console.print("[Cancelled]")
                                 sys.exit(1)
                         else:
-                            prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Execute? [Y/n]: "
+                            prompt_text = (
+                                f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
+                                "Execute? [Y/n]: "
+                            )
                             console.print(Text(prompt_text, style="yellow bold"), end="")
                             subchoice = input().lower()
                             if subchoice.lower() != "y":
@@ -199,7 +234,10 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                         print(cmd)
                         sys.exit(0)
                     else:
-                        prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Copy to clipboard? [Y/n]: "
+                        prompt_text = (
+                            f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
+                            "Copy to clipboard? [Y/n]: "
+                        )
                         console.print(Text(prompt_text, style="yellow bold"), end="")
                         subchoice = input().lower()
                         if subchoice.lower() != "n":
@@ -223,14 +261,20 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
 
                     if eval_mode or shell_integration_active:
                         if is_cmd_risky:
-                            prompt_text = f"[RISKY][STATEFUL COMMAND] The command '{cmd}' is risky and changes shell state. Execute? [y/N]: "
+                            prompt_text = (
+                                f"[RISKY][STATEFUL COMMAND] '{cmd}' is risky and changes "
+                                "shell state. Execute? [y/N]: "
+                            )
                             console.print(Text(prompt_text, style="red bold"), end="")
                             subchoice = input().lower()
                             if subchoice.lower() != "y":
                                 console.print("[Cancelled]")
                                 sys.exit(1)
                         else:
-                            prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Execute? [Y/n]: "
+                            prompt_text = (
+                                f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
+                                "Execute? [Y/n]: "
+                            )
                             console.print(Text(prompt_text, style="yellow bold"), end="")
                             subchoice = input().lower()
                             if subchoice.lower() != "y":
@@ -239,7 +283,10 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                         print(cmd)
                         sys.exit(0)
                     else:
-                        prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Copy to clipboard? [Y/n]: "
+                        prompt_text = (
+                            f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
+                            "Copy to clipboard? [Y/n]: "
+                        )
                         console.print(Text(prompt_text, style="yellow bold"), end="")
                         subchoice = input().lower()
                         if subchoice.lower() != "n":
@@ -262,9 +309,6 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
 
 def run_command(command):
     """Execute a shell command with error handling."""
-    from rich.console import Console
-    from rich.panel import Panel
-
     console = Console()
 
     if not command:
@@ -288,13 +332,6 @@ def run_command(command):
 
 def interactive_mode(chat_mode=False):
     """Run TerminalAI in interactive mode. If chat_mode is True, stay in a loop."""
-    from terminalai.config import load_config
-    from rich.console import Console
-    from rich.text import Text
-    from rich.panel import Panel
-    from rich.rule import Rule
-
-    config = load_config()
     console = Console()
 
     if chat_mode:
@@ -321,7 +358,7 @@ def interactive_mode(chat_mode=False):
     while True:
         # Add visual separation between interactions
         console.print("")
-        provider_name = config.get("default_provider", "Unknown") # Get provider name
+        provider_name = load_config().get("default_provider", "Unknown") # Get provider name
         prompt = Text()
         prompt.append("AI:", style="bold cyan")
         prompt.append("(", style="bold green")
@@ -338,11 +375,9 @@ def interactive_mode(chat_mode=False):
         if not query:
             continue
 
-        from terminalai.shell_integration import get_system_context
         system_context = get_system_context()
 
-        from terminalai.ai_providers import get_provider
-        provider = get_provider(config.get("default_provider", ""))
+        provider = get_provider(load_config().get("default_provider", ""))
         if not provider:
             console.print("[bold red]No AI provider configured. Please run 'ai setup' first.[/bold red]")
             break
@@ -356,19 +391,20 @@ def interactive_mode(chat_mode=False):
             # Clear the thinking indicator with a visual separator
             console.print(Rule(style="dim"))
 
-            from terminalai.formatting import print_ai_answer_with_rich
             print_ai_answer_with_rich(response)
 
             # Extract and handle commands from the response, limiting to max 3 commands
             # to avoid overwhelming the user in interactive mode
-            from terminalai.command_extraction import extract_commands as get_commands
-            commands = get_commands(response, max_commands=3)
+            commands = get_commands_interactive(response, max_commands=3)
 
             if commands:
                 # For interactive mode, we need to handle stateful commands specially
                 for cmd in commands:
                     if is_stateful_command(cmd):
-                        prompt_text = f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. Copy to clipboard? [Y/n]: "
+                        prompt_text = (
+                            f"[STATEFUL COMMAND] The command '{cmd}' changes shell state. "
+                            "Copy to clipboard? [Y/n]: "
+                        )
                         console.print(Text(prompt_text, style="yellow bold"), end="")
                         choice = input().lower()
 
@@ -403,13 +439,6 @@ def interactive_mode(chat_mode=False):
 
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
-    from terminalai.config import (
-        load_config, save_config,
-        get_system_prompt, DEFAULT_SYSTEM_PROMPT
-    )
-    from rich.console import Console
-
-    config = load_config()
     console = Console()
 
     logo = '''
@@ -442,14 +471,15 @@ def setup_wizard():
             '1': ("Set which AI provider (OpenRouter, Gemini, Mistral, Ollama) "
                   "is used by default for all queries."),
             '2': "View the current system prompt that guides the AI's behavior.",
-            '3': "Edit the system prompt to customize how the AI responds to your queries.",
+            '3': "Edit the system prompt to customize how the AI responds.",
             '4': "Reset the system prompt to the default recommended by TerminalAI.",
             '5': "Set/update API key/host for any provider.",
             '6': "List providers and their stored API key/host.",
-            '7': "Install the 'ai' shell function for seamless stateful command execution (recommended for advanced users).",
+            '7': ("Install the 'ai' shell function for seamless stateful command execution "
+                  "(Only affects ai \"...\" mode)."),
             '8': "Uninstall the 'ai' shell function from your shell config.",
-            '9': "Check if the 'ai' shell integration is installed and highlight it in your shell config.",
-            '10': "Display the quick setup guide to help you get started with TerminalAI.",
+            '9': "Check if the 'ai' shell integration is installed in your shell config.",
+            '10': "Display the quick setup guide to help you get started.",
             '11': "View information about TerminalAI, including version and links.",
             '12': "Exit the setup menu."
         }
@@ -570,15 +600,12 @@ def setup_wizard():
                 console.print(f"[bold yellow]{p_item}:[/bold yellow] {shown}")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '7':
-            from terminalai.shell_integration import install_shell_integration
             install_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '8':
-            from terminalai.shell_integration import uninstall_shell_integration
             uninstall_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '9':
-            from terminalai.shell_integration import check_shell_integration
             check_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '10':
@@ -647,7 +674,6 @@ You're now ready to use TerminalAI! Here's how:
             console.print(guide)
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '11':
-            from terminalai.__init__ import __version__
             console.print("\n[bold cyan]About TerminalAI:[/bold cyan]\n")
             console.print(f"[bold]Version:[/bold] {__version__}")
             console.print("[bold]GitHub:[/bold] https://github.com/coaxialdolor/terminalai")
