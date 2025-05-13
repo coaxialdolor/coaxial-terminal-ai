@@ -23,19 +23,22 @@ class AIProvider:
         """
         raise NotImplementedError
 
-    def generate_response(self, user_query, system_context, verbose=False):
+    def generate_response(self, user_query, system_context, verbose=False, override_system_prompt=None):
         """Generate a response with the given query and system context.
 
         Args:
             user_query: The user's question or request
-            system_context: The system context/instructions
+            system_context: The system context/instructions (used if override_system_prompt is None)
             verbose: Whether to provide a more detailed response
+            override_system_prompt: If provided, this system prompt will be used instead of system_context.
 
         Returns:
             The formatted response from the AI
         """
-        # Combine system context and user query
-        full_prompt = f"{system_context}\n\n{user_query}"
+        current_system_prompt = override_system_prompt if override_system_prompt is not None else system_context
+
+        # Combine system prompt and user query
+        full_prompt = f"{current_system_prompt}\n\n{user_query}"
 
         # If verbose is enabled, add instructions for a more detailed response
         if verbose:

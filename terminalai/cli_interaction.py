@@ -178,8 +178,9 @@ def _get_ai_risk_assessment(command, console, provider):
         # with console.status("[dim]Assessing command risk...[/dim]"):
         risk_response = provider.generate_response(
             risk_query,
-            system_prompt=_RISK_ASSESSMENT_SYSTEM_PROMPT, # Use the hardcoded prompt
-            verbose=False # Keep assessment concise
+            system_context=None, # Not needed as we are overriding
+            verbose=False, # Keep assessment concise
+            override_system_prompt=_RISK_ASSESSMENT_SYSTEM_PROMPT # Use the hardcoded prompt
         )
         # Basic cleaning - remove potential leading/trailing whitespace/newlines
         risk_explanation = risk_response.strip()
@@ -197,8 +198,15 @@ def _get_ai_risk_assessment(command, console, provider):
 def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
     console = Console(file=sys.stderr if rich_to_stderr else None)
-    # Load provider here to pass to helper function if needed
     provider = get_provider(load_config().get("default_provider", ""))
+
+    # ANSI color codes for prompts (accessible throughout the function)
+    color_reset = "\033[0m"
+    color_bold_green = "\033[1;32m"
+    color_bold_yellow = "\033[1;33m"
+    color_bold_red = "\033[1;31m"
+    color_bold_cyan = "\033[1;36m"
+    color_dim = "\033[2m"
 
     # Detect shell integration
     shell_integration_active = os.environ.get("TERMINALAI_SHELL_INTEGRATION") == "1"
@@ -380,14 +388,6 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                     if item_is_risky: prompt_parts.append(" [RISKY]")
                     if item_is_stateful: prompt_parts.append(" [STATEFUL]")
                     if confirm_remaining_non_risky: prompt_parts.append(" ['A' previously selected]") # Indicate 'A' status
-
-                    # Use ANSI codes for color
-                    color_reset = "\033[0m"
-                    color_bold_green = "\033[1;32m"
-                    color_bold_yellow = "\033[1;33m"
-                    color_bold_red = "\033[1;31m"
-                    color_bold_cyan = "\033[1;36m"
-                    color_dim = "\033[2m"
 
                     prompt_base = "".join(prompt_parts) + " Execute? "
                     options_text = (
