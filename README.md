@@ -17,6 +17,7 @@ TerminalAI is your intelligent command-line assistant. Ask questions in natural 
 
 *   **Natural Language Interaction:** Ask questions or request actions naturally.
 *   **Intelligent Command Suggestion:** Get relevant shell commands based on your query.
+*   **File Reading & Explanation:** Read and understand the content of specified files within your project context using the `--read-file` flag.
 *   **Multiple AI Backends:** Supports OpenRouter, Gemini, Mistral, and local Ollama models.
 *   **Interactive Execution:** Review and confirm commands before they run.
 *   **Context-Aware:** Includes OS and current directory information in prompts to the AI.
@@ -89,6 +90,9 @@ ai -l "explain the difference between TCP and UDP"
 # Combine flags: Auto-confirm and Verbose
 ai -y -v "create a new directory called 'test_project' and list its contents"
 # (Example: If AI suggests 'mkdir test_project && ls test_project', it will run without a prompt)
+
+# Read and explain a file
+ai --read-file ./my_script.py "Summarize this Python script and what it does"
 ```
 
 **3. Chat Mode (`ai --chat` or `ai -c`):** Have a persistent conversation.

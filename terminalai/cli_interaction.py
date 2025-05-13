@@ -100,6 +100,10 @@ AVAILABLE FLAGS:
                      Example: ai -l "explain git rebase workflow"
   --setup           Run the interactive setup wizard.
   --version         Show program's version number and exit.
+  --read-file <filepath>
+                    Read the specified file and use its content in the prompt.
+                    The AI will be asked to explain/summarize this file based on your query.
+                    Example: ai --read-file script.py "explain this script"
 
 -----------------------------------------------------------------------
 AI FORMATTING EXPECTATIONS:
@@ -166,7 +170,7 @@ Project: https://github.com/coaxialdolor/terminalai"""
         "--read-file",
         type=str,
         metavar="<filepath>",
-        help=argparse.SUPPRESS # Add to help text later if desired
+        help="Read the specified file and use its content in the prompt. Your query will then be about this file."
     )
 
     return parser.parse_args()
