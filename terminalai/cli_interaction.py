@@ -2,6 +2,7 @@
 import os
 import sys
 import argparse
+import time # Import time module for sleep
 from terminalai.command_utils import run_shell_command, is_shell_command
 from terminalai.command_extraction import is_stateful_command, is_risky_command
 from terminalai.clipboard_utils import copy_to_clipboard
@@ -173,6 +174,8 @@ def _get_ai_risk_assessment(command, console, provider):
     try:
         cwd = os.getcwd()
         risk_query = f"<RISK_CONFIRMATION> Explain the potential consequences and dangers of running the following command(s) if my current working directory is '{cwd}':\n---\n{command}\n---"
+
+        time.sleep(1) # Add 1-second delay before the API call
 
         # Optional: Show thinking indicator
         # with console.status("[dim]Assessing command risk...[/dim]"):
