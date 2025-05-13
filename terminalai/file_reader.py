@@ -1,7 +1,7 @@
 import os
 
-# Define allowed extensions and max file size (e.g., 1MB)
-ALLOWED_EXTENSIONS = {".txt", ".py", ".json", ".md", ".log", ".sh", ".cfg", ".ini", ".yaml", ".yml", ".toml"}
+# Define max file size (e.g., 1MB)
+# ALLOWED_EXTENSIONS = {".txt", ".py", ".json", ".md", ".log", ".sh", ".cfg", ".ini", ".yaml", ".yml", ".toml"} # Removed
 MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024  # 1MB
 
 def read_project_file(filepath: str, project_root: str) -> tuple[str | None, str | None]:
@@ -26,20 +26,21 @@ def read_project_file(filepath: str, project_root: str) -> tuple[str | None, str
         if not abs_filepath.startswith(abs_project_root):
             return None, f"Error: Access denied. File '{filepath}' is outside the project directory '{project_root}'."
 
-        # Security: Check file extension
-        _, ext = os.path.splitext(abs_filepath)
-        if ext.lower() not in ALLOWED_EXTENSIONS:
-            return None, f"Error: File type '{ext}' is not allowed. Allowed types are: {', '.join(ALLOWED_EXTENSIONS)}."
+        # Security: Check file extension # Removed extension check
+        # _, ext = os.path.splitext(abs_filepath)
+        # if ext.lower() not in ALLOWED_EXTENSIONS:
+        #     return None, f"Error: File type '{ext}' is not allowed. Allowed types are: {', '.join(ALLOWED_EXTENSIONS)}."
 
         # Security: Check file size
-        if os.path.getsize(abs_filepath) > MAX_FILE_SIZE_BYTES:
-            return None, f"Error: File '{filepath}' exceeds the maximum allowed size of {MAX_FILE_SIZE_BYTES // 1024 // 1024}MB."
-
+        # First, check if file exists and is a file, otherwise getsize will fail
         if not os.path.exists(abs_filepath):
             return None, f"Error: File not found at '{abs_filepath}'."
 
         if not os.path.isfile(abs_filepath):
              return None, f"Error: Path '{abs_filepath}' is a directory, not a file."
+
+        if os.path.getsize(abs_filepath) > MAX_FILE_SIZE_BYTES:
+            return None, f"Error: File '{filepath}' exceeds the maximum allowed size of {MAX_FILE_SIZE_BYTES // 1024 // 1024}MB."
 
         with open(abs_filepath, "r", encoding="utf-8") as f:
             content = f.read()

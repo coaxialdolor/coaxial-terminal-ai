@@ -16,9 +16,10 @@ Date: $(date +%Y-%m-%d)
     *   The AI will receive the file's content, its path, your current working directory, and your query to provide a contextual explanation.
     *   **Security Measures:**
         *   File access is restricted to the current project directory (or subdirectories).
-        *   A predefined list of allowed file extensions (e.g., `.py`, `.json`, `.md`, `.txt`) prevents accidental reading of unintended file types.
+        *   TerminalAI now attempts to read any file type, assuming it is plain text. The AI will determine if the content is understandable.
         *   A maximum file size limit (currently 1MB) is enforced to prevent issues with very large files.
-        *   Users will be informed if a file cannot be read due to permissions, size, type, or if it's not found.
+        *   The tool attempts to decode files as UTF-8. If a file is binary or uses an incompatible encoding, an error will be reported.
+        *   Users will be informed if a file cannot be read due to permissions, size, type (e.g., it's a directory), or if it's not found.
 
 ### ⚙️ Technical Details
 

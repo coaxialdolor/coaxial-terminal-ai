@@ -58,15 +58,14 @@ AI:(provider)> /read_explain path/to/file.py What does this do?
 ### 3.2. File Reading Logic (New Module: `terminalai/file_reader.py`)
 
 *   Create a new file `terminalai/file_reader.py`.
-*   Implement `read_project_file(filepath: str, project_root: str) -> str | None`:
+*   Implement `read_project_file(filepath: str, project_root: str) -> tuple[str | None, str | None]`:
     *   Takes a relative or absolute file path and the project root.
     *   **Security:**
         *   Crucially, ensure the `filepath` is constrained within the `project_root` (or user's current working directory if no project context is defined yet) to prevent arbitrary file access (path traversal attacks). Resolve `filepath` to an absolute path and check if it starts with the resolved `project_root`.
-        *   Consider a whitelist of readable file extensions (e.g., `.txt`, `.py`, `.json`, `.md`, `.log`, common config files) or a blacklist for binary/sensitive files, configurable by the user.
+        *   The tool will attempt to read any file type, assuming it is plain text. The main safeguards are size and UTF-8 decoding.
         *   Warn users about reading very large files. Implement a size limit (e.g., 1MB, configurable) and truncate or refuse if exceeded, informing the user.
-    *   Reads the file content.
-    *   Handles `FileNotFoundError`, `PermissionError` gracefully.
-    *   Returns file content as a string or `None` if an error occurs.
+    *   Reads the file content (attempts UTF-8 decoding).
+    *   Handles `FileNotFoundError`, `PermissionError`, `UnicodeDecodeError` gracefully.
 
 ### 3.3. Contextual Analysis and Prompt Engineering (Modify `terminalai/terminalai_cli.py` and AI provider logic)
 
@@ -122,7 +121,7 @@ AI:(provider)> /read_explain path/to/file.py What does this do?
 *   **File Access:** Strictly limit file reading to the project directory/CWD. Clearly communicate this to the user.
 *   **Large Files:** Implement size limits and truncation.
 *   **Sensitive Information:** Remind users that the content of the file they select will be sent to the AI provider. This is similar to how their queries are sent, but file content can be much larger and more sensitive.
-*   **Binary Files:** Avoid attempting to read and send binary file content. Filter by extension or use heuristics.
+*   **Binary Files:** The tool will attempt to read files as UTF-8. If a file is binary or uses an incompatible encoding, an error during decoding will be caught and reported to the user. The primary safeguards against problematic binary files are the size limit and the AI potentially not understanding garbled content.
 
 ## 6. Future Enhancements
 
