@@ -162,6 +162,13 @@ Project: https://github.com/coaxialdolor/terminalai"""
         help=argparse.SUPPRESS
     )
 
+    parser.add_argument(
+        "--read-file",
+        type=str,
+        metavar="<filepath>",
+        help=argparse.SUPPRESS # Add to help text later if desired
+    )
+
     return parser.parse_args()
 
 # --- Helper Function for AI Risk Assessment ---

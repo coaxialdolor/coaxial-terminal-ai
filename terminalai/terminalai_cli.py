@@ -17,6 +17,7 @@ from terminalai.cli_interaction import (
     parse_args, handle_commands, interactive_mode, setup_wizard
 )
 from terminalai.color_utils import colorize_command
+from terminalai.file_reader import read_project_file
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -69,24 +70,63 @@ def main():
     system_context = get_system_context()
     # Add current working directory to context
     cwd = os.getcwd()
-    system_context += f"\nThe user's current working directory is: {cwd}"
+    user_query = args.query
+    final_system_context = system_context
+    file_content_for_prompt = None
+
+    if hasattr(args, 'read_file') and args.read_file:
+        file_path_to_read = args.read_file
+        content, error = read_project_file(file_path_to_read, cwd)
+        if error:
+            print(colorize_command(error))
+            sys.exit(1)
+        if content is None:
+            # This case should ideally be covered by error, but as a safeguard:
+            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."))
+            sys.exit(1)
+
+        file_content_for_prompt = content
+        abs_file_path = os.path.abspath(os.path.join(cwd, file_path_to_read))
+
+        # Construct a more specific prompt when a file is read
+        # The user_query is now a query *about* the file
+        # The original system_context might be less relevant or could be prefixed.
+        final_system_context = (
+            f"The user is in the directory: {cwd}.\n"
+            f"They have provided the content of the file: '{file_path_to_read}' (absolute path: '{abs_file_path}').\n"
+            f"Their query related to this file is: '{user_query}'.\n\n"
+            f"File Content:\n"
+            f"-------------------------------------------------------\n"
+            f"{file_content_for_prompt}\n"
+            f"-------------------------------------------------------\n\n"
+            f"Based on the file content and the user's query, please provide an explanation or perform the requested task. "
+            f"If relevant, identify any other files or modules it appears to reference or interact with, considering standard import statements or common patterns for its file type. "
+            f"Focus on its role within a typical project structure if it seems to be part of a larger application in '{cwd}'."
+        )
+        # The user_query itself is integrated into the new system_context,
+        # so we can pass a simpler query to the provider, or an empty one if the context is self-sufficient.
+        # For now, let's pass the original query as it might contain nuances not fully captured by the reframing.
+        # user_query = f"Explain the provided file content based on my previous query."
+
+    else:
+        # Original behavior if not reading a file
+        final_system_context += f"\nThe user's current working directory is: {cwd}"
 
     # Adjust system context for verbosity/length if requested
     if args.verbose:
-        system_context += (
+        final_system_context += (
             "\nPlease provide a detailed response with thorough explanation."
         )
     if args.long:
-        system_context += (
+        final_system_context += (
             "\nPlease provide a comprehensive, in-depth response covering all relevant aspects."
         )
 
     # Generate response
     try:
         # Ensure args.query is a string, not a list
-        user_query = args.query
         response = provider.generate_response(
-            user_query, system_context, verbose=args.verbose or args.long
+            user_query, final_system_context, verbose=args.verbose or args.long
         )
     except (ValueError, TypeError, ConnectionError, requests.RequestException) as e:
         print(colorize_command(f"Error from AI provider: {str(e)}"))
