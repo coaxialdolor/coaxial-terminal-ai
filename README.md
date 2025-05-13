@@ -17,7 +17,7 @@ TerminalAI is your intelligent command-line assistant. Ask questions in natural 
 
 *   **Natural Language Interaction:** Ask questions or request actions naturally.
 *   **Intelligent Command Suggestion:** Get relevant shell commands based on your query.
-*   **File Reading & Explanation:** Read and understand the content of specified files within your project context using the `--read-file` flag.
+*   **File Reading & Explanation:** Read and understand the content of specified files (assumed to be plain text) within your project context using the `--read-file` flag. The AI will attempt to interpret various text-based formats.
 *   **Multiple AI Backends:** Supports OpenRouter, Gemini, Mistral, and local Ollama models.
 *   **Interactive Execution:** Review and confirm commands before they run.
 *   **Context-Aware:** Includes OS and current directory information in prompts to the AI.
