@@ -129,6 +129,34 @@ echo "Backup of $SRCDIR completed to $DESTFILE"
 Would you like commands to address any of these issues?
 ```
 
+**Getting an Automatic Explanation of a File (`--explain`):**
+This flag reads a file and uses a predefined internal query to ask the AI to summarize and explain it in context.
+
+```bash
+$ ai --explain ./src/utils.py
+[AI] The file './src/utils.py' (absolute path: '/Users/youruser/yourproject/src/utils.py') appears to be a utility module in a Python project.
+
+**File Content Summary:**
+-------------------------------------------------------
+# src/utils.py
+def helper_function_one(data):
+    # processes data
+    return processed_data
+
+def another_utility(config_value):
+    # uses config
+    return result
+-------------------------------------------------------
+
+**Purpose and Context:**
+This file likely contains common helper functions or utility routines that are used across different parts of the larger project located in '/Users/youruser/yourproject/'.
+
+*   `helper_function_one(data)`: Seems to be a generic data processing function.
+*   `another_utility(config_value)`: Might be used for tasks that require some configuration input.
+
+It doesn't seem to import other custom modules from this project directly, but it would typically be imported by other scripts within the 'src' directory or other parts of the application.
+```
+
 ### 2. Single Interaction Mode (`ai`)
 
 Run `ai` without a query to enter a single-shot interactive mode.

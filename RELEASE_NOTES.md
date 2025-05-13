@@ -20,17 +20,27 @@ Date: $(date +%Y-%m-%d)
         *   A maximum file size limit (currently 1MB) is enforced to prevent issues with very large files.
         *   The tool attempts to decode files as UTF-8. If a file is binary or uses an incompatible encoding, an error will be reported.
         *   Users will be informed if a file cannot be read due to permissions, size, type (e.g., it's a directory), or if it's not found.
+*   **Automatic File Explanation Shortcut (`--explain`):**
+    *   A new flag `--explain <filepath>` provides a shortcut for getting an automatic summary and contextual explanation of a specified file.
+    *   TerminalAI uses a predefined internal query to ask the AI to explain the file's purpose and role, considering its content and path. This is useful for quickly understanding a file without formulating a specific question.
+    *   Example:
+        ```bash
+        ai --explain path/to/your/module.py
+        ```
+    *   This feature leverages the same secure file reading capabilities as `--read-file`.
 
 ### ⚙️ Technical Details
 
 *   Added a new module `terminalai/file_reader.py` to handle secure file reading operations.
 *   Updated `terminalai/terminalai_cli.py` to process the `--read-file` argument and augment the prompt sent to the AI provider with file content and related context.
 *   Modified `terminalai/cli_interaction.py` to include the `--read-file` argument in command-line parsing and help messages.
+*   Updated `terminalai/terminalai_cli.py` and `terminalai/cli_interaction.py` to also handle the `--explain` flag and its distinct prompting logic.
 
 ### 📚 Documentation
 
 *   The `README.md` has been updated with information about the new `--read-file` flag in the "Key Features" and "Usage Examples" sections.
 *   The output of `ai --help` now includes the `--read-file` flag and its description.
+*   The `README.md`, `Examples_of_features_and_usage.md`, and help page now also cover the `--explain` flag.
 
 ### ✅ Testing
 

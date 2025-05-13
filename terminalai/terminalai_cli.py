@@ -53,10 +53,10 @@ def main():
         setup_wizard()
         sys.exit(0)
 
-    # Run in interactive mode if no query provided or chat explicitly requested
+    # Run in interactive mode if no query provided AND no --explain flag AND no --read-file flag, or if chat explicitly requested
     is_chat_request = getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c')
-    if not args.query or is_chat_request:
-        interactive_mode(chat_mode=is_chat_request) # Pass True only if chat was explicit
+    if (not args.query and not args.explain and not args.read_file) or is_chat_request:
+        interactive_mode(chat_mode=is_chat_request)
         sys.exit(0)
 
     # Get AI provider
@@ -70,27 +70,59 @@ def main():
     system_context = get_system_context()
     # Add current working directory to context
     cwd = os.getcwd()
-    user_query = args.query
-    final_system_context = system_context
-    file_content_for_prompt = None
+    final_system_context = system_context # Start with base system context
+    user_query = args.query # Initialize user_query from args
 
-    if hasattr(args, 'read_file') and args.read_file:
-        file_path_to_read = args.read_file
+    file_content_for_prompt = None # Initialize
+
+    if hasattr(args, 'explain') and args.explain:
+        file_path_to_read = args.explain
         content, error = read_project_file(file_path_to_read, cwd)
         if error:
             print(colorize_command(error))
             sys.exit(1)
         if content is None:
-            # This case should ideally be covered by error, but as a safeguard:
             print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."))
             sys.exit(1)
 
         file_content_for_prompt = content
         abs_file_path = os.path.abspath(os.path.join(cwd, file_path_to_read))
 
-        # Construct a more specific prompt when a file is read
-        # The user_query is now a query *about* the file
-        # The original system_context might be less relevant or could be prefixed.
+        # For --explain, the user_query becomes the predefined explanation query
+        user_query = (
+            f"The user wants an explanation of the file '{file_path_to_read}' (absolute path: '{abs_file_path}') "
+            f"located in their current working directory '{cwd}'. "
+            f"Please summarize this file, explain its likely purpose, and describe its context within a typical project structure found in this directory. "
+            f"If relevant, also identify any other files or modules it appears to reference or interact with."
+        )
+
+        # The system context includes the file content and instructions
+        final_system_context = (
+            f"""You are assisting a user who wants to understand a file. Their current working directory is '{cwd}'.
+The file in question is '{file_path_to_read}' (absolute path: '{abs_file_path}').
+File Content of '{file_path_to_read}':
+-------------------------------------------------------
+{file_content_for_prompt}
+-------------------------------------------------------
+
+Please process the request which is to summarize this file, explain its likely purpose, and describe its context within a typical project structure. If relevant, also identify any other files or modules it appears to reference or interact with."""
+        )
+
+    elif hasattr(args, 'read_file') and args.read_file: # Ensure this is elif
+        file_path_to_read = args.read_file
+        content, error = read_project_file(file_path_to_read, cwd)
+        if error:
+            print(colorize_command(error))
+            sys.exit(1)
+        if content is None:
+            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."))
+            sys.exit(1)
+
+        file_content_for_prompt = content
+        abs_file_path = os.path.abspath(os.path.join(cwd, file_path_to_read))
+
+        # For --read-file, user_query is the original user query.
+        # The system context includes file content and guides the AI to use it for the user's query.
         final_system_context = (
             f"The user is in the directory: {cwd}.\n"
             f"They have provided the content of the file: '{file_path_to_read}' (absolute path: '{abs_file_path}').\n"
@@ -100,16 +132,12 @@ def main():
             f"{file_content_for_prompt}\n"
             f"-------------------------------------------------------\n\n"
             f"Based on the file content and the user's query, please provide an explanation or perform the requested task. "
-            f"If relevant, identify any other files or modules it appears to reference or interact with, considering standard import statements or common patterns for its file type. "
+            f"If relevant, identify any other files or modules it appears to reference or interact with, "
+            f"considering standard import statements or common patterns for its file type. "
             f"Focus on its role within a typical project structure if it seems to be part of a larger application in '{cwd}'."
         )
-        # The user_query itself is integrated into the new system_context,
-        # so we can pass a simpler query to the provider, or an empty one if the context is self-sufficient.
-        # For now, let's pass the original query as it might contain nuances not fully captured by the reframing.
-        # user_query = f"Explain the provided file content based on my previous query."
-
     else:
-        # Original behavior if not reading a file
+        # Original behavior if not reading a file, just add CWD to system_context
         final_system_context += f"\nThe user's current working directory is: {cwd}"
 
     # Adjust system context for verbosity/length if requested
@@ -124,7 +152,10 @@ def main():
 
     # Generate response
     try:
-        # Ensure args.query is a string, not a list
+        # Ensure user_query is a string before passing to provider.generate_response
+        if user_query is None:
+            user_query = "" # Default to empty string if None (e.g. if only --explain was used and no actual query text)
+
         response = provider.generate_response(
             user_query, final_system_context, verbose=args.verbose or args.long
         )

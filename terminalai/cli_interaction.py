@@ -104,6 +104,8 @@ AVAILABLE FLAGS:
                     Read the specified file and use its content in the prompt.
                     The AI will be asked to explain/summarize this file based on your query.
                     Example: ai --read-file script.py "explain this script"
+  --explain <filepath>
+                    Read and automatically explain/summarize the specified file in its project context. Ignores general query.
 
 -----------------------------------------------------------------------
 AI FORMATTING EXPECTATIONS:
@@ -173,7 +175,18 @@ Project: https://github.com/coaxialdolor/terminalai"""
         help="Read the specified file and use its content in the prompt. Your query will then be about this file."
     )
 
-    return parser.parse_args()
+    parser.add_argument(
+        "--explain",
+        type=str,
+        metavar="<filepath>",
+        help="Read and automatically explain/summarize the specified file in its project context. Ignores general query."
+    )
+
+    # Ensure --read-file and --explain are mutually exclusive
+    args = parser.parse_args()
+    if args.read_file and args.explain:
+        parser.error("argument --explain: not allowed with argument --read-file")
+    return args
 
 # --- Helper Function for AI Risk Assessment ---
 
