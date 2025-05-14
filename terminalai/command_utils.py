@@ -1,10 +1,27 @@
 import subprocess
 import platform # Import platform module to check OS
 
+COMMON_POWERSHELL_CMDLET_STARTS = [
+    "remove-item", "get-childitem", "copy-item", "move-item", "new-item", "set-location", 
+    "select-string", "get-content", "set-content", "clear-content", "start-process", 
+    "stop-process", "get-process", "get-service", "start-service", "stop-service", 
+    "invoke-webrequest", "invoke-restmethod", "get-command", "get-help", "test-path",
+    "resolve-path", "get-date", "measure-object", "write-output", "write-host"
+] # Add more as needed, ensure lowercase
+
 def is_shell_command(text):
     # Naive check: if it starts with a common shell command or contains a pipe/redirect
-    shell_keywords = ['ls', 'cd', 'cat', 'echo', 'grep', 'find', 'head', 'tail', 'cp', 'mv', 'rm', 'mkdir', 'touch']
-    return any(text.strip().startswith(cmd) for cmd in shell_keywords) or '|' in text or '>' in text or '<' in text
+    shell_keywords = ['ls', 'cd', 'cat', 'echo', 'grep', 'find', 'head', 'tail', 'cp', 'mv', 'rm', 'mkdir', 'touch', 'dir', 'del', 'copy', 'move', 'rd', 'md']
+    # Added common Windows commands: dir, del, copy, move, rd (rmdir), md (mkdir)
+    
+    # Add PowerShell cmdlets to known keywords for the check
+    # This helps avoid the "Warning: ... not a valid shell command" for these
+    all_keywords = shell_keywords + COMMON_POWERSHELL_CMDLET_STARTS
+
+    first_word_lower = text.strip().lower().split()[0] if text.strip() else ""
+    
+    return any(first_word_lower == cmd_start for cmd_start in all_keywords) or \
+           '|' in text or '>' in text or '<' in text
 
 def run_shell_command(cmd):
     """Execute a shell command and print its output.
@@ -13,15 +30,21 @@ def run_shell_command(cmd):
     """
     current_os = platform.system()
     executable_cmd = cmd # Default to the original command
+    original_cmd_for_powershell_wrapper = cmd # Store original for the wrapper
 
-    # Check if on Windows and the command is 'ls' (or starts with 'ls ')
     if current_os == "Windows":
-        # Normalize to check just the command part, in case of arguments
         command_parts = cmd.strip().split()
-        if command_parts and command_parts[0].lower() == "ls":
-            executable_cmd = f"powershell -NoProfile -Command {cmd}"
-            # Optional: print a notice that we're using PowerShell for ls
-            # print(f"(Notice: Executing 'ls' via PowerShell on Windows as: {executable_cmd})")
+        if command_parts:
+            main_cmd_lower = command_parts[0].lower()
+            if main_cmd_lower == "ls":
+                # Use the original 'cmd' here to preserve casing and quoting if present
+                executable_cmd = f"powershell -NoProfile -Command {original_cmd_for_powershell_wrapper}"
+            elif main_cmd_lower in COMMON_POWERSHELL_CMDLET_STARTS:
+                 # Use the original 'cmd' here to preserve casing and quoting
+                executable_cmd = f"powershell -NoProfile -Command & {{{original_cmd_for_powershell_wrapper}}}"
+                # Using & { ... } ensures PowerShell treats it as a command invocation,
+                # especially important if the command string contains spaces or special characters
+                # that might be misinterpreted by powershell -Command without the script block.
 
     try:
         # Show what's being executed
@@ -29,11 +52,10 @@ def run_shell_command(cmd):
         print("-" * 80)  # Separator line for clarity
 
         # Run the command
-        # When using `powershell -Command ...`, shell=True might still be okay,
-        # or shell=False might be preferred if executable_cmd is a full path or specific executable.
-        # For simplicity and consistency with previous behavior for other commands, keeping shell=True.
-        # If executable_cmd starts with "powershell", shell=True will use cmd.exe to launch powershell.exe.
-        result = subprocess.run(executable_cmd, shell=True, check=True, capture_output=True, text=True)
+        # If executable_cmd starts with "powershell", shell=True uses cmd.exe to launch powershell.exe.
+        # This is generally fine.
+        # Using shell=False with the full path to powershell.exe would be more robust but more complex to set up.
+        result = subprocess.run(executable_cmd, shell=True, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
 
         # Always print the output, even if it's empty
         if result.stdout:

@@ -81,7 +81,15 @@ def print_ai_answer_with_rich(ai_response, to_stderr=False):
         content_printed = True
     
     if not content_printed and processed_ai_response: # If loop didn't run but there was non-whitespace response
-        console.print(home_replace(processed_ai_response.strip()))
+        stripped_response = home_replace(processed_ai_response.strip())
+        lines = stripped_response.splitlines()
+        # Check if the entire response, after stripping, is a single line and that line is a command.
+        if len(lines) == 1 and lines[0].strip() and is_likely_command(lines[0].strip()):
+            console.print(Panel(Syntax(lines[0].strip(), "bash", theme="monokai", line_numbers=False),
+                               title="Command", border_style="yellow"))
+        else: # Otherwise, print as plain text (or could attempt more complex formatting)
+            console.print(stripped_response) # Fallback to current behavior for multi-line or non-command text
+        content_printed = True # Ensure we mark content as printed
     elif not processed_ai_response.strip(): # If response was empty or just whitespace
         console.print() # Newline for empty responses after a prompt.
 

@@ -161,12 +161,6 @@ Project: https://github.com/coaxialdolor/terminalai"""
     )
 
     parser.add_argument(
-        "--eval-mode",
-        action="store_true",
-        help=argparse.SUPPRESS
-    )
-
-    parser.add_argument(
         "--chat",
         action="store_true",
         help=argparse.SUPPRESS
@@ -202,181 +196,59 @@ def _get_ai_risk_assessment(command, console, provider):
     try:
         cwd = os.getcwd()
         risk_query = f"<RISK_CONFIRMATION> Explain the potential consequences and dangers of running the following command(s) if my current working directory is '{cwd}':\n---\n{command}\n---"
+        
+        # Increased delay for API rate limits
+        time.sleep(1.5) 
 
-        time.sleep(1) # Add 1-second delay before the API call
-
-        # Optional: Show thinking indicator
-        # with console.status("[dim]Assessing command risk...[/dim]"):
         risk_response = provider.generate_response(
             risk_query,
-            system_context=None, # Not needed as we are overriding
-            verbose=False, # Keep assessment concise
-            override_system_prompt=_RISK_ASSESSMENT_SYSTEM_PROMPT # Use the hardcoded prompt
+            system_context=None,
+            verbose=False,
+            override_system_prompt=_RISK_ASSESSMENT_SYSTEM_PROMPT
         )
-        # Basic cleaning - remove potential leading/trailing whitespace/newlines
         risk_explanation = risk_response.strip()
         if not risk_explanation:
              return "AI returned empty risk assessment."
         return risk_explanation
-
     except Exception as e:
-        # Log the exception details?
-        # print(f"Error during risk assessment: {e}", file=sys.stderr)
-        return f"Risk assessment failed. Error: {e}" # Return error info
+        return f"Risk assessment failed. Error: {e}"
 
 # --- Main Command Handling Logic ---
 
-def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
+def handle_commands(commands, auto_confirm=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
-    # console is for stderr output if rich_to_stderr is True, otherwise for stdout.
-    # In eval_mode, rich_to_stderr is True, so 'console' writes to stderr.
-    # Direct print() to stdout is used for the final command in eval_mode.
-    console = Console(file=sys.stderr if rich_to_stderr else sys.stdout)
+    console = Console()
 
     provider_instance = None
-    if commands: # Only load provider if there are commands to potentially assess risk
+    if commands:
         try:
             config = load_config()
             default_provider_name = config.get("default_provider")
             if default_provider_name:
                 provider_instance = get_provider(default_provider_name)
-            # If no default_provider, provider_instance remains None.
-            # _get_ai_risk_assessment handles provider_instance being None.
         except Exception as e:
             console.print(Text(f"[WARNING] Could not load AI provider for risk assessment: {e}", style="yellow"))
-            provider_instance = None
+            # provider_instance remains None
 
-    if not commands and not eval_mode: # Kept original short-circuit for non-eval mode
+    if not commands:
         return
     
     n_commands = len(commands)
 
-    if eval_mode:
-        effective_command_for_eval = None
-        non_shell_commands_found = []
-        shell_names = {"powershell", "bash", "sh", "zsh", "cmd", "fish", "csh", "tcsh", "ksh"} # Expanded set
-
-        for cmd_candidate in commands:
-            cmd_stripped = cmd_candidate.strip()
-            if not cmd_stripped: # Skip blank commands
-                continue
-
-            # Check if the first token of the command is a known shell name
-            first_token = cmd_stripped.lower().split()[0] if cmd_stripped else ""
-            if first_token not in shell_names:
-                non_shell_commands_found.append(cmd_stripped)
-
-        if len(non_shell_commands_found) == 1:
-            effective_command_for_eval = non_shell_commands_found[0]
-            if n_commands > 1: # Only print info if we actually filtered something
-                 console.print(Text(f"[INFO EVAL_MODE] Multiple commands/tokens found. Prioritizing the single non-shell command: '{effective_command_for_eval}'.", style="dim"))
-        # else: effective_command_for_eval remains None (0 or >1 non-shell commands)
-
-
-        if effective_command_for_eval: # Already stripped
-            command_to_eval = effective_command_for_eval # No need to strip again
-            is_cmd_risky = is_risky_command(command_to_eval)
-
-            if is_cmd_risky:
-                risk_explanation = _get_ai_risk_assessment(command_to_eval, console, provider_instance)
-                panel_title = "[bold red]AI Risk Assessment[/bold red]"
-                # In eval_mode, if it's risky and auto_confirm is true, we still show assessment.
-                # If not auto_confirm, we show assessment before erroring out.
-                if auto_confirm:
-                    panel_title = "[bold red]AI Risk Assessment (Auto-Confirmed)[/bold red]"
-                
-                console.print(Panel(
-                    Text(risk_explanation, style="yellow"),
-                    title=panel_title,
-                    border_style="red",
-                    expand=False
-                ))
-
-            if is_cmd_risky and not auto_confirm:
-                console.print(Text(f"[RISKY COMMAND DETECTED IN EVAL_MODE] Command '{command_to_eval}' is risky.", style="bold red"))
-                console.print(Text("To execute, re-run with the --yes flag.", style="yellow"))
-                sys.exit(1) # Exit, nothing to stdout
-            # If risky AND auto_confirm, it will proceed to print to stdout later.
-            
-            # NEW: Always prompt in eval_mode for single commands unless auto_confirm is true for a non-risky one,
-            # OR if it's a risky one that has been auto-confirmed.
-            if not auto_confirm: # If --yes is not used, always prompt
-                prompt_text_eval = f"Execute '{command_to_eval}'? [Y/n]: "
-                if is_cmd_risky: # Should only be reached if auto_confirm was FALSE for a risky cmd - but above logic exits.
-                                  # This case is more for future-proofing or if logic changes.
-                                  # For now, if risky and not auto_confirm, we sys.exit(1) above.
-                                  # Let's assume if we reach here with is_cmd_risky, auto_confirm must have been true.
-                                  # So, this specific 'if is_cmd_risky:' inside 'if not auto_confirm:' is less likely.
-                                  # The primary prompt path here is for NON-RISKY commands when auto_confirm is false.
-                    prompt_text_eval = f"Execute risky command '{command_to_eval}'? [y/N]: " # Default N for risky if somehow prompted
-                    default_choice_eval = "n"
-                else: # Non-risky, and auto_confirm is false
-                    default_choice_eval = "y"
-
-                # Print prompt to stderr so it's visible but not captured by shell eval
-                print(prompt_text_eval, end="", file=sys.stderr); sys.stderr.flush()
-                try:
-                    choice = input().lower() or default_choice_eval # Read choice from stdin
-                except EOFError:
-                    console.print(Text("\n[ERROR] EOFError reading input in eval_mode. No input stream?", style="bold red"))
-                    sys.exit(1)
-
-                if choice == "y":
-                    print(command_to_eval)  # Print command to STDOUT for PowerShell to eval
-                    sys.exit(0)
-                else:
-                    console.print(Text("[Cancelled in eval_mode]", style="yellow"))
-                    sys.exit(1) # Cancelled, nothing to stdout
-            else: # auto_confirm IS true
-                if is_cmd_risky:
-                    # auto_confirm is true, and it's risky. Risk assessment already shown.
-                    console.print(Text(f"[INFO EVAL_MODE] Auto-submitting risky command due to --yes: {command_to_eval}", style="yellow"))
-                # else: non-risky and auto_confirm is true, no special message needed before printing.
-                print(command_to_eval)  # Print command to STDOUT
-                sys.exit(0)
-        
-        elif n_commands == 0 or not non_shell_commands_found: # Covers no commands or only shell names/blank commands
-            console.print(Text("[NO EXECUTABLE COMMAND FOUND IN EVAL_MODE]", style="yellow"))
-            if n_commands > 0 and not non_shell_commands_found: # Means only shell names were found
-                console.print(Text("The AI suggested only shell names or blank commands:", style="yellow"))
-                for i, cmd_item in enumerate(commands):
-                    console.print(Text(f"  {i+1}: {cmd_item}", style="yellow"))
-            sys.exit(1)
-            
-        else: # Multiple non-shell commands found, or other unhandled cases (should be caught by previous condition)
-            console.print(Text("[MULTIPLE OR AMBIGUOUS NON-SHELL COMMANDS IN EVAL_MODE]", style="bold red"))
-            console.print(Text("Shell integration's eval_mode expects a single, clear, non-shell command from the AI.", style="yellow"))
-            console.print(Text("The AI suggested the following non-shell commands:", style="yellow"))
-            for i, cmd_item in enumerate(non_shell_commands_found): # Print the ambiguous ones
-                console.print(Text(f"  {i+1}: {cmd_item}", style="yellow"))
-            if len(non_shell_commands_found) < n_commands: # Also show the full list if some were filtered
-                console.print(Text("Full list from AI:", style="dim"))
-                for i, cmd_item in enumerate(commands):
-                    console.print(Text(f"  {i+1}: {cmd_item}", style="dim"))
-            sys.exit(1)
-        
-        # Fallback, should not be reached if logic above is complete.
-        sys.exit(1) # Should be unreachable
-
-    # --- NON-EVAL_MODE --- (Original logic mostly preserved, ensure provider_instance is used)
-    # ANSI color codes for prompts (accessible throughout the function)
+    # ANSI color codes (can be defined elsewhere or kept if simple enough)
     color_reset = "\033[0m"
     color_bold_green = "\033[1;32m"
     color_bold_yellow = "\033[1;33m"
-    color_bold_red = "\033[1;31m"
-    color_bold_cyan = "\033[1;36m"
-    color_dim = "\033[2m"
-
-    # Detect shell integration
-    shell_integration_active = os.environ.get("TERMINALAI_SHELL_INTEGRATION") == "1"
+    # color_bold_red = "\033[1;31m" # Defined by Rich styles now
+    # color_bold_cyan = "\033[1;36m" # Defined by Rich styles now
+    # color_dim = "\033[2m"         # Defined by Rich styles now
 
     if n_commands == 1:
         command = commands[0]
-        is_stateful = is_stateful_command(command)
-        is_risky = is_risky_command(command)
+        is_stateful_cmd = is_stateful_command(command)
+        is_risky_cmd = is_risky_command(command)
 
-        # --- Insert Risk Assessment Here if is_risky ---
-        if is_risky:
+        if is_risky_cmd:
             risk_explanation = _get_ai_risk_assessment(command, console, provider_instance)
             console.print(Panel(
                 Text(risk_explanation, style="yellow"),
@@ -385,377 +257,164 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                 expand=False
             ))
 
-        # A. Handle eval_mode pathway STRICTLY first.
-        if eval_mode:
-            # --- Insert Risk Assessment Here if is_risky ---
-            # Note: Assessment must print to stderr in eval_mode
-            if is_risky:
-                # Get provider if not already loaded (might be loaded at function start)
-                if 'provider' not in locals() or not provider_instance:
-                    provider_instance = get_provider(load_config().get("default_provider", ""))
-
-                risk_explanation = "Risk assessment skipped (no provider)."
-                if provider_instance:
-                     risk_explanation = _get_ai_risk_assessment(command, console, provider_instance)
-
-                # Print panel directly to stderr for eval_mode visibility
-                # Create a temporary console writing to stderr for the panel
-                stderr_console = Console(file=sys.stderr)
-                stderr_console.print(Panel(
-                    Text(risk_explanation, style="yellow"),
-                    title="[bold red]AI Risk Assessment[/bold red]",
-                    border_style="red",
-                    expand=False
-                ))
-
-            # A.1 Auto-confirm non-risky commands if -y is used IN eval_mode
-            # THIS BLOCK (A.1 and A.2) IS NOW HANDLED BY THE NEW EVAL_MODE LOGIC AT THE TOP.
-            # This old eval_mode path for single command can be removed or ensured it's not reachable.
-            # For safety, I will leave the structure but it should not be hit if the top eval_mode logic is correct.
-            # The 'eval_mode' variable here is the function argument.
-            # The 'if eval_mode:' at the very top of the function should catch all eval_mode cases.
-            # This implies the following 'if eval_mode:' check here is redundant.
-            # I'll assume it's effectively dead code if the top 'if eval_mode:' block exits.
-
-        # B. Handle NON-eval_mode pathway (covers interactive `ai` and `ai --chat`)
-        # This block is only reached if eval_mode is False.
-        elif is_stateful: # Check if the command is stateful
-            # B.1 Prompt user to copy the stateful command
+        if is_stateful_cmd:
             prompt_text = (
                 f"[STATEFUL COMMAND] '{command}' changes shell state. "
-                "Copy to clipboard? [Y/n]: " # Standard clipboard prompt
+                "Copy to clipboard? [Y/n]: "
             )
             console.print(Text(prompt_text, style="yellow bold"), end="")
-            choice = input().lower()
-            if choice != 'n': # Default to yes (copy)
+            choice = input().lower() or "y" # Default to yes (copy)
+            if choice == 'y':
                 copy_to_clipboard(command)
                 console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-            # We do NOT exit here in interactive mode; just return to the interactive loop
-            # or let the main script exit if it was a single (non-chat) interaction.
+            return # Done with this single stateful command
+
+        # Non-stateful command
+        if auto_confirm and not is_risky_cmd:
+            console.print(f"[green]Auto-executing: {command}[/green]")
+            run_command(command)
             return
 
-        else: # C. Handle NON-eval_mode and NON-stateful command
-            # --- Risk Assessment already displayed above if is_risky ---
-            # C.1 Auto-confirm non-risky if -y was used (only relevant if called non-interactively without eval)
-            if auto_confirm and not is_risky:
-                console.print(f"[green]Auto-executing: {command}[/green]")
-                run_command(command)
-                return
+        # Needs confirmation (either risky, or not auto_confirm for non-risky)
+        default_choice = "n" if is_risky_cmd else "y"
+        prompt_style = "red bold" if is_risky_cmd else "green"
+        # Using Rich Text for prompt for better styling control
+        prompt_msg_text = Text("Execute '", style=prompt_style)
+        prompt_msg_text.append(command, style=prompt_style + " underline")
+        prompt_msg_text.append("'? ", style=prompt_style)
+        prompt_msg_text.append("[Y/n]" if default_choice == "y" else "[y/N]", style="bold " + prompt_style)
+        prompt_msg_text.append(": ", style=prompt_style)
 
-            # C.2 Regular confirmation prompt for direct execution
-            # Default N if risky, Y otherwise
-            default_choice_c = "n" if is_risky else "y"
-            prompt_style_c = "red bold" if is_risky else "green"
-            confirm_msg_c = f"Execute '{command}'? [{color_bold_green}Y{color_reset}/{color_bold_yellow}N{color_reset}]: " # Simplified prompt for single non-eval non-stateful
-            console.print(Text(confirm_msg_c, style=prompt_style_c), end="")
-            choice_c = input().lower() or default_choice_c
-            if choice_c == "y":
-                    run_command(command) # Execute using subprocess
-            else:
-                 console.print("[Cancelled]")
-            return # Return after single non-eval command processed or cancelled
+        console.print(prompt_msg_text, end="")
+        choice = input().lower() or default_choice
+        
+        if choice == "y":
+            run_command(command)
+        else:
+            console.print("[Cancelled]")
+        return
 
-    # === Multiple Command Logic ===
+    # Multiple commands
     else:
-        cmd_list = []
-        for i, cmd_text_item in enumerate(commands, 1): # Renamed cmd to cmd_text_item
-            is_risky_cmd = is_risky_command(cmd_text_item)
-            is_stateful_cmd = is_stateful_command(cmd_text_item)
-            cmd_display_text = f"[cyan]{i}[/cyan]: [white]{cmd_text_item}[/white]" # Renamed cmd_text to cmd_display_text
-            if is_risky_cmd:
-                cmd_display_text += " [bold red][RISKY][/bold red]"
-            if is_stateful_cmd:
-                cmd_display_text += " [bold yellow][STATEFUL][/bold yellow]"
-            cmd_list.append(cmd_display_text)
+        cmd_list_display = []
+        for i, cmd_text_item in enumerate(commands, 1):
+            is_risky_item = is_risky_command(cmd_text_item)
+            is_stateful_item = is_stateful_command(cmd_text_item)
+            
+            display_item = Text()
+            display_item.append(f"{i}", style="cyan")
+            display_item.append(f": {cmd_text_item}", style="white")
+            if is_risky_item:
+                display_item.append(" [RISKY]", style="bold red")
+            if is_stateful_item:
+                display_item.append(" [STATEFUL]", style="bold yellow")
+            cmd_list_display.append(display_item)
+        
+        # Create a single Text object for the panel content
+        panel_content = Text("\n").join(cmd_list_display)
         console.print(Panel(
-            "\n".join(cmd_list),
+            panel_content,
             title=f"Found {n_commands} commands",
             border_style="blue"
         ))
-        # Prompt to stderr if in eval_mode, otherwise use console (respecting rich_to_stderr)
-        prompt_message = "Enter command number, 'a' for all, or 'q' to quit: "
-        if eval_mode:
-            print(prompt_message, end="", file=sys.stderr)
-            sys.stderr.flush()
-        else:
-            console.print(Text(prompt_message, style="bold cyan"), end="")
-        choice = input().lower()
+        
+        prompt_message = Text("Enter command number, 'a' for all, or 'q' to quit: ", style="bold cyan")
+        console.print(prompt_message, end="")
+        user_choice = input().lower()
 
-        if choice == "q":
-            if eval_mode:
-                print("[Cancelled]", file=sys.stderr)
-                sys.exit(1) # Signal cancellation in eval_mode
+        if user_choice == "q":
             return
 
-        elif choice == "a":
-            if eval_mode:
-                cmds_to_eval = []
-                confirm_remaining_non_risky = False
-                for i, cmd_item in enumerate(commands):
-                    item_is_risky = is_risky_command(cmd_item)
-                    item_is_stateful = is_stateful_command(cmd_item)
+        elif user_choice == "a":
+            console.print(Text("Executing all non-stateful/non-risky (unless auto-confirmed) commands:", style="magenta"))
+            for i, cmd_item in enumerate(commands):
+                console.print(f"Processing command {i+1}: {cmd_item}")
+                is_stateful_item = is_stateful_command(cmd_item)
+                is_risky_item = is_risky_command(cmd_item)
 
-                    # --- Insert Risk Assessment Here if is_risky ---
-                    # Needs to print to stderr
-                    if item_is_risky:
-                        # Provider should be loaded at function start
-                        risk_explanation = "Risk assessment skipped (no provider)."
-                        if provider_instance: # Check if provider_instance was successfully loaded
-                             risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
+                if is_risky_item:
+                    risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
+                    console.print(Panel(
+                        Text(risk_explanation, style="yellow"),
+                        title="[bold red]AI Risk Assessment[/bold red]",
+                        border_style="red",
+                        expand=False
+                    ))
+                
+                if is_stateful_item:
+                    copy_prompt_text = Text(f"[STATEFUL COMMAND] '{cmd_item}'. Copy to clipboard? [Y/n]: ", style="yellow bold")
+                    console.print(copy_prompt_text, end="")
+                    sub_choice = input().lower() or "y"
+                    if sub_choice == 'y':
+                        copy_to_clipboard(cmd_item)
+                        console.print("[green]Command copied to clipboard.[/green]")
+                    continue # Move to next command in 'a'
 
-                        stderr_console = Console(file=sys.stderr)
-                        stderr_console.print(Panel(
-                            Text(risk_explanation, style="yellow"),
-                            title="[bold red]AI Risk Assessment[/bold red]",
-                            border_style="red",
-                            expand=False
-                        ))
-
-                    # If 'Yes to All' was chosen and current cmd is not risky, auto-confirm
-                    if confirm_remaining_non_risky and not item_is_risky:
-                        cmds_to_eval.append(cmd_item)
-                        print(f"[Auto-confirmed (A): {cmd_item}]", file=sys.stderr)
-                        continue
-
-                    # Auto-confirm non-risky if -y is used (and not already handled by confirm_remaining)
-                    if auto_confirm and not item_is_risky:
-                        cmds_to_eval.append(cmd_item)
-                        print(f"[Auto-confirmed (-y): {cmd_item}]", file=sys.stderr)
-                        continue
-
-                    # --- Prompting logic starts here ---
-                    prompt_parts = [f"Cmd {i+1}/{len(commands)} ('{cmd_item}'):"]
-                    if item_is_risky: prompt_parts.append(" [RISKY]")
-                    if item_is_stateful: prompt_parts.append(" [STATEFUL]")
-                    if confirm_remaining_non_risky: prompt_parts.append(" ['A' previously selected]") # Indicate 'A' status
-
-                    prompt_base = "".join(prompt_parts) + " Execute? "
-                    options_text = (
-                        f"{color_dim}[{color_reset}{color_bold_green}Y{color_reset}{color_dim}]{color_reset}es {color_dim}/{color_reset} "
-                        f"{color_dim}[{color_reset}{color_bold_yellow}N{color_reset}{color_dim}]{color_reset}o {color_dim}/{color_reset} "
-                        f"{color_dim}[{color_reset}{color_bold_cyan}A{color_reset}{color_dim}]{color_reset}ll remaining non-risky {color_dim}/{color_reset} " # Added 'A' option
-                        f"{color_dim}[{color_reset}{color_bold_red}Q{color_reset}{color_dim}]{color_reset}uit: " # Changed to Q/Quit
-                    )
-
-                    if item_is_risky:
-                        # Default N for risky commands
-                        # Note: 'A' behaves like 'y' for the *current* risky command if selected.
-                        prompt_formatted = prompt_base + options_text
-                        default_choice_a = "n"
+                # Non-stateful command in 'a'
+                if auto_confirm and not is_risky_item:
+                    console.print(f"[green]Auto-executing: {cmd_item}[/green]")
+                    run_command(cmd_item)
+                elif is_risky_item: # Needs explicit confirmation even in 'a' if not auto_confirm
+                    exec_prompt_text = Text(f"[RISKY] Execute '{cmd_item}'? [y/N]: ", style="red bold")
+                    console.print(exec_prompt_text, end="")
+                    sub_choice = input().lower() or "n"
+                    if sub_choice == "y":
+                        run_command(cmd_item)
                     else:
-                        # Default Y for non-risky commands
-                        prompt_formatted = prompt_base + options_text
-                        default_choice_a = "y"
+                        console.print(f"[Skipped: {cmd_item}]")
+                else: # Not risky, not stateful, not auto_confirm - prompt for this specific one in 'a'
+                    exec_prompt_text = Text(f"Execute '{cmd_item}'? [Y/n]: ", style="green")
+                    console.print(exec_prompt_text, end="")
+                    sub_choice = input().lower() or "y"
+                    if sub_choice == "y":
+                        run_command(cmd_item)
+                    else:
+                        console.print(f"[Skipped: {cmd_item}]")
+            return
 
-                    print(prompt_formatted, end="", file=sys.stderr); sys.stderr.flush()
-                    # Read choice - strip whitespace and take the first char if multiple entered
-                    raw_choice = input().strip()
-                    subchoice_a = (raw_choice[0].lower() if raw_choice else "") or default_choice_a
-
-                    if subchoice_a == 'y' or subchoice_a == 'a': # Treat 'a' as 'y' for the current one
-                        cmds_to_eval.append(cmd_item)
-                        if subchoice_a == 'a':
-                            confirm_remaining_non_risky = True # Set flag for subsequent loops
-                    elif subchoice_a == 'q':
-                        print("[Quit All]", file=sys.stderr)
-                        # Exit with error only if *no* commands were confirmed before quitting
-                        exit_code = 1 if not cmds_to_eval else 0
-                        if cmds_to_eval:
-                           print("\n".join(cmds_to_eval)) # Output confirmed commands before quitting
-                        sys.exit(exit_code)
-                    else: # 'n' or other invalid input defaults to skip
-                        print(f"[Skipped cmd: {cmd_item}]", file=sys.stderr)
-
-                # After loop completes
-                if cmds_to_eval:
-                    print("\n".join(cmds_to_eval))
-                    sys.exit(0)
-            else: # Not eval_mode, for 'a'
-                # Loop through commands for non-eval 'a'
-                for i, cmd_val_non_eval in enumerate(commands):
-                    is_stateful_cmd_val = is_stateful_command(cmd_val_non_eval)
-                    is_risky_cmd_val = is_risky_command(cmd_val_non_eval)
-
-                    # --- Insert Risk Assessment Here if is_risky_cmd_val ---
-                    if is_risky_cmd_val:
-                        # Provider should be loaded at function start
-                        risk_explanation = "Risk assessment skipped (no provider)."
-                        if provider_instance: # Check if provider_instance was successfully loaded
-                             risk_explanation = _get_ai_risk_assessment(cmd_val_non_eval, console, provider_instance)
-
-                        console.print(Panel(
-                            Text(risk_explanation, style="yellow"),
-                            title="[bold red]AI Risk Assessment[/bold red]",
-                            border_style="red",
-                            expand=False
-                        ))
-
-                    # --- Existing non-eval 'a' logic follows ---
-                    if is_stateful_cmd_val:
-                        prompt_text = (
-                            f"[STATEFUL COMMAND] '{cmd_val_non_eval}' changes shell state. "
-                            "Copy to clipboard? [Y/n]: "
-                        )
-                        console.print(Text(prompt_text, style="yellow bold"), end="")
-                        subchoice = input().lower()
-                        if subchoice.lower() != "n":
-                            copy_to_clipboard(cmd_val_non_eval)
-                            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                    else: # Not stateful, not eval_mode, in 'a'
-                        if auto_confirm and not is_risky_cmd_val:
-                            console.print(f"[green]Auto-executing: {cmd_val_non_eval}[/green]")
-                            run_command(cmd_val_non_eval)
-                        elif is_risky_cmd_val:
-                            console.print(Text(f"[RISKY] Execute risky command '{cmd_val_non_eval}'? [y/N]: ", style="red bold"), end="")
-                            subchoice = input().lower()
-                            if subchoice == "y":
-                                run_command(cmd_val_non_eval)
-                            else:
-                                console.print(f"[Skipped: {cmd_val_non_eval}]")
-                        else: # Not risky, not auto_confirm
-                            console.print(Text(f"Execute command '{cmd_val_non_eval}'? [Y/n]: ", style="green"), end="")
-                            subchoice = input().lower() or "y"
-                            if subchoice == "y":
-                                run_command(cmd_val_non_eval)
-                            else:
-                                console.print(f"[Skipped: {cmd_val_non_eval}]")
-                return # Return after processing 'a' in non-eval mode
-
-        elif choice.isdigit():
-            idx = int(choice) - 1
+        elif user_choice.isdigit():
+            idx = int(user_choice) - 1
             if 0 <= idx < len(commands):
-                cmd = commands[idx]
-                is_cmd_risky = is_risky_command(cmd)
-                is_cmd_stateful = is_stateful_command(cmd)
+                cmd_to_run = commands[idx]
+                is_stateful_cmd_num = is_stateful_command(cmd_to_run)
+                is_risky_cmd_num = is_risky_command(cmd_to_run)
 
-                # --- Insert Risk Assessment Here if is_cmd_risky ---
-                if is_cmd_risky:
-                    # Provider should be loaded at function start
-                    risk_explanation = "Risk assessment skipped (no provider)."
-                    if provider_instance: # Check if provider_instance was successfully loaded
-                         risk_explanation = _get_ai_risk_assessment(cmd, console, provider_instance)
+                if is_risky_cmd_num:
+                    risk_explanation_num = _get_ai_risk_assessment(cmd_to_run, console, provider_instance)
+                    console.print(Panel(
+                        Text(risk_explanation_num, style="yellow"),
+                        title="[bold red]AI Risk Assessment[/bold red]",
+                        border_style="red",
+                        expand=False
+                    ))
 
-                    # Print to stderr if in eval_mode
-                    if eval_mode:
-                        stderr_console = Console(file=sys.stderr)
-                        stderr_console.print(Panel(
-                            Text(risk_explanation, style="yellow"),
-                            title="[bold red]AI Risk Assessment[/bold red]",
-                            border_style="red",
-                            expand=False
-                        ))
+                if is_stateful_cmd_num:
+                    copy_prompt_text_num = Text(f"[STATEFUL COMMAND] '{cmd_to_run}'. Copy to clipboard? [Y/n]: ", style="yellow bold")
+                    console.print(copy_prompt_text_num, end="")
+                    sub_choice_num = input().lower() or "y"
+                    if sub_choice_num == 'y':
+                        copy_to_clipboard(cmd_to_run)
+                        console.print("[green]Command copied to clipboard.[/green]")
+                elif is_risky_cmd_num: # Not stateful, but risky
+                    exec_prompt_text_num = Text(f"[RISKY] Execute '{cmd_to_run}'? [y/N]: ", style="red bold")
+                    console.print(exec_prompt_text_num, end="")
+                    sub_choice_num = input().lower() or "n"
+                    if sub_choice_num == "y":
+                        run_command(cmd_to_run)
                     else:
-                        console.print(Panel(
-                            Text(risk_explanation, style="yellow"),
-                            title="[bold red]AI Risk Assessment[/bold red]",
-                            border_style="red",
-                            expand=False
-                        ))
-
-                # --- Existing numbered choice logic follows ---
-                if eval_mode:
-                    # In eval_mode, all prompts to stderr, command to stdout, then exit.
-                    if auto_confirm and not is_cmd_risky: # Applies to both stateful and non-stateful
-                        print(cmd) # Auto-confirmed non-risky command
-                        sys.exit(0)
-                    else:
-                        # Needs confirmation (either risky, or not auto_confirm)
-                        prompt_parts = []
-                        if is_cmd_risky: prompt_parts.append("[RISKY]")
-                        if is_cmd_stateful: prompt_parts.append("[STATEFUL COMMAND]")
-
-                        base_prompt = "".join(prompt_parts) + f" Execute command '{cmd}'?"
-                        if is_cmd_risky:
-                            confirm_prompt_text, default_choice_num = base_prompt + " [y/N]: ", "n"
-                        else: # Not risky (but needs confirmation, so -y not used or it's stateful)
-                            confirm_prompt_text, default_choice_num = base_prompt + " [Y/n]: ", "y"
-
-                        print(confirm_prompt_text, end="", file=sys.stderr); sys.stderr.flush()
-                        subchoice_num = input().lower() or default_choice_num
-
-                        if subchoice_num == "y":
-                            print(cmd)
-                            sys.exit(0)
-                        else:
-                            print("[Cancelled]", file=sys.stderr)
-                            sys.exit(1)
-                else: # Not eval_mode (interactive, direct query without shell integration)
-                    if is_cmd_stateful:
-                        prompt_text_ne = (
-                            f"[STATEFUL COMMAND] '{cmd}' changes shell state. "
-                            "Copy to clipboard? [Y/n]: "
-                        )
-                        console.print(Text(prompt_text_ne, style="yellow bold"), end="")
-                        # For multi-commands, the choice of number is the main interaction.
-                        # Default to 'y' (copy) if user just hits Enter.
-                        subchoice_ne = input().lower() or "y" 
-                        if subchoice_ne.lower() != "n":
-                            copy_to_clipboard(cmd)
-                            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                        # No return here, let it fall through to the main return of the function
-                        # if this was called from a direct query context.
-                    else: # Not stateful, not eval_mode. This is a command chosen by number.
-                          # If it's risky, it needs the risk assessment and specific y/N prompt.
-                          # If not risky, choosing it by number implies confirmation, similar to -y for single commands.
-                        if is_cmd_risky:
-                            # Risk assessment should have already been displayed when listing commands if we decide to do that.
-                            # For now, it's displayed here, right before confirmation.
-                            # (Re-checking if provider_instance exists, though it should)
-                            if not provider_instance:
-                                try:
-                                    config = load_config()
-                                    default_provider_name = config.get("default_provider")
-                                    if default_provider_name:
-                                        provider_instance = get_provider(default_provider_name)
-                                except Exception as e:
-                                    console.print(Text(f"[WARNING] Could not load AI provider for risk assessment: {e}", style="yellow"))
-                            
-                            risk_explanation_num = _get_ai_risk_assessment(cmd, console, provider_instance)
-                            console.print(Panel(
-                                Text(risk_explanation_num, style="yellow"),
-                                title="[bold red]AI Risk Assessment[/bold red]",
-                                border_style="red",
-                                expand=False
-                            ))
-                            console.print(Text(f"[RISKY] Execute command '{cmd}'? [y/N]: ", style="red bold"), end="")
-                            default_choice_ne_r = "n"
-                            subchoice_ne_r = input().lower() or default_choice_ne_r
-                            if subchoice_ne_r == "y":
-                                run_command(cmd)
-                            else:
-                                console.print("[Cancelled]")
-                        else: # Not risky, not stateful, chosen by number.
-                              # Execute directly. The act of choosing it from the list is the confirmation.
-                              # The auto_confirm flag (--yes) means we wouldn't even show the list for a single non-risky command.
-                            console.print(f"[green]Executing selected command: {cmd}[/green]")
-                            run_command(cmd)
-            else: # Invalid index
-                # Use console for this error message as it could be non-eval mode
-                console.print(f"[red]Invalid choice: {choice}[/red]")
-
-            # After handling a numbered choice (or invalid), return from handle_commands.
-            # If eval_mode, sys.exit would have occurred. If not eval_mode, this return is correct.
+                        console.print("[Cancelled]")
+                else: # Not stateful, not risky - chosen by number, execute directly.
+                    console.print(f"[green]Executing selected command: {cmd_to_run}[/green]")
+                    run_command(cmd_to_run)
+            else:
+                console.print(f"[red]Invalid choice: {user_choice}[/red]")
+            return 
+        else: # Invalid choice from multi-command prompt
+            console.print(f"[red]Invalid selection: {user_choice}[/red]")
             return
 
-    # Fallback for single command logic - This section should not be reached if n_commands > 1 handled above.
-    # The original single command logic remains below this multi-command block.
-    # However, the original code had some single command logic duplicated *after* the multi-command block.
-    # That needs to be reviewed to ensure it's not dead code or causing issues.
-    # For now, assuming the multi-command block correctly returns or exits.
-
-    # The following block seems to be a duplicate or misplaced version of single command logic.
-    # It should ideally be part of the `if n_commands == 1:` block or removed if redundant.
-    # Given the structure, if n_commands > 1, the function should have returned or exited within the 'else' block above.
-    # Thus, this bottom part is likely only reachable if n_commands == 1, but that's handled at the top.
-    # This looks like leftover code. I will remove it to prevent confusion.
-    # --- Start of potentially redundant block to remove ---
-    # command = commands[0]
-    # is_stateful = is_stateful_command(command)
-    # is_risky = is_risky_command(command)
-    # if eval_mode or shell_integration_active: # This condition is too broad if shell_integration_active but not eval_mode
-    # ... (rest of this block)
-    # --- End of potentially redundant block ---
-    return # Should be a clear return if not exited for eval_mode.
+    # Should be unreachable if all paths above return
+    return
 
 def run_command(command):
     """Execute a shell command with error handling."""
@@ -846,16 +505,35 @@ def interactive_mode(chat_mode=False):
             # Show a thinking indicator
             console.print("[dim]Thinking...[/dim]")
 
-            response = provider.generate_response(query, system_context, verbose=False)
+            response_from_provider = provider.generate_response(query, system_context, verbose=False)
 
             # Clear the thinking indicator with a visual separator
             console.print(Rule(style="dim"))
 
-            print_ai_answer_with_rich(response)
+            # Clean the response before printing and command extraction
+            temp_response = response_from_provider.strip() # General strip first
+            # Use a regex for more flexible prefix matching, e.g., "[AI] ", "AI: ", "[AI]", "AI:"
+            # and ensure we only strip it if it's at the very beginning of the string.
+            # common_ai_prefixes = re.compile(r"^(\[AI\]|AI:)\s*", re.IGNORECASE)
+            # match = common_ai_prefixes.match(temp_response)
+            # if match:
+            #    cleaned_response = temp_response[match.end():]
+            # else:
+            #    cleaned_response = temp_response
+            
+            # Simpler string method approach, which should be sufficient here:
+            cleaned_response = temp_response
+            if temp_response.lower().startswith("[ai]"):
+                # Strip "[ai]" and then any leading whitespace
+                cleaned_response = temp_response[4:].lstrip()
+            elif temp_response.lower().startswith("ai:"):
+                # Strip "ai:" and then any leading whitespace
+                cleaned_response = temp_response[3:].lstrip()
 
-            # Extract and handle commands from the response, limiting to max 3 commands
-            # to avoid overwhelming the user in interactive mode
-            commands = get_commands_interactive(response, max_commands=3)
+            print_ai_answer_with_rich(cleaned_response) # Pass cleaned response
+
+            # Extract and handle commands from the CLEANED response
+            commands = get_commands_interactive(cleaned_response, max_commands=3)
 
             if commands:
                 handle_commands(commands, auto_confirm=False)

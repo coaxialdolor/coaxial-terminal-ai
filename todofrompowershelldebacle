@@ -1,0 +1,33 @@
+pyperclip Dependency (pyproject.toml):
+We added pyperclip to the dependencies in pyproject.toml because it was missing, causing an initial ModuleNotFoundError for you on Windows. This is a necessary fix regardless of the shell integration.
+Ollama Provider Fixes (ai_providers.py):
+Changed the Ollama API endpoint from /api/chat to /api/generate.
+Adjusted the payload to use "prompt": prompt_text and "stream": False.
+Correctly parsed the response from response.json()["response"].
+These were crucial for making Ollama work correctly and are independent of shell integration.
+Interactive Prompt Model Display (cli_interaction.py - interactive_mode):
+Modified interactive_mode to fetch and display the specific Ollama model name in the prompt (e.g., AI:(ollama-qwen2.5:7b-instruct)>). This is a UI enhancement for interactive mode.
+.gitignore File:
+Created a .gitignore file with standard Python, VS Code, and .history patterns to help manage untracked files in your Git repository.
+CLI Argument Parsing and Handling (cli_interaction.py, terminalai_cli.py):
+Added new CLI flags: --set-default, --set-ollama, --provider.
+Refactored _set_default_provider_interactive and _set_ollama_model_interactive out of setup_wizard and called them from main() in terminalai_cli.py when the new flags are used.
+Modified main() to respect the --provider override.
+These changes expanded the CLI's direct usability for configuration and provider selection.
+ImportError for color_utils (cli_interaction.py):
+Corrected imports to use colorize_success etc., from terminalai.color_utils after you switched to an editable install (pip install -e .). This was a necessary bug fix.
+Direct Query Prompt Formatting (formatting.py, terminalai_cli.py):
+Addressed a double prompt issue by simplifying print_ai_answer_with_rich in formatting.py to only format AI content, and made main() in terminalai_cli.py responsible for printing the "AI:(provider-model)>" prefix for direct queries, along with an empty line above it and ensuring the answer starts on a new line. This improved output consistency.
+handle_commands in cli_interaction.py (the --eval-mode saga):
+This is where a lot of complex logic was added to support the (now abandoned for PowerShell) --eval-mode. This involved:
+Distinguishing risky vs. non-risky.
+Handling --yes.
+Attempting to intelligently pick a single command if the AI gave multiple (e.g., "powershell" and "cd ..").
+Managing stdout vs. stderr for command output vs. Rich display.
+Adding interactive prompts within eval_mode as a later step.
+Much of this eval_mode-specific logic inside handle_commands might now be dead code if --eval-mode is no longer used by any shell integration. The standard non-eval_mode paths in handle_commands (which prompt for execution/copying) are what would be active now for PowerShell direct queries.
+PowerShell Profile Detection (shell_integration.py - get_shell_config_file):
+Modified get_shell_config_file to correctly detect the PowerShell profile path using subprocess.run(["powershell", "-NoProfile", "-Command", "$PROFILE.CurrentUserCurrentHost"]). This is important for ai setup to correctly install/uninstall/check the PowerShell integration markers, even if the function itself is simplified.
+Added logic to create the profile parent directory if it doesn't exist.
+
+This is what I want to keep! 

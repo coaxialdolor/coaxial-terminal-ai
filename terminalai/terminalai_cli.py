@@ -38,9 +38,9 @@ def main():
     # Here, we set up a default console. If print_ai_answer_with_rich needs to go to stderr,
     # it should be handled there or by passing a stderr_console to it.
     # For now, main output (non-command, non-error) from direct query goes to stdout.
-    rich_output_to_stderr = args.eval_mode # Key decision: Rich AI explanations to stderr in eval_mode
+    # rich_output_to_stderr = args.eval_mode # Key decision: Rich AI explanations to stderr in eval_mode # REMOVED
 
-    console = Console(file=sys.stderr if rich_output_to_stderr else sys.stdout)
+    console = Console() # Default console for general script output not handled by specific functions
 
     # --- Main Logic Based on Arguments ---
     if args.version:
@@ -129,9 +129,11 @@ def main():
         sys.exit(1)
 
     # Format and print response
-    rich_to_stderr = getattr(args, 'eval_mode', False)
+    # rich_to_stderr = getattr(args, 'eval_mode', False) # REMOVED
 
-    console_for_direct = Console(stderr=rich_to_stderr, force_terminal=True)
+    # console_for_direct determines where the "AI:(model)>" prompt for direct queries goes.
+    # Since eval_mode is removed, this can now consistently go to stdout.
+    console_for_direct = Console(force_terminal=True) # Defaults to stdout
     
     # Print an empty line before the prompt for direct queries
     console_for_direct.print()
@@ -160,16 +162,16 @@ def main():
         cleaned_response = response[len("[AI] "):]
 
     # Print the cleaned AI response (which will start on a new line)
-    print_ai_answer_with_rich(cleaned_response, to_stderr=rich_to_stderr)
+    # to_stderr argument is removed, print_ai_answer_with_rich defaults to stdout.
+    print_ai_answer_with_rich(cleaned_response)
 
     # Extract and handle commands from the response
     commands = extract_commands_from_output(response)
     if commands:
         handle_commands(
             commands,
-            auto_confirm=args.yes,
-            eval_mode=getattr(args, 'eval_mode', False),
-            rich_to_stderr=rich_to_stderr
+            auto_confirm=args.yes
+            # eval_mode and rich_to_stderr parameters are removed from handle_commands
         )
 
     # If not a direct query, and not setup, and not chat mode, it's single interaction
