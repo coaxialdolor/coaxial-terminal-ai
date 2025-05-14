@@ -686,26 +686,49 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                             "Copy to clipboard? [Y/n]: "
                         )
                         console.print(Text(prompt_text_ne, style="yellow bold"), end="")
-                        subchoice_ne = input().lower()
+                        # For multi-commands, the choice of number is the main interaction.
+                        # Default to 'y' (copy) if user just hits Enter.
+                        subchoice_ne = input().lower() or "y" 
                         if subchoice_ne.lower() != "n":
                             copy_to_clipboard(cmd)
                             console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                    else: # Not stateful, not eval_mode
-                        if auto_confirm and not is_cmd_risky:
-                            console.print(f"[green]Auto-executing: {cmd}[/green]")
-                            run_command(cmd)
-                        else:
-                            if is_cmd_risky:
-                                console.print(Text(f"[RISKY] Execute command '{cmd}'? [y/N]: ", style="red bold"), end="")
-                                default_choice_ne_r = "n"
-                            else:
-                                console.print(Text(f"Execute command '{cmd}'? [Y/n]: ", style="green"), end="")
-                                default_choice_ne_r = "y"
+                        # No return here, let it fall through to the main return of the function
+                        # if this was called from a direct query context.
+                    else: # Not stateful, not eval_mode. This is a command chosen by number.
+                          # If it's risky, it needs the risk assessment and specific y/N prompt.
+                          # If not risky, choosing it by number implies confirmation, similar to -y for single commands.
+                        if is_cmd_risky:
+                            # Risk assessment should have already been displayed when listing commands if we decide to do that.
+                            # For now, it's displayed here, right before confirmation.
+                            # (Re-checking if provider_instance exists, though it should)
+                            if not provider_instance:
+                                try:
+                                    config = load_config()
+                                    default_provider_name = config.get("default_provider")
+                                    if default_provider_name:
+                                        provider_instance = get_provider(default_provider_name)
+                                except Exception as e:
+                                    console.print(Text(f"[WARNING] Could not load AI provider for risk assessment: {e}", style="yellow"))
+                            
+                            risk_explanation_num = _get_ai_risk_assessment(cmd, console, provider_instance)
+                            console.print(Panel(
+                                Text(risk_explanation_num, style="yellow"),
+                                title="[bold red]AI Risk Assessment[/bold red]",
+                                border_style="red",
+                                expand=False
+                            ))
+                            console.print(Text(f"[RISKY] Execute command '{cmd}'? [y/N]: ", style="red bold"), end="")
+                            default_choice_ne_r = "n"
                             subchoice_ne_r = input().lower() or default_choice_ne_r
                             if subchoice_ne_r == "y":
                                 run_command(cmd)
                             else:
                                 console.print("[Cancelled]")
+                        else: # Not risky, not stateful, chosen by number.
+                              # Execute directly. The act of choosing it from the list is the confirmation.
+                              # The auto_confirm flag (--yes) means we wouldn't even show the list for a single non-risky command.
+                            console.print(f"[green]Executing selected command: {cmd}[/green]")
+                            run_command(cmd)
             else: # Invalid index
                 # Use console for this error message as it could be non-eval mode
                 console.print(f"[red]Invalid choice: {choice}[/red]")

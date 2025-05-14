@@ -11,60 +11,54 @@ function global:ai {
 
     Set-Variable -Name TERMINALAI_SHELL_INTEGRATION -Value "1" -Scope Global -Force
 
-    if ($Arguments.Count -gt 0 -and $Arguments[0] -ne "--chat" -and $Arguments[0] -ne "-c" -and $Arguments[0] -ne "--setup" -and $Arguments[0] -ne "--set-default" -and $Arguments[0] -ne "--set-ollama" -and $Arguments[0] -notmatch "^--(provider|yes|verbose|long|version|help)") {
-        # Direct query / eval mode path
-        $queryStringFromArgs = $Arguments -join " "
-        $aiCommandPath = (Get-Command -Name ai -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
-        if (-not $aiCommandPath) {
-            Write-Error "Could not resolve path for 'ai' command. Ensure it's in your PATH."
-            return
-        }
-
-        $LiteralQuote = [char]34
-        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
-        $processInfo.FileName = $aiCommandPath
-        $processInfo.Arguments = "--eval-mode $($LiteralQuote)$queryStringFromArgs$($LiteralQuote)"
-        $processInfo.UseShellExecute = $false
-        $processInfo.RedirectStandardOutput = $true
-        $processInfo.RedirectStandardError = $true
-        $processInfo.RedirectStandardInput = $true # Added for stdin hang issue
-
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo = $processInfo
-
-        try {
-            $process.Start() | Out-Null
-            $process.StandardInput.Close() # Close stdin stream
-            $process.WaitForExit()
-
-            $outputToEval = $process.StandardOutput.ReadToEnd()
-            $errorOutputFromAI = $process.StandardError.ReadToEnd()
-            $aiExitCode = $process.ExitCode
-
-            if ($errorOutputFromAI) {
-                [System.Console]::Error.Write($errorOutputFromAI)
-            }
-
-            if ($aiExitCode -eq 0) {
-                if ($outputToEval -and $outputToEval.Trim().Length -gt 0) {
-                    Invoke-Expression $outputToEval.Trim()
-                }
-            }
-        } catch {
-            Write-Error "Error executing 'ai': $_"
-        } finally {
-            Remove-Variable -Name TERMINALAI_SHELL_INTEGRATION -Scope Global -ErrorAction SilentlyContinue
-            $process.Dispose()
-        }
-    } else {
-        # Interactive, chat, or setup mode path
-        $aiCommandPath = (Get-Command -Name ai -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
-        if (-not $aiCommandPath) {
-            Write-Error "Could not resolve path for 'ai' command. Ensure it's in your PATH."
-            return
-        }
-        & $aiCommandPath @Arguments # Pass all original arguments
+    $aiCommandPath = (Get-Command -Name ai -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    if (-not $aiCommandPath) {
+        Write-Error "Could not resolve path for 'ai' command. Ensure it's in your PATH."
         Remove-Variable -Name TERMINALAI_SHELL_INTEGRATION -Scope Global -ErrorAction SilentlyContinue
+        return
+    }
+
+    $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $processInfo.FileName = $aiCommandPath
+
+    $processedArgs = $Arguments | ForEach-Object {
+        # If an argument contains a space and is not already quoted, quote it.
+        if ($_ -match '\s' -and -not ($_.StartsWith('"') -and $_.EndsWith('"'))) {
+            '"' + $_ + '"'
+        } else {
+            $_
+        }
+    }
+    $joinedArgs = $processedArgs -join ' '
+    $processInfo.Arguments = $joinedArgs
+
+    $processInfo.UseShellExecute = $false
+    $processInfo.RedirectStandardOutput = $true
+    $processInfo.RedirectStandardError = $true
+    $processInfo.RedirectStandardInput = $false
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $processInfo
+
+    try {
+        $process.Start() | Out-Null
+        $process.WaitForExit()
+
+        $outputFromAI = $process.StandardOutput.ReadToEnd()
+        $errorOutputFromAI = $process.StandardError.ReadToEnd()
+
+        if ($errorOutputFromAI) {
+            [System.Console]::Error.Write($errorOutputFromAI)
+        }
+        if ($outputFromAI) {
+            [System.Console]::Out.Write($outputFromAI)
+        }
+
+    } catch {
+        Write-Error "Error executing 'ai': $_"
+    } finally {
+        Remove-Variable -Name TERMINALAI_SHELL_INTEGRATION -Scope Global -ErrorAction SilentlyContinue
+        $process.Dispose()
     }
 }
 # <<< TERMINALAI SHELL INTEGRATION END
