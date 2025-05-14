@@ -2,3 +2,4 @@ requests
 pygments
 rich
 pyperclip
+appdirs

@@ -16,19 +16,19 @@ def get_system_context():
     system_release = platform.release()
     system_version = platform.version()
     system_machine = platform.machine()
-    
+
     # Get user info
     username = getpass.getuser()
-    
+
     # Get home directory and common paths
     home_dir = os.path.expanduser("~")
     desktop_dir = os.path.join(home_dir, "Desktop")
     documents_dir = os.path.join(home_dir, "Documents")
     downloads_dir = os.path.join(home_dir, "Downloads")
-    
+
     # Get current working directory
     cwd = os.getcwd()
-    
+
     # Construct path reference guide based on OS
     if system_name == "Windows":
         path_guide = (
@@ -46,7 +46,7 @@ def get_system_context():
             f"- When the user refers to 'my home directory', use the absolute path: {home_dir}\n"
             f"- When a location is not specified, assume they mean their current directory: {cwd}"
         )
-    
+
     # Add additional system-specific guidance
     if system_name == "Windows":
         additional_guidance = (
@@ -65,7 +65,7 @@ def get_system_context():
             "- Use ~ to represent the user's home directory when appropriate\n"
             "- Use 'cd' followed by commands only when they can be combined with && or ;"
         )
-    
+
     context = (
         f"System Information:\n"
         f"- OS: {system_name} {system_release} {system_version}\n"
@@ -75,7 +75,7 @@ def get_system_context():
         f"Path References:\n{path_guide}\n\n"
         f"Command Guidelines:\n{additional_guidance}"
     )
-    
+
     return context
 
 def get_shell_config_file():
@@ -93,7 +93,7 @@ def get_shell_config_file():
             # We want the script that runs for the current user in the current host.
             # A common path is $HOME\\Documents\\WindowsPowerShell\\Microsoft.PowerShell_profile.ps1
             # or $HOME\\Documents\\PowerShell\\Microsoft.PowerShell_profile.ps1 for PS Core
-            
+
             # Attempt to get the profile path directly from PowerShell
             # This is more reliable than guessing paths.
             process = subprocess.run(
@@ -226,14 +226,19 @@ def install_shell_integration():
 # Prompts and errors from the Python script are sent to stderr and are visible in the terminal.
 ai() {
     export TERMINALAI_SHELL_INTEGRATION=1
-    # Bypass eval for interactive/chat/setup/help/version modes
+    # Bypass eval for interactive/chat/setup/help/version/config modes
     if [ $# -eq 0 ] || \
        [ "$1" = "setup" ] || \
+       [ "$1" = "--setup" ] || \
+       [ "$1" = "--set-default" ] || \
+       [ "$1" = "--set-ollama" ] || \
        [ "$1" = "--chat" ] || \
        [ "$1" = "-c" ] || \
        [ "$1" = "--help" ] || \
        [ "$1" = "-h" ] || \
        [ "$1" = "--version" ] || \
+       [ "$1" = "--read-file" ] || \
+       [ "$1" = "--explain" ] || \
        [ "$(basename "$0")" = "ai-c" ]; then
         command ai "$@"
     else
@@ -317,7 +322,7 @@ ai() {
                 content = "\r\n" + after_block
             else:
                 content = "" # File becomes empty if only block was present
-        
+
         # Check for other ai aliases/functions (basic check)
         # PowerShell function definition is `Function ai { ... }`
         # Alias is `Set-Alias -Name ai -Value ...`
@@ -366,7 +371,7 @@ ai() {
         if ($aiCommandPath) {
             & $aiCommandPath @args
         } # Error already handled by catch
-    } else { 
+    } else {
         # For direct queries, use eval mode to handle stateful commands
         # Construct the command to run: ai --eval-mode @args
         try {
@@ -379,7 +384,7 @@ ai() {
         if (-not $aiCommandPath) {
             # This block should ideally not be reached if ErrorAction Stop is used and caught above.
             Write-Error "Could not resolve path for 'ai' command during eval-mode preparation."
-            return 
+            return
         }
 
         $evalArgs = @("--eval-mode") + @($args)
@@ -409,7 +414,7 @@ ai() {
                 Write-Error "Command from AI: $outputToEval"
             }
         }
-        
+
         if ($aiExitCode -ne 0) {
             # Errors from 'ai --eval-mode' should have already printed to stderr.
             # PowerShell functions don't automatically set $LASTEXITCODE from external commands in the same way bash functions do.
@@ -430,7 +435,7 @@ ai() {
         new_content = content.rstrip('\r\n') # Clean trailing newlines from existing content
         if new_content: # If content was not empty or just newlines
             new_content += "\r\n\r\n" # Add two newlines before our block
-        
+
         new_content += powershell_function
 
         try:
@@ -511,18 +516,18 @@ def uninstall_shell_integration():
 
         if start_idx != -1 and end_idx != -1:
             end_idx_inclusive = end_idx + len(end_marker)
-            
+
             # Preserve content before and after the block
             before_block = content[:start_idx]
             after_block = content[end_idx_inclusive:]
-            
+
             # Smartly remove block and surrounding newlines
             # Remove trailing newlines from before_block
             # Remove leading newlines from after_block
             new_content = before_block.rstrip('\r\n')
             if new_content and after_block.lstrip('\r\n'): # Both have content after stripping
                 new_content += "\r\n\r\n" # Ensure at least one blank line between them if both exist
-            
+
             new_content += after_block.lstrip('\r\n')
 
             # If the file becomes empty or just whitespace, make it truly empty.
