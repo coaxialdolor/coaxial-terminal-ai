@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coaxial-terminal-ai"
-version = "0.2.6"
+version = "0.2.8"
 description = "TerminalAI: Command-line AI assistant"
 readme = "README.md"
 authors = [
