@@ -18,9 +18,9 @@ TerminalAI is your intelligent command-line assistant. Ask questions in natural 
 *   **Natural Language Interaction:** Ask questions or request actions naturally.
 *   **Intelligent Command Suggestion:** Get relevant shell commands based on your query.
 *   **File Reading & Explanation:**
-    *   Use `--read-file <filepath>` along with your query to have the AI consider a file's content.
-    *   Use `--explain <filepath>` for a direct summary and contextual explanation of a file.
-    *   Supports various plain text files; the AI attempts to interpret the content.
+    *   Use `--read-file <filepath>` along with your query to have the AI consider a file's content (any plain text file).
+    *   Use `--explain <filepath>` for a direct summary and contextual explanation of a file (predefined query, ignores general query).
+    *   Supports any plain text file; the AI attempts to interpret the content.
 *   **Multiple AI Backends:** Supports OpenRouter, Gemini, Mistral, and local Ollama models.
 *   **Interactive Execution:** Review and confirm commands before they run.
 *   **Context-Aware:** Includes OS and current directory information in prompts to the AI.
@@ -35,6 +35,8 @@ TerminalAI is your intelligent command-line assistant. Ask questions in natural 
 *   **Easy Configuration:** `ai setup` provides a menu for API keys and settings.
 *   **Optional Shell Integration:** For seamless execution of stateful commands in direct query mode.
 *   **Syntax Highlighting:** Uses `rich` for formatted output.
+*   **Ollama Model Selection:**
+    *   When configuring Ollama, you now select a model by number or 'c' to cancel. Invalid input is rejected for safety.
 
 ## Installation
 
@@ -99,6 +101,10 @@ ai --read-file ./my_script.py "Summarize this Python script and what it does"
 
 # Get an automatic explanation of a file
 ai --explain ./config/app_settings.yaml
+
+# Ollama model selection (example):
+# ai --set-ollama
+# (Choose a model number, or 'c' to cancel)
 ```
 
 **3. Chat Mode (`ai --chat` or `ai -c`):** Have a persistent conversation.

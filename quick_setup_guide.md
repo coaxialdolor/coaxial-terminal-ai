@@ -31,6 +31,7 @@ TerminalAI needs access to an AI provider.
     *   *Ollama* is great for running local models.
 5.  Repeat for any other providers you wish to use.
 6.  Press Enter to return to the main setup menu.
+7.  When configuring Ollama, you will now select a model by number or 'c' to cancel. Invalid input is rejected for safety.
 
 ## 3. Set Default Provider
 
@@ -71,6 +72,14 @@ If you want stateful commands (like `cd`) to run directly *when using the `ai ".
 
 You're ready to go!
 
+**File Reading & Explanation:**
+```sh
+# Read and explain a file
+ai --read-file ./my_script.py "Summarize this Python script and what it does"
+# Get an automatic explanation of a file
+ai --explain ./config/app_settings.yaml
+```
+
 **Single Interaction:**
 ```sh
 ai
@@ -90,3 +99,16 @@ ai --chat
 AI:(mistral)> explain the code in cli_interaction.py
 ```
 *(Stays running until you type `exit` or `q`)*
+
+## 7. Advanced: Reverting to Previous States
+
+If you want to experiment with new features or merges, you can create a backup branch of your current main branch before merging. This allows you to easily revert to a previous state if needed:
+
+```sh
+# Create a backup branch before merging
+git checkout main
+git checkout -b main-backup-before-merge
+git push -u origin main-backup-before-merge
+# Merge your feature branch as usual
+```
+To revert, simply check out the backup branch.

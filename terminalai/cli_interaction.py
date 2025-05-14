@@ -113,11 +113,13 @@ AVAILABLE FLAGS:
   --set-ollama      Shortcut to configure the Ollama model.
   --provider        Override the default AI provider for this query only.
   --read-file <filepath>
-                    Read the specified file and use its content in the prompt.
+                    Read the specified file (any plain text file) and use its content in the prompt.
                     The AI will be asked to explain/summarize this file based on your query.
                     Example: ai --read-file script.py "explain this script"
   --explain <filepath>
-                    Read and automatically explain/summarize the specified file in its project context. Ignores general query.
+                    Read and automatically explain/summarize the specified file (any plain text file) in its project context.
+                    Uses a predefined query and ignores any general query you provide.
+                    Mutually exclusive with --read-file.
 
 -----------------------------------------------------------------------
 AI FORMATTING EXPECTATIONS:

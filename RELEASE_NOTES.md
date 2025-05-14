@@ -28,6 +28,8 @@ Date: $(date +%Y-%m-%d)
         ai --explain path/to/your/module.py
         ```
     *   This feature leverages the same secure file reading capabilities as `--read-file`.
+*   **Ollama Model Selection UX:**
+    *   When configuring Ollama, you now select a model by number or 'c' to cancel. Invalid input is rejected and you are re-prompted until a valid choice is made.
 
 ### ⚙️ Technical Details
 

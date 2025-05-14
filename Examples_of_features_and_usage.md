@@ -96,6 +96,8 @@ drwxr-xr-x 30 user group 960 Oct 26 10:00 ..
 ```
 
 **Reading and Explaining a File (`--read-file`):**
+This flag works with any plain text file. The AI will attempt to interpret the content and answer your query about it.
+
 ```bash
 $ ai --read-file ./scripts/backup.sh "Explain this backup script and point out potential issues."
 [AI] This shell script `./scripts/backup.sh` appears to be designed to create a backup of the `/home/user/documents` directory into `/mnt/backup/docs_backup.tar.gz`.
@@ -130,7 +132,7 @@ Would you like commands to address any of these issues?
 ```
 
 **Getting an Automatic Explanation of a File (`--explain`):**
-This flag reads a file and uses a predefined internal query to ask the AI to summarize and explain it in context.
+This flag works with any plain text file. It uses a predefined internal query to ask the AI to summarize and explain the file in context.
 
 ```bash
 $ ai --explain ./apps/EXAMPLEAPP/config/settings.json
@@ -276,6 +278,31 @@ Potential Dangers:
 -------------------------------------------------------
 Execute? [y/N]: y
 Executing: rm ./*.tmp
+```
+
+### Ollama Model Selection (Improved UX)
+
+When configuring Ollama (e.g., with `ai --set-ollama`), you will see a numbered list of available models. You must enter a model number or 'c' to cancel. Any other input is rejected and you will be re-prompted until you enter a valid choice.
+
+```bash
+$ ai --set-ollama
+Current Ollama host: http://localhost:11434
+Enter Ollama host (leave blank to keep current, e.g., http://localhost:11434):
+
+Current Ollama model: llama3.2:latest
+Fetching models from http://localhost:11434/api/tags...
+Available Ollama models:
+  1. llama3.2:latest
+  2. mistral:latest
+  3. qwen2.5:7b
+Choose a model number, or enter 'c' to cancel: foo
+[red]Invalid selection. Please enter a number between 1 and 3, or 'c' to cancel.[/red]
+Choose a model number, or enter 'c' to cancel: 2
+[bold green]Ollama model set to: mistral:latest[/bold green]
+
+Ollama configuration summary:
+  Host: http://localhost:11434
+  Model: mistral:latest
 ```
 
 ---
