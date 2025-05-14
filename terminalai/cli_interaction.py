@@ -279,13 +279,14 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
 
             if is_cmd_risky:
                 risk_explanation = _get_ai_risk_assessment(command_to_eval, console, provider_instance)
-                
                 panel_title = "[bold red]AI Risk Assessment[/bold red]"
+                # In eval_mode, if it's risky and auto_confirm is true, we still show assessment.
+                # If not auto_confirm, we show assessment before erroring out.
                 if auto_confirm:
                     panel_title = "[bold red]AI Risk Assessment (Auto-Confirmed)[/bold red]"
                 
                 console.print(Panel(
-                    Text(risk_explanation, style="yellow"), # Apply yellow style to explanation
+                    Text(risk_explanation, style="yellow"),
                     title=panel_title,
                     border_style="red",
                     expand=False
@@ -293,11 +294,44 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
 
             if is_cmd_risky and not auto_confirm:
                 console.print(Text(f"[RISKY COMMAND DETECTED IN EVAL_MODE] Command '{command_to_eval}' is risky.", style="bold red"))
-                console.print(Text("To execute, re-run with the --yes flag or use interactive mode for confirmation.", style="yellow"))
-                sys.exit(1)
-            else:
-                if is_cmd_risky and auto_confirm:
-                     console.print(Text(f"[INFO EVAL_MODE] Auto-submitting risky command due to --yes: {command_to_eval}", style="yellow"))
+                console.print(Text("To execute, re-run with the --yes flag.", style="yellow"))
+                sys.exit(1) # Exit, nothing to stdout
+            # If risky AND auto_confirm, it will proceed to print to stdout later.
+            
+            # NEW: Always prompt in eval_mode for single commands unless auto_confirm is true for a non-risky one,
+            # OR if it's a risky one that has been auto-confirmed.
+            if not auto_confirm: # If --yes is not used, always prompt
+                prompt_text_eval = f"Execute '{command_to_eval}'? [Y/n]: "
+                if is_cmd_risky: # Should only be reached if auto_confirm was FALSE for a risky cmd - but above logic exits.
+                                  # This case is more for future-proofing or if logic changes.
+                                  # For now, if risky and not auto_confirm, we sys.exit(1) above.
+                                  # Let's assume if we reach here with is_cmd_risky, auto_confirm must have been true.
+                                  # So, this specific 'if is_cmd_risky:' inside 'if not auto_confirm:' is less likely.
+                                  # The primary prompt path here is for NON-RISKY commands when auto_confirm is false.
+                    prompt_text_eval = f"Execute risky command '{command_to_eval}'? [y/N]: " # Default N for risky if somehow prompted
+                    default_choice_eval = "n"
+                else: # Non-risky, and auto_confirm is false
+                    default_choice_eval = "y"
+
+                # Print prompt to stderr so it's visible but not captured by shell eval
+                print(prompt_text_eval, end="", file=sys.stderr); sys.stderr.flush()
+                try:
+                    choice = input().lower() or default_choice_eval # Read choice from stdin
+                except EOFError:
+                    console.print(Text("\n[ERROR] EOFError reading input in eval_mode. No input stream?", style="bold red"))
+                    sys.exit(1)
+
+                if choice == "y":
+                    print(command_to_eval)  # Print command to STDOUT for PowerShell to eval
+                    sys.exit(0)
+                else:
+                    console.print(Text("[Cancelled in eval_mode]", style="yellow"))
+                    sys.exit(1) # Cancelled, nothing to stdout
+            else: # auto_confirm IS true
+                if is_cmd_risky:
+                    # auto_confirm is true, and it's risky. Risk assessment already shown.
+                    console.print(Text(f"[INFO EVAL_MODE] Auto-submitting risky command due to --yes: {command_to_eval}", style="yellow"))
+                # else: non-risky and auto_confirm is true, no special message needed before printing.
                 print(command_to_eval)  # Print command to STDOUT
                 sys.exit(0)
         

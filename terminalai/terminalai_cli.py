@@ -29,28 +29,22 @@ if __name__ == "__main__" and (__package__ is None or __package__ == ""):
 
 def main():
     """Main entry point for the TerminalAI CLI."""
-    # --- BEGIN DEBUG ---
-    is_eval_mode_debug = "--eval-mode" in sys.argv
-    if is_eval_mode_debug:
-        print(f"DEBUG_CLI (eval_mode): sys.argv received by Python: {sys.argv}", file=sys.stderr)
-    # --- END DEBUG ---
+    # --- Argument Parsing and Initial Setup ---
+    args = parse_args()
 
-    try:
-        args = parse_args()
-    except SystemExit as e:
-        if e.code == 2: # Argparse error
-            if "--eval-mode" in sys.argv: # Only print extra debug for eval_mode issues
-                print(f"DEBUG_CLI (eval_mode): Argparse failed with exit code 2.", file=sys.stderr)
-                # Potentially print help string to see what argparse was expecting, but this might be too verbose for eval_mode.
-                # parser_for_help = create_parser_for_help_in_error() # You\'d need to refactor parse_args to get a parser object
-                # parser_for_help.print_help(file=sys.stderr)
-            sys.exit(e.code) # Re-exit with the same code
-        else:
-            sys.exit(e.code) # Re-exit for other system exit codes
+    # Setup console for rich output (can be changed later if needed, e.g., for eval_mode stderr)
+    # If eval_mode is true, rich output should go to stderr.
+    # The handle_commands function itself will manage its console for stderr/stdout.
+    # Here, we set up a default console. If print_ai_answer_with_rich needs to go to stderr,
+    # it should be handled there or by passing a stderr_console to it.
+    # For now, main output (non-command, non-error) from direct query goes to stdout.
+    rich_output_to_stderr = args.eval_mode # Key decision: Rich AI explanations to stderr in eval_mode
 
-    # Check for version flag
+    console = Console(file=sys.stderr if rich_output_to_stderr else sys.stdout)
+
+    # --- Main Logic Based on Arguments ---
     if args.version:
-        print(f"TerminalAI version {__version__}")
+        console.print(f"TerminalAI version {__version__}")
         sys.exit(0)
 
     # Check for setup flag or "setup" command
@@ -60,13 +54,11 @@ def main():
 
     # Handle --set-default flag
     if args.set_default:
-        console = Console()
         _set_default_provider_interactive(console)
         sys.exit(0)
 
     # Handle --set-ollama flag
     if args.set_ollama:
-        console = Console()
         _set_ollama_model_interactive(console)
         sys.exit(0)
 
@@ -179,6 +171,10 @@ def main():
             eval_mode=getattr(args, 'eval_mode', False),
             rich_to_stderr=rich_to_stderr
         )
+
+    # If not a direct query, and not setup, and not chat mode, it's single interaction
+    elif not args.setup and not args.chat and not args.set_default and not args.set_ollama:
+        interactive_mode(chat_mode=False) # Single interaction then exit
 
 if __name__ == "__main__":
     main()
