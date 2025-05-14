@@ -1,0 +1,124 @@
+# >>> TERMINALAI SHELL INTEGRATION START
+# Added by TerminalAI (https://github.com/coaxialdolor/terminalai)
+# This shell function enables seamless stateful command execution.
+# Prompts and errors from the Python script are sent to stderr and are visible in the terminal.
+function global:ai {
+    # Set environment variable for TerminalAI to detect shell integration
+    $env:TERMINALAI_SHELL_INTEGRATION = "1"
+    Write-Host "DEBUG: AI PS FUNCTION - TERMINALAI_SHELL_INTEGRATION set to 1" # DEBUG
+
+    # Determine if this is a direct query or interactive/setup/help mode
+    $isDirectQuery = $true
+    if ($args.Count -eq 0) {
+        $isDirectQuery = $false
+        Write-Host "DEBUG: AI PS FUNCTION - No args, not a direct query." # DEBUG
+    } else {
+        $firstArg = $args[0].ToLower()
+        Write-Host "DEBUG: AI PS FUNCTION - First arg: $firstArg" # DEBUG
+        if (($firstArg -eq "setup") -or 
+            ($firstArg -eq "--chat") -or ($firstArg -eq "-c") -or 
+            ($firstArg -eq "--help") -or ($firstArg -eq "-h") -or 
+            ($firstArg -eq "--version") -or 
+            ($firstArg -eq "--set-default") -or 
+            ($firstArg -eq "--set-ollama")) {
+            $isDirectQuery = $false
+            Write-Host "DEBUG: AI PS FUNCTION - Arg matches non-direct query pattern." # DEBUG
+        }
+    }
+
+    if (-not $isDirectQuery) {
+        Write-Host "DEBUG: AI PS FUNCTION - Entering non-direct query path" # DEBUG
+        $aiCommandPath = $null
+        try {
+            $aiCommandPath = (Get-Command -Name ai -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+            Write-Host "DEBUG: AI PS FUNCTION (non-direct) - aiCommandPath: $aiCommandPath" # DEBUG
+        } catch {
+            Write-Error "Could not resolve path for the 'ai' executable. Please ensure it is in your PATH."
+            Write-Host "DEBUG: AI PS FUNCTION (non-direct) - Failed to resolve aiCommandPath" # DEBUG
+            return
+        }
+        if ($aiCommandPath) {
+            Write-Host "DEBUG: AI PS FUNCTION (non-direct) - Executing: & \`"$aiCommandPath\`" @args" # DEBUG
+            & $aiCommandPath @args
+        } # Error already handled by catch
+    } else { # For direct queries
+        Write-Host "DEBUG: AI PS FUNCTION - Entering direct query / eval mode path" # DEBUG
+        Write-Host "DEBUG: AI PS FUNCTION - Original Args received by function: $($args -join ' ')" # DEBUG
+
+        $aiCommandPath = $null
+        try {
+            $aiCommandPath = (Get-Command -Name ai -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+            Write-Host "DEBUG: AI PS FUNCTION (direct) - aiCommandPath: $aiCommandPath" # DEBUG
+        } catch {
+            Write-Error "Could not resolve path for the 'ai' executable (for eval-mode). Please ensure it is in your PATH."
+            Write-Host "DEBUG: AI PS FUNCTION (direct) - Failed to resolve aiCommandPath" # DEBUG
+            return
+        }
+
+        if (-not $aiCommandPath) {
+            Write-Error "Path for 'ai' command not found after Get-Command (should have been caught)."
+            Write-Host "DEBUG: AI PS FUNCTION (direct) - aiCommandPath is unexpectedly null/empty" # DEBUG
+            return 
+        }
+
+        # Construct the query string from all arguments passed to the 'ai' function
+        $queryStringFromArgs = $args -join ' '
+        Write-Host "DEBUG: AI PS FUNCTION (direct) - Query string from args: '$queryStringFromArgs'" # DEBUG
+
+        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $processInfo.FileName = $aiCommandPath
+        $LiteralQuote = [char]34 # The double quote character
+        $processInfo.Arguments = "--eval-mode $($LiteralQuote)$queryStringFromArgs$($LiteralQuote)" # CHANGED LINE with LiteralQuote
+        Write-Host "DEBUG: AI PS FUNCTION (direct) - ProcessInfo.Arguments: $($processInfo.Arguments)" # DEBUG
+        
+        $processInfo.RedirectStandardOutput = $true
+        $processInfo.RedirectStandardError = $true # CAPTURE STDERR
+        $processInfo.RedirectStandardInput = $true # ADDED for stdin handling
+        $processInfo.UseShellExecute = $false
+        $processInfo.CreateNoWindow = $true
+
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $processInfo
+        
+        Write-Host "DEBUG: AI PS FUNCTION (direct) - Starting process: \`"$aiCommandPath\`" $($processInfo.Arguments)" # DEBUG
+        try {
+            $process.Start() | Out-Null
+            if ($processInfo.RedirectStandardInput) { # ADDED: Close stdin if redirected
+                $process.StandardInput.Close()
+            }
+        } catch {
+            Write-Error "DEBUG: AI PS FUNCTION (direct) - Error starting process: $($_.Exception.Message)"
+            return
+        }
+        
+        Write-Host "DEBUG: AI PS FUNCTION (direct) - Waiting for process to exit..." # DEBUG
+        $process.WaitForExit() 
+        $aiExitCode = $process.ExitCode
+        Write-Host "DEBUG: AI PS FUNCTION (direct) - Process exited with code: $aiExitCode" # DEBUG
+        
+        $outputToEval = $process.StandardOutput.ReadToEnd()
+        $errorOutputFromAI = $process.StandardError.ReadToEnd() # NEW: Capture stderr from process
+
+        # Print captured stderr if there is any
+        if (-not [string]::IsNullOrWhiteSpace($errorOutputFromAI)) {
+            Write-Host "DEBUG: AI PS FUNCTION (direct) - Stderr from ai.bat (length $($errorOutputFromAI.Length)):`n$errorOutputFromAI" # NEW DEBUG
+        }
+
+        Write-Host "DEBUG: AI PS FUNCTION (direct) - Output to eval (length $($outputToEval.Length)):`n$outputToEval" # DEBUG
+
+        if ($aiExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($outputToEval)) {
+            Write-Host "DEBUG: AI PS FUNCTION (direct) - Invoking expression: $outputToEval" # DEBUG
+            try {
+                Invoke-Expression $outputToEval.Trim()
+            } catch {
+                Write-Error "Error evaluating command: $($_.Exception.Message)"
+                Write-Error "Command from AI: $outputToEval"
+            }
+        } elseif ($aiExitCode -ne 0) {
+            Write-Host "DEBUG: AI PS FUNCTION (direct) - ai --eval-mode script failed with exit code $aiExitCode. See stderr output above for details from the script." # MODIFIED DEBUG
+        } else { 
+            Write-Host "DEBUG: AI PS FUNCTION (direct) - No command output to eval from ai script (aiExitCode: $aiExitCode)." # DEBUG
+        }
+    }
+}
+# <<< TERMINALAI SHELL INTEGRATION END

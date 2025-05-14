@@ -29,7 +29,24 @@ if __name__ == "__main__" and (__package__ is None or __package__ == ""):
 
 def main():
     """Main entry point for the TerminalAI CLI."""
-    args = parse_args()
+    # --- BEGIN DEBUG ---
+    is_eval_mode_debug = "--eval-mode" in sys.argv
+    if is_eval_mode_debug:
+        print(f"DEBUG_CLI (eval_mode): sys.argv received by Python: {sys.argv}", file=sys.stderr)
+    # --- END DEBUG ---
+
+    try:
+        args = parse_args()
+    except SystemExit as e:
+        if e.code == 2: # Argparse error
+            if "--eval-mode" in sys.argv: # Only print extra debug for eval_mode issues
+                print(f"DEBUG_CLI (eval_mode): Argparse failed with exit code 2.", file=sys.stderr)
+                # Potentially print help string to see what argparse was expecting, but this might be too verbose for eval_mode.
+                # parser_for_help = create_parser_for_help_in_error() # You\'d need to refactor parse_args to get a parser object
+                # parser_for_help.print_help(file=sys.stderr)
+            sys.exit(e.code) # Re-exit with the same code
+        else:
+            sys.exit(e.code) # Re-exit for other system exit codes
 
     # Check for version flag
     if args.version:

@@ -228,9 +228,103 @@ def _get_ai_risk_assessment(command, console, provider):
 
 def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
-    console = Console(file=sys.stderr if rich_to_stderr else None)
-    provider = get_provider(load_config().get("default_provider", ""))
+    # console is for stderr output if rich_to_stderr is True, otherwise for stdout.
+    # In eval_mode, rich_to_stderr is True, so 'console' writes to stderr.
+    # Direct print() to stdout is used for the final command in eval_mode.
+    console = Console(file=sys.stderr if rich_to_stderr else sys.stdout)
 
+    provider_instance = None
+    if commands: # Only load provider if there are commands to potentially assess risk
+        try:
+            config = load_config()
+            default_provider_name = config.get("default_provider")
+            if default_provider_name:
+                provider_instance = get_provider(default_provider_name)
+            # If no default_provider, provider_instance remains None.
+            # _get_ai_risk_assessment handles provider_instance being None.
+        except Exception as e:
+            console.print(Text(f"[WARNING] Could not load AI provider for risk assessment: {e}", style="yellow"))
+            provider_instance = None
+
+    if not commands and not eval_mode: # Kept original short-circuit for non-eval mode
+        return
+    
+    n_commands = len(commands)
+
+    if eval_mode:
+        effective_command_for_eval = None
+        non_shell_commands_found = []
+        shell_names = {"powershell", "bash", "sh", "zsh", "cmd", "fish", "csh", "tcsh", "ksh"} # Expanded set
+
+        for cmd_candidate in commands:
+            cmd_stripped = cmd_candidate.strip()
+            if not cmd_stripped: # Skip blank commands
+                continue
+
+            # Check if the first token of the command is a known shell name
+            first_token = cmd_stripped.lower().split()[0] if cmd_stripped else ""
+            if first_token not in shell_names:
+                non_shell_commands_found.append(cmd_stripped)
+
+        if len(non_shell_commands_found) == 1:
+            effective_command_for_eval = non_shell_commands_found[0]
+            if n_commands > 1: # Only print info if we actually filtered something
+                 console.print(Text(f"[INFO EVAL_MODE] Multiple commands/tokens found. Prioritizing the single non-shell command: '{effective_command_for_eval}'.", style="dim"))
+        # else: effective_command_for_eval remains None (0 or >1 non-shell commands)
+
+
+        if effective_command_for_eval: # Already stripped
+            command_to_eval = effective_command_for_eval # No need to strip again
+            is_cmd_risky = is_risky_command(command_to_eval)
+
+            if is_cmd_risky:
+                risk_explanation = _get_ai_risk_assessment(command_to_eval, console, provider_instance)
+                
+                panel_title = "[bold red]AI Risk Assessment[/bold red]"
+                if auto_confirm:
+                    panel_title = "[bold red]AI Risk Assessment (Auto-Confirmed)[/bold red]"
+                
+                console.print(Panel(
+                    Text(risk_explanation, style="yellow"), # Apply yellow style to explanation
+                    title=panel_title,
+                    border_style="red",
+                    expand=False
+                ))
+
+            if is_cmd_risky and not auto_confirm:
+                console.print(Text(f"[RISKY COMMAND DETECTED IN EVAL_MODE] Command '{command_to_eval}' is risky.", style="bold red"))
+                console.print(Text("To execute, re-run with the --yes flag or use interactive mode for confirmation.", style="yellow"))
+                sys.exit(1)
+            else:
+                if is_cmd_risky and auto_confirm:
+                     console.print(Text(f"[INFO EVAL_MODE] Auto-submitting risky command due to --yes: {command_to_eval}", style="yellow"))
+                print(command_to_eval)  # Print command to STDOUT
+                sys.exit(0)
+        
+        elif n_commands == 0 or not non_shell_commands_found: # Covers no commands or only shell names/blank commands
+            console.print(Text("[NO EXECUTABLE COMMAND FOUND IN EVAL_MODE]", style="yellow"))
+            if n_commands > 0 and not non_shell_commands_found: # Means only shell names were found
+                console.print(Text("The AI suggested only shell names or blank commands:", style="yellow"))
+                for i, cmd_item in enumerate(commands):
+                    console.print(Text(f"  {i+1}: {cmd_item}", style="yellow"))
+            sys.exit(1)
+            
+        else: # Multiple non-shell commands found, or other unhandled cases (should be caught by previous condition)
+            console.print(Text("[MULTIPLE OR AMBIGUOUS NON-SHELL COMMANDS IN EVAL_MODE]", style="bold red"))
+            console.print(Text("Shell integration's eval_mode expects a single, clear, non-shell command from the AI.", style="yellow"))
+            console.print(Text("The AI suggested the following non-shell commands:", style="yellow"))
+            for i, cmd_item in enumerate(non_shell_commands_found): # Print the ambiguous ones
+                console.print(Text(f"  {i+1}: {cmd_item}", style="yellow"))
+            if len(non_shell_commands_found) < n_commands: # Also show the full list if some were filtered
+                console.print(Text("Full list from AI:", style="dim"))
+                for i, cmd_item in enumerate(commands):
+                    console.print(Text(f"  {i+1}: {cmd_item}", style="dim"))
+            sys.exit(1)
+        
+        # Fallback, should not be reached if logic above is complete.
+        sys.exit(1) # Should be unreachable
+
+    # --- NON-EVAL_MODE --- (Original logic mostly preserved, ensure provider_instance is used)
     # ANSI color codes for prompts (accessible throughout the function)
     color_reset = "\033[0m"
     color_bold_green = "\033[1;32m"
@@ -242,12 +336,6 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
     # Detect shell integration
     shell_integration_active = os.environ.get("TERMINALAI_SHELL_INTEGRATION") == "1"
 
-    if not commands:
-        return
-
-    n_commands = len(commands)
-
-    # === Single Command Logic ===
     if n_commands == 1:
         command = commands[0]
         is_stateful = is_stateful_command(command)
@@ -255,7 +343,7 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
 
         # --- Insert Risk Assessment Here if is_risky ---
         if is_risky:
-            risk_explanation = _get_ai_risk_assessment(command, console, provider)
+            risk_explanation = _get_ai_risk_assessment(command, console, provider_instance)
             console.print(Panel(
                 Text(risk_explanation, style="yellow"),
                 title="[bold red]AI Risk Assessment[/bold red]",
@@ -269,12 +357,12 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
             # Note: Assessment must print to stderr in eval_mode
             if is_risky:
                 # Get provider if not already loaded (might be loaded at function start)
-                if 'provider' not in locals() or not provider:
-                    provider = get_provider(load_config().get("default_provider", ""))
+                if 'provider' not in locals() or not provider_instance:
+                    provider_instance = get_provider(load_config().get("default_provider", ""))
 
                 risk_explanation = "Risk assessment skipped (no provider)."
-                if provider:
-                     risk_explanation = _get_ai_risk_assessment(command, console, provider)
+                if provider_instance:
+                     risk_explanation = _get_ai_risk_assessment(command, console, provider_instance)
 
                 # Print panel directly to stderr for eval_mode visibility
                 # Create a temporary console writing to stderr for the panel
@@ -287,26 +375,13 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                 ))
 
             # A.1 Auto-confirm non-risky commands if -y is used IN eval_mode
-            if auto_confirm and not is_risky:
-                print(command) # Output command to stdout for shell function to eval
-                sys.exit(0) # Exit successfully after printing command
-
-            # A.2 Otherwise, prompt for confirmation (to stderr)
-            if is_risky:
-                confirm_msg, default_choice = "Execute? [y/N]: ", "n"
-            else: # Not risky, but -y was not used
-                confirm_msg, default_choice = "Execute? [Y/n]: ", "y"
-            style = "yellow" if is_risky else "green"
-            # Print prompt to stderr so it's visible but not captured by shell eval
-            print(confirm_msg, end="", file=sys.stderr); sys.stderr.flush()
-            choice = input().lower() or default_choice # Read choice from stdin
-
-            if choice == "y":
-                print(command) # Output command to stdout for shell function to eval
-                sys.exit(0) # Exit successfully after printing command
-            else:
-                print("[Cancelled]", file=sys.stderr) # Notify user on stderr
-                sys.exit(1) # Exit with error if cancelled IN eval_mode to signal failure
+            # THIS BLOCK (A.1 and A.2) IS NOW HANDLED BY THE NEW EVAL_MODE LOGIC AT THE TOP.
+            # This old eval_mode path for single command can be removed or ensured it's not reachable.
+            # For safety, I will leave the structure but it should not be hit if the top eval_mode logic is correct.
+            # The 'eval_mode' variable here is the function argument.
+            # The 'if eval_mode:' at the very top of the function should catch all eval_mode cases.
+            # This implies the following 'if eval_mode:' check here is redundant.
+            # I'll assume it's effectively dead code if the top 'if eval_mode:' block exits.
 
         # B. Handle NON-eval_mode pathway (covers interactive `ai` and `ai --chat`)
         # This block is only reached if eval_mode is False.
@@ -391,8 +466,8 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                     if item_is_risky:
                         # Provider should be loaded at function start
                         risk_explanation = "Risk assessment skipped (no provider)."
-                        if provider: # Check if provider was successfully loaded
-                             risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider)
+                        if provider_instance: # Check if provider_instance was successfully loaded
+                             risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
 
                         stderr_console = Console(file=sys.stderr)
                         stderr_console.print(Panel(
@@ -471,8 +546,8 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                     if is_risky_cmd_val:
                         # Provider should be loaded at function start
                         risk_explanation = "Risk assessment skipped (no provider)."
-                        if provider: # Check if provider was successfully loaded
-                             risk_explanation = _get_ai_risk_assessment(cmd_val_non_eval, console, provider)
+                        if provider_instance: # Check if provider_instance was successfully loaded
+                             risk_explanation = _get_ai_risk_assessment(cmd_val_non_eval, console, provider_instance)
 
                         console.print(Panel(
                             Text(risk_explanation, style="yellow"),
@@ -523,8 +598,8 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
                 if is_cmd_risky:
                     # Provider should be loaded at function start
                     risk_explanation = "Risk assessment skipped (no provider)."
-                    if provider: # Check if provider was successfully loaded
-                         risk_explanation = _get_ai_risk_assessment(cmd, console, provider)
+                    if provider_instance: # Check if provider_instance was successfully loaded
+                         risk_explanation = _get_ai_risk_assessment(cmd, console, provider_instance)
 
                     # Print to stderr if in eval_mode
                     if eval_mode:
