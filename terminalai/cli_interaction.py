@@ -208,10 +208,21 @@ Project: https://github.com/coaxialdolor/terminalai"""
         help="Read and automatically explain/summarize the specified file in its project context. Ignores general query."
     )
 
+    parser.add_argument(
+        "--eval-mode",
+        action="store_true",
+        help=argparse.SUPPRESS
+    )
+
     # Ensure --read-file and --explain are mutually exclusive
     args, unknown = parser.parse_known_args(filtered_argv)
     if args.read_file and args.explain:
         parser.error("argument --explain: not allowed with argument --read-file")
+
+    # Check if --eval-mode was in original args but removed for parsing
+    if "--eval-mode" in sys.argv:
+        args.eval_mode = True
+
     return args
 
 # --- Helper Function for AI Risk Assessment ---
@@ -244,7 +255,12 @@ def _get_ai_risk_assessment(command, console, provider):
 # --- Main Command Handling Logic ---
 
 def handle_commands(commands, auto_confirm=False):
-    """Handle extracted commands, prompting the user and executing if confirmed."""
+    """Handle extracted commands, prompting the user and executing if confirmed.
+
+    Args:
+        commands: List of commands to handle
+        auto_confirm: If True, auto-confirm non-risky commands without prompting
+    """
     console = Console()
 
     provider_instance = None
@@ -281,16 +297,7 @@ def handle_commands(commands, auto_confirm=False):
                 expand=False
             ))
 
-        if auto_confirm:
-            if is_stateful_cmd:
-                copy_to_clipboard(command)
-                console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-                return
-            else:
-                console.print(f"[green]Auto-executing: {command}[/green]")
-                run_command(command)
-                return
-
+        # Always handle stateful commands the same way, regardless of auto_confirm
         if is_stateful_cmd:
             prompt_text = (
                 f"[STATEFUL COMMAND] '{command}' changes shell state. "
@@ -303,37 +310,59 @@ def handle_commands(commands, auto_confirm=False):
                 console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
             return # Done with this single stateful command
 
-        # Non-stateful command
-        default_choice = "n" if is_risky_cmd else "y"
-        prompt_style = "red bold" if is_risky_cmd else "green"
+        # Auto-confirm for non-stateful, non-risky commands
+        if auto_confirm and not is_risky_cmd:
+            console.print(Text("\n[Auto-executing command]", style="bold blue"))
+            console.print(Panel(Text(command, style="cyan bold"),
+                               border_style="blue",
+                               expand=False))
+            run_command(command, auto_confirm=True)
+            return
+
+        # Risky commands always require confirmation
+        if is_risky_cmd:
+            prompt_style = "red bold"
+            prompt_msg_text = Text("[RISKY] Execute '", style=prompt_style)
+            prompt_msg_text.append(command, style=prompt_style + " underline")
+            prompt_msg_text.append("'? [y/N]: ", style=prompt_style)
+            console.print(prompt_msg_text, end="")
+            choice = input().lower() or "n"  # Default to no for risky
+            if choice == "y":
+                run_command(command, auto_confirm=auto_confirm)
+            else:
+                console.print("[Cancelled]")
+            return
+
+        # Regular non-risky, non-stateful command without auto_confirm
+        prompt_style = "green"
         prompt_msg_text = Text("Execute '", style=prompt_style)
         prompt_msg_text.append(command, style=prompt_style + " underline")
-        prompt_msg_text.append("'? ", style=prompt_style)
-        prompt_msg_text.append("[Y/n]" if default_choice == "y" else "[y/N]", style="bold " + prompt_style)
-        prompt_msg_text.append(": ", style=prompt_style)
-
+        prompt_msg_text.append("'? [Y/n]: ", style=prompt_style)
         console.print(prompt_msg_text, end="")
-        choice = input().lower() or default_choice
+        choice = input().lower() or "y"  # Default to yes
 
         if choice == "y":
-            run_command(command)
+            run_command(command, auto_confirm=auto_confirm)
         else:
             console.print("[Cancelled]")
         return
 
     # Multiple commands
     else:
+        # Auto-confirm case for multiple commands
         if auto_confirm:
             for cmd_item in commands:
                 is_stateful_item = is_stateful_command(cmd_item)
                 is_risky_item = is_risky_command(cmd_item)
+
                 if is_stateful_item:
                     copy_to_clipboard(cmd_item)
                     console.print(f"[green]Command copied to clipboard: {cmd_item}[/green]")
                 elif not is_risky_item:
                     console.print(f"[green]Auto-executing: {cmd_item}[/green]")
-                    run_command(cmd_item)
+                    run_command(cmd_item, auto_confirm=True)
                 else:
+                    # For risky commands, show assessment and ask for confirmation
                     risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
                     console.print(Panel(
                         Text(risk_explanation, style="yellow"),
@@ -341,9 +370,19 @@ def handle_commands(commands, auto_confirm=False):
                         border_style="red",
                         expand=False
                     ))
-                    # For risky commands, do not auto-execute, just print risk and skip
-                    console.print(f"[yellow]Skipped risky command: {cmd_item}[/yellow]")
+                    prompt_style = "red bold"
+                    prompt_msg_text = Text("[RISKY] Execute '", style=prompt_style)
+                    prompt_msg_text.append(cmd_item, style=prompt_style + " underline")
+                    prompt_msg_text.append("'? [y/N]: ", style=prompt_style)
+                    console.print(prompt_msg_text, end="")
+                    choice = input().lower() or "n"  # Default to no for risky commands
+                    if choice == "y":
+                        run_command(cmd_item, auto_confirm=auto_confirm)
+                    else:
+                        console.print(f"[Skipped: {cmd_item}]")
             return
+
+        # Display command list and prompt for selection (not auto_confirm)
         cmd_list_display = []
         for i, cmd_text_item in enumerate(commands, 1):
             is_risky_item = is_risky_command(cmd_text_item)
@@ -401,13 +440,13 @@ def handle_commands(commands, auto_confirm=False):
                 # Non-stateful command in 'a'
                 if auto_confirm and not is_risky_item:
                     console.print(f"[green]Auto-executing: {cmd_item}[/green]")
-                    run_command(cmd_item)
+                    run_command(cmd_item, auto_confirm=True)
                 elif is_risky_item: # Needs explicit confirmation even in 'a' if not auto_confirm
                     exec_prompt_text = Text(f"[RISKY] Execute '{cmd_item}'? [y/N]: ", style="red bold")
                     console.print(exec_prompt_text, end="")
                     sub_choice = input().lower() or "n"
                     if sub_choice == "y":
-                        run_command(cmd_item)
+                        run_command(cmd_item, auto_confirm=auto_confirm)
                     else:
                         console.print(f"[Skipped: {cmd_item}]")
                 else: # Not risky, not stateful, not auto_confirm - prompt for this specific one in 'a'
@@ -415,7 +454,7 @@ def handle_commands(commands, auto_confirm=False):
                     console.print(exec_prompt_text, end="")
                     sub_choice = input().lower() or "y"
                     if sub_choice == "y":
-                        run_command(cmd_item)
+                        run_command(cmd_item, auto_confirm=auto_confirm)
                     else:
                         console.print(f"[Skipped: {cmd_item}]")
             return
@@ -448,12 +487,12 @@ def handle_commands(commands, auto_confirm=False):
                     console.print(exec_prompt_text_num, end="")
                     sub_choice_num = input().lower() or "n"
                     if sub_choice_num == "y":
-                        run_command(cmd_to_run)
+                        run_command(cmd_to_run, auto_confirm=auto_confirm)
                     else:
                         console.print("[Cancelled]")
                 else: # Not stateful, not risky - chosen by number, execute directly.
                     console.print(f"[green]Executing selected command: {cmd_to_run}[/green]")
-                    run_command(cmd_to_run)
+                    run_command(cmd_to_run, auto_confirm=auto_confirm)
             else:
                 console.print(f"[red]Invalid choice: {user_choice}[/red]")
             return
@@ -464,28 +503,72 @@ def handle_commands(commands, auto_confirm=False):
     # Should be unreachable if all paths above return
     return
 
-def run_command(command):
-    """Execute a shell command with error handling."""
+def run_command(command, auto_confirm=False):
+    """Execute a shell command with error handling.
+
+    Args:
+        command: The command to execute
+        auto_confirm: If True, execute without confirmation prompt
+    """
     console = Console()
 
     if not command:
         return
 
-    if not is_shell_command(command):
+    if not is_shell_command(command) and not auto_confirm:
         console.print(f"[yellow]Warning: '{command}' doesn't look like a valid shell command.[/yellow]")
         console.print("[yellow]Execute anyway? [y/N]:[/yellow]", end=" ")
         choice = input().lower()
         if choice != "y":
             return
+    elif not is_shell_command(command) and auto_confirm:
+        console.print(f"[yellow]Warning: '{command}' doesn't look like a valid shell command. Executing anyway due to auto-confirm.[/yellow]")
 
-    console.print(Panel(f"[bold white]Executing: [/bold white][cyan]{command}[/cyan]",
-                       border_style="green",
-                       title="Command Execution",
-                       title_align="left"))
+    # Display different message based on auto-confirm
+    if auto_confirm:
+        console.print(Text("\n[Auto-executing command]", style="bold blue"))
+        console.print(Panel(Text(command, style="cyan bold"),
+                           border_style="blue",
+                           expand=False))
+    else:
+        console.print(Text("\n[Executing command]", style="bold green"))
+        console.print(Panel(Text(command, style="cyan bold"),
+                           border_style="green",
+                           expand=False))
 
-    success = run_shell_command(command)
-    if not success:
-        console.print(f"[bold red]Command failed: {command}[/bold red]")
+    # Capture the output to display it properly
+    import subprocess
+    import shlex
+
+    try:
+        # Run the command and capture its output
+        process = subprocess.run(
+            shlex.split(command),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        # Show command output with a clear label
+        if process.stdout:
+            console.print(Text("[Command output]", style="bold magenta"))
+            console.print(Panel(
+                process.stdout.strip(),
+                border_style="magenta",
+                expand=False
+            ))
+
+        # Show any errors
+        if process.returncode != 0:
+            console.print(f"[bold red]Command failed with exit code {process.returncode}[/bold red]")
+            if process.stderr:
+                console.print(f"[red]Error: {process.stderr.strip()}[/red]")
+            return False
+
+        return True
+    except Exception as e:
+        console.print(f"[bold red]Failed to execute command: {e}[/bold red]")
+        return False
 
 def interactive_mode(chat_mode=False):
     """Run TerminalAI in interactive mode. If chat_mode is True, stay in a loop."""

@@ -1,0 +1,12 @@
+[DEBUG] Entered _set_ollama_model_interactive
+[DEBUG] About to prompt for Ollama host
+Traceback (most recent call last):
+  File "/Users/petter/.pyenv/versions/3.12.5/bin/ai", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/Users/petter/Desktop/terminalai/terminalai/terminalai_cli.py", line 63, in main
+    _set_ollama_model_interactive(console)
+  File "/Users/petter/Desktop/terminalai/terminalai/cli_interaction.py", line 650, in _set_ollama_model_interactive
+    new_host_input = input(ollama_host_prompt).strip()  # [DEBUG] Plain input version for troubleshooting
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

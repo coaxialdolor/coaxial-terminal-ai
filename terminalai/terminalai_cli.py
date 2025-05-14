@@ -10,7 +10,7 @@ import requests
 from terminalai.__init__ import __version__
 from terminalai.config import load_config
 from terminalai.ai_providers import get_provider
-from terminalai.command_extraction import extract_commands_from_output
+from terminalai.command_extraction import extract_commands_from_output, is_stateful_command, is_risky_command
 from terminalai.formatting import print_ai_answer_with_rich
 from terminalai.shell_integration import get_system_context
 from terminalai.cli_interaction import (
@@ -22,6 +22,7 @@ from terminalai.color_utils import colorize_command
 from rich.console import Console
 from rich.text import Text
 from terminalai.file_reader import read_project_file
+from rich.panel import Panel
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -33,15 +34,12 @@ def main():
     # --- Argument Parsing and Initial Setup ---
     args = parse_args()
 
-    # Setup console for rich output (can be changed later if needed, e.g., for eval_mode stderr)
-    # If eval_mode is true, rich output should go to stderr.
-    # The handle_commands function itself will manage its console for stderr/stdout.
-    # Here, we set up a default console. If print_ai_answer_with_rich needs to go to stderr,
-    # it should be handled there or by passing a stderr_console to it.
-    # For now, main output (non-command, non-error) from direct query goes to stdout.
-    # rich_output_to_stderr = args.eval_mode # Key decision: Rich AI explanations to stderr in eval_mode # REMOVED
+    # Check if we're in eval mode (used by shell integration)
+    is_eval_mode = getattr(args, 'eval_mode', False)
+    rich_output_to_stderr = is_eval_mode
 
-    console = Console() # Default console for general script output not handled by specific functions
+    # In eval mode, all rich output goes to stderr, and only the raw command goes to stdout
+    console = Console(file=sys.stderr if rich_output_to_stderr else None)
 
     # --- Main Logic Based on Arguments ---
     if args.version:
@@ -79,13 +77,13 @@ def main():
         provider_to_use = config.get("default_provider", "")
 
     if not provider_to_use:
-        print(colorize_command("No AI provider configured. Running setup wizard..."))
+        print(colorize_command("No AI provider configured. Running setup wizard..."), file=sys.stderr)
         setup_wizard() # This will allow user to set a default
         # After setup, try to load config again or exit if user quit setup
         config = load_config()
         provider_to_use = config.get("default_provider", "")
         if not provider_to_use:
-            print(colorize_command("Setup was not completed. Exiting."))
+            print(colorize_command("Setup was not completed. Exiting."), file=sys.stderr)
             sys.exit(1)
 
     # Run in interactive mode if no query provided AND no --explain flag AND no --read-file flag, or if chat explicitly requested
@@ -94,11 +92,15 @@ def main():
         interactive_mode(chat_mode=is_chat_request)
         sys.exit(0)
 
+    # --- Direct Query Mode: process and exit ---
+    # If a query is provided (ai "query"), process it, print the answer, handle commands, and exit.
+    # Do NOT call interactive_mode after handling a direct query.
+
     # Get AI provider instance
     provider = get_provider(provider_to_use) # Use the determined provider_to_use
     if not provider:
-        print(colorize_command(f"Error: Provider '{provider_to_use}' is not configured properly or is unknown."))
-        print(colorize_command("Please run 'ai setup' to configure an AI provider, or check the provider name."))
+        print(colorize_command(f"Error: Provider '{provider_to_use}' is not configured properly or is unknown."), file=sys.stderr)
+        print(colorize_command("Please run 'ai setup' to configure an AI provider, or check the provider name."), file=sys.stderr)
         sys.exit(1)
 
     # Get system context
@@ -114,10 +116,10 @@ def main():
         file_path_to_read = args.explain
         content, error, context = read_project_file(file_path_to_read, cwd)
         if error:
-            print(colorize_command(error))
+            print(colorize_command(error), file=sys.stderr)
             sys.exit(1)
         if content is None:
-            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."))
+            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."), file=sys.stderr)
             sys.exit(1)
 
         file_content_for_prompt = content
@@ -158,10 +160,10 @@ Please process the request which is to summarize this file, explain its likely p
         file_path_to_read = args.read_file
         content, error, context = read_project_file(file_path_to_read, cwd)
         if error:
-            print(colorize_command(error))
+            print(colorize_command(error), file=sys.stderr)
             sys.exit(1)
         if content is None:
-            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."))
+            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."), file=sys.stderr)
             sys.exit(1)
 
         file_content_for_prompt = content
@@ -217,17 +219,11 @@ File Location and Context:
             user_query, final_system_context, verbose=args.verbose or args.long
         )
     except (ValueError, TypeError, ConnectionError, requests.RequestException) as e:
-        print(colorize_command(f"Error from AI provider: {str(e)}"))
+        print(colorize_command(f"Error from AI provider: {str(e)}"), file=sys.stderr)
         sys.exit(1)
 
     # Format and print response
-    # rich_to_stderr = getattr(args, 'eval_mode', False) # REMOVED
-
-    # console_for_direct determines where the "AI:(model)>" prompt for direct queries goes.
-    # Since eval_mode is removed, this can now consistently go to stdout.
-    console_for_direct = Console(force_terminal=True) # Defaults to stdout
-    
-    # Print an empty line before the prompt for direct queries
+    console_for_direct = Console(file=sys.stderr if rich_output_to_stderr else None, force_terminal=True if rich_output_to_stderr else False)
     console_for_direct.print()
 
     # Construct and print the display prompt for direct queries
@@ -238,37 +234,175 @@ File Location and Context:
             display_provider_for_direct_query = f"ollama-{ollama_model_for_direct}"
         else:
             display_provider_for_direct_query = "ollama (model not set)"
-    
     direct_query_prompt_text = Text()
     direct_query_prompt_text.append("AI:", style="bold cyan")
     direct_query_prompt_text.append("(", style="bold green")
     direct_query_prompt_text.append(display_provider_for_direct_query, style="bold green")
     direct_query_prompt_text.append(")", style="bold green")
-    # No space or > here, as the response will be on the next line.
-    
     console_for_direct.print(direct_query_prompt_text)
 
     # The original response from the AI provider might start with "[AI] "
     cleaned_response = response
     if response.startswith("[AI] "):
-        cleaned_response = response[len("[AI] "):]
+        cleaned_response = response[len("[AI] ") :]
 
-    # Print the cleaned AI response (which will start on a new line)
-    # to_stderr argument is removed, print_ai_answer_with_rich defaults to stdout.
-    print_ai_answer_with_rich(cleaned_response)
+    # Check if we need to output to stderr (in eval mode)
+    print_ai_answer_with_rich(cleaned_response, to_stderr=rich_output_to_stderr)
 
     # Extract and handle commands from the response
     commands = extract_commands_from_output(response)
+
     if commands:
+        # In eval_mode (shell integration), we need special handling for commands
+        if is_eval_mode and commands:
+            # IMPORTANT: Do NOT auto-execute commands
+            # Instead, handle commands normally but with special output handling
+
+            # Print all explanations and prompts to stderr so they don't get executed
+            auto_confirm = args.yes  # Only honor -y flag, ignore eval_mode for auto-confirm
+
+            # Use a custom handling function for eval mode that will print the selected command to stdout
+            # ONLY after user confirmation
+            handle_eval_mode_commands(commands, auto_confirm=auto_confirm)
+
+            # After handling, exit without printing anything else to stdout
+            sys.exit(0)
+
+        # Normal mode (no shell integration)
+        auto_confirm = args.yes
         handle_commands(
             commands,
-            auto_confirm=args.yes
-            # eval_mode and rich_to_stderr parameters are removed from handle_commands
+            auto_confirm=auto_confirm
         )
 
-    # If not a direct query, and not setup, and not chat mode, it's single interaction
-    elif not args.setup and not args.chat and not args.set_default and not args.set_ollama:
-        interactive_mode(chat_mode=False) # Single interaction then exit
+    # After handling a direct query, exit immediately. Do NOT call interactive_mode here.
+    sys.exit(0)
+
+def handle_eval_mode_commands(commands, auto_confirm=False):
+    """Special handler for commands in eval mode (shell integration).
+
+    In eval mode, we need to print the command ONLY to stdout (for shell execution)
+    but ONLY after user confirmation. All other output goes to stderr.
+
+    Args:
+        commands: List of commands to handle
+        auto_confirm: Whether to auto-confirm non-risky commands
+    """
+    if not commands:
+        return
+
+    # Create a console that writes to stderr for all prompts and info messages
+    console = Console(file=sys.stderr)
+
+    # For a single command
+    if len(commands) == 1:
+        command = commands[0]
+        is_stateful = is_stateful_command(command)
+        is_risky = is_risky_command(command)
+
+        # Show command with appropriate styling
+        console.print("\n[Suggested command]", style="bold green")
+        console.print(Panel(Text(command, style="cyan bold"), border_style="green", expand=False))
+
+        # If auto-confirm is on and the command is not risky, execute without prompting
+        if auto_confirm and not is_risky and not is_stateful:
+            # Print the command to stdout for shell execution
+            print(command)
+            return
+
+        # For stateful commands, always copy to clipboard (shell integration handles this)
+        if is_stateful:
+            console.print("[bold yellow]This command changes shell state and will be executed in your shell.[/bold yellow]")
+
+        # Prompt with appropriate default based on command type
+        default_choice = "n" if is_risky else "y"
+        prompt_style = "red bold" if is_risky else "green"
+        prompt_text = "[RISKY] " if is_risky else ""
+
+        console.print(f"[{prompt_style}]{prompt_text}Execute this command? [{default_choice.upper() if default_choice == 'y' else 'y'}/{default_choice.upper() if default_choice == 'n' else 'n'}]:[/{prompt_style}] ", end="")
+
+        # Read from stdin (terminal input)
+        try:
+            choice = input().lower() or default_choice
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[yellow]Command execution cancelled.[/yellow]")
+            return
+
+        if choice == "y":
+            # Print the command to stdout for shell execution
+            print(command)
+        else:
+            console.print("[yellow]Command execution cancelled.[/yellow]")
+
+    # Multiple commands
+    else:
+        # Display the list of commands
+        cmd_list_display = []
+        for i, cmd in enumerate(commands, 1):
+            is_risky_item = is_risky_command(cmd)
+            is_stateful_item = is_stateful_command(cmd)
+
+            display_item = Text()
+            display_item.append(f"{i}", style="cyan")
+            display_item.append(f": {cmd}", style="white")
+            if is_risky_item:
+                display_item.append(" [RISKY]", style="bold red")
+            if is_stateful_item:
+                display_item.append(" [STATEFUL]", style="bold yellow")
+            cmd_list_display.append(display_item)
+
+        panel_content = Text("\n").join(cmd_list_display)
+        console.print(Panel(panel_content, title=f"Found {len(commands)} commands", border_style="blue"))
+
+        # Prompt for which command to execute
+        console.print(Text("Enter command number, 'a' for all, or 'q' to quit: ", style="bold cyan"), end="")
+        try:
+            user_choice = input().lower()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[yellow]Command execution cancelled.[/yellow]")
+            return
+
+        if user_choice == "q":
+            console.print("[yellow]Command execution cancelled.[/yellow]")
+            return
+
+        # Handle user selecting a specific command by number
+        if user_choice.isdigit():
+            idx = int(user_choice) - 1
+            if 0 <= idx < len(commands):
+                cmd_to_run = commands[idx]
+                is_risky_item = is_risky_command(cmd_to_run)
+                is_stateful_item = is_stateful_command(cmd_to_run)
+
+                # Show selected command
+                console.print(f"\n[Executing command {user_choice}]", style="bold green")
+                console.print(Panel(Text(cmd_to_run, style="cyan bold"), border_style="green", expand=False))
+
+                # For stateful commands in shell integration
+                if is_stateful_item:
+                    console.print("[bold yellow]This command changes shell state and will be executed in your shell.[/bold yellow]")
+
+                # Confirm execution for risky commands
+                if is_risky_item:
+                    console.print(Text(f"[RISKY] Execute this command? [y/N]: ", style="red bold"), end="")
+                    try:
+                        confirm = input().lower() or "n"
+                    except (KeyboardInterrupt, EOFError):
+                        console.print("\n[yellow]Command execution cancelled.[/yellow]")
+                        return
+
+                    if confirm != "y":
+                        console.print("[yellow]Command execution cancelled.[/yellow]")
+                        return
+
+                # Print the selected command to stdout for shell execution
+                print(cmd_to_run)
+            else:
+                console.print(f"[red]Invalid command number: {user_choice}[/red]")
+        elif user_choice == "a":
+            console.print("[yellow]All commands mode not supported in shell integration. Please select one command.[/yellow]")
+        else:
+            console.print(f"[red]Invalid choice: {user_choice}[/red]")
 
 if __name__ == "__main__":
     main()
