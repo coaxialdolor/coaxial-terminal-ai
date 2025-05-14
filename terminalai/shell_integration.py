@@ -7,21 +7,76 @@ from terminalai.clipboard_utils import copy_to_clipboard
 from rich.console import Console
 from rich.text import Text
 from rich.panel import Panel
+import getpass
 
 def get_system_context():
-    """Return the system context string for the prompt."""
-    system = platform.system()
-    if system == "Darwin":
-        sys_str = "macOS/zsh"
-    elif system == "Linux":
-        sys_str = "Linux/bash"
-    elif system == "Windows":
-        sys_str = "Windows/PowerShell"
+    """Get system context information for the AI."""
+    # Get platform-specific info
+    system_name = platform.system()
+    system_release = platform.release()
+    system_version = platform.version()
+    system_machine = platform.machine()
+    
+    # Get user info
+    username = getpass.getuser()
+    
+    # Get home directory and common paths
+    home_dir = os.path.expanduser("~")
+    desktop_dir = os.path.join(home_dir, "Desktop")
+    documents_dir = os.path.join(home_dir, "Documents")
+    downloads_dir = os.path.join(home_dir, "Downloads")
+    
+    # Get current working directory
+    cwd = os.getcwd()
+    
+    # Construct path reference guide based on OS
+    if system_name == "Windows":
+        path_guide = (
+            f"- When the user refers to 'my desktop', use the absolute path: {desktop_dir}\n"
+            f"- When the user refers to 'my documents', use the absolute path: {documents_dir}\n"
+            f"- When the user refers to 'my downloads', use the absolute path: {downloads_dir}\n"
+            f"- When the user refers to 'my home directory', use the absolute path: {home_dir}\n"
+            f"- When a location is not specified, assume they mean their current directory: {cwd}"
+        )
     else:
-        sys_str = "a Unix-like system"
-    from terminalai.config import get_system_prompt
-    prompt = get_system_prompt()
-    return prompt.replace("the user's system", sys_str)
+        path_guide = (
+            f"- When the user refers to 'my desktop', use the absolute path: {desktop_dir}\n"
+            f"- When the user refers to 'my documents', use the absolute path: {documents_dir}\n"
+            f"- When the user refers to 'my downloads', use the absolute path: {downloads_dir}\n"
+            f"- When the user refers to 'my home directory', use the absolute path: {home_dir}\n"
+            f"- When a location is not specified, assume they mean their current directory: {cwd}"
+        )
+    
+    # Add additional system-specific guidance
+    if system_name == "Windows":
+        additional_guidance = (
+            "- Use Windows-compatible commands (e.g., 'dir' instead of 'ls' for cmd.exe)\n"
+            "- For paths, use backslashes (\\) or forward slashes (/) which both work in most modern Windows contexts\n"
+            "- Use environment variables like %USERPROFILE% for user paths when appropriate\n"
+            "- NEVER use 'cd' followed by another command - each command runs in a new shell\n"
+            "- ALWAYS use absolute paths in commands (e.g., 'dir \"C:\\Users\\username\\Desktop\\*.log\"')\n"
+            "- For file operations, use the full path in the command itself\n"
+            "- Commands must be self-contained and work from any directory"
+        )
+    else:
+        additional_guidance = (
+            "- Use Unix/Linux compatible commands\n"
+            "- For paths, use forward slashes (/)\n"
+            "- Use ~ to represent the user's home directory when appropriate\n"
+            "- Use 'cd' followed by commands only when they can be combined with && or ;"
+        )
+    
+    context = (
+        f"System Information:\n"
+        f"- OS: {system_name} {system_release} {system_version}\n"
+        f"- Architecture: {system_machine}\n"
+        f"- Username: {username}\n"
+        f"- Current Working Directory: {cwd}\n\n"
+        f"Path References:\n{path_guide}\n\n"
+        f"Command Guidelines:\n{additional_guidance}"
+    )
+    
+    return context
 
 def get_shell_config_file():
     system = platform.system()
