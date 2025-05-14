@@ -133,28 +133,46 @@ Would you like commands to address any of these issues?
 This flag reads a file and uses a predefined internal query to ask the AI to summarize and explain it in context.
 
 ```bash
-$ ai --explain ./src/utils.py
-[AI] The file './src/utils.py' (absolute path: '/Users/youruser/yourproject/src/utils.py') appears to be a utility module in a Python project.
+$ ai --explain ./apps/EXAMPLEAPP/config/settings.json
+[AI] The file './apps/EXAMPLEAPP/config/settings.json' (absolute path: '/Users/youruser/yourproject/apps/EXAMPLEAPP/config/settings.json') appears to be a configuration file for the 'EXAMPLEAPP' component of your project, located under the 'apps/EXAMPLEAPP' directory.
 
 **File Content Summary:**
 -------------------------------------------------------
-# src/utils.py
-def helper_function_one(data):
-    # processes data
-    return processed_data
-
-def another_utility(config_value):
-    # uses config
-    return result
+{
+  "debug": false,
+  "database": {
+    "host": "db.internal",
+    "port": 3306,
+    "user": "exampleapp",
+    "password": "prodpass"
+  },
+  "features": {
+    "enable_signup": false,
+    "max_upload_size_mb": 20
+  }
+}
 -------------------------------------------------------
 
 **Purpose and Context:**
-This file likely contains common helper functions or utility routines that are used across different parts of the larger project located in '/Users/youruser/yourproject/'.
+This `settings.json` file is a JSON configuration file specifically for the 'EXAMPLEAPP' application or service within your project. Its location under `apps/EXAMPLEAPP/config/` strongly suggests it is used to configure the 'EXAMPLEAPP' component, as opposed to other apps or services that may exist in the `apps/` directory.
 
-*   `helper_function_one(data)`: Seems to be a generic data processing function.
-*   `another_utility(config_value)`: Might be used for tasks that require some configuration input.
+- The `"debug": false` setting indicates that the application is running in production mode, with minimal logging and error output.
+- The `"database"` section provides connection details for a MySQL database, with credentials specific to the 'exampleapp' user.
+- The `"features"` section controls application-specific options:
+    - `"enable_signup": false` disables new user registrations, possibly because this is a production deployment.
+    - `"max_upload_size_mb": 20` restricts file uploads to 20 megabytes.
 
-It doesn't seem to import other custom modules from this project directly, but it would typically be imported by other scripts within the 'src' directory or other parts of the application.
+**Context within the Project:**
+- The file's path (`apps/EXAMPLEAPP/config/settings.json`) indicates it is scoped to the 'EXAMPLEAPP' part of a larger, possibly multi-app project.
+- Other directories at the same level (e.g., `apps/api/`, `apps/admin/`) may have their own `config/settings.json` files for their respective components.
+- The main entry point for the EXAMPLEAPP application (such as `apps/EXAMPLEAPP/app.py` or `apps/EXAMPLEAPP/main.py`) will likely load this file at startup to configure its environment.
+
+**Referenced Files/Modules:**
+- While this file does not directly reference other files, it is intended to be read by the 'EXAMPLEAPP' application code.
+- If there are environment-specific files (like `settings.prod.json`), the application may select which config to load based on deployment environment variables.
+
+**Likely Belongs To:**
+- Based on its directory (`apps/EXAMPLEAPP/config/`), this file almost certainly configures the 'EXAMPLEAPP' application within your project at `/Users/youruser/yourproject/`.
 ```
 
 ### 2. Single Interaction Mode (`ai`)

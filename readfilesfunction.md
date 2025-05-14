@@ -44,16 +44,26 @@ ai "explain_file:src/utils.py what functions does it define and where are they u
 AI:(provider)> /read_explain path/to/file.py What does this do?
 ```
 
-**Decision:** Option A (new flags) seems more explicit for command-line usage. For chat mode, a `/command` style could be added later. We'll start with flags for direct queries.
+### Option C: Dedicated Explanation Flag (New Suggestion)
+
+Introduce a dedicated flag `--explain <filepath>` that acts as a shortcut for reading a file and asking for a summary/contextual explanation.
+
+**Example Usage:**
+```bash
+ai --explain path/to/file.py
+```
+This would internally use a predefined query like "Summarize this file and explain its role in the current project context."
+
+**Decision for `--explain`:** This is a good addition for streamlining a common use case. It will be implemented alongside `--read-file`.
 
 ## 3. Implementation Steps
 
 ### 3.1. Argument Parsing (`terminalai/cli_interaction.py` or `terminalai/terminalai_cli.py`)
 
 *   Modify `parse_args()` in `terminalai/cli_interaction.py` (or ensure `terminalai_cli.py`'s parsing is updated) to include:
-    *   `--read-file <filepath>`: Argument to specify the path to the file.
-    *   `--file-query <query_string>` (Optional, better name TBD): A specific query related to the file, distinct from the main AI query. If not provided, the main query is used.
-    *   Alternatively, the main query `args.query` will be used as the prompt for explaining the file.
+    *   `--read-file <filepath>`: Argument to specify the path to the file. The user provides a query for this file.
+    *   `--explain <filepath>`: Argument to specify the path to a file for automatic summarization and contextual explanation. This flag implies a predefined query. If a general query is also provided by the user, it will be ignored when `--explain` is used.
+    *   These two flags (`--read-file` and `--explain`) should ideally be mutually exclusive, or `--explain` should take precedence if both are somehow provided for the same file interaction.
 
 ### 3.2. File Reading Logic (New Module: `terminalai/file_reader.py`)
 
@@ -70,25 +80,36 @@ AI:(provider)> /read_explain path/to/file.py What does this do?
 ### 3.3. Contextual Analysis and Prompt Engineering (Modify `terminalai/terminalai_cli.py` and AI provider logic)
 
 *   In `terminalai/terminalai_cli.py` (or wherever the main AI call is made):
-    *   If `--read-file` is used:
+    *   If `--explain <filepath>` is used:
+        *   Set `file_path_to_read = args.explain`.
         *   Call `file_reader.read_project_file()`.
-        *   If successful, construct a new system prompt or augment the user query for the AI provider.
-        *   The prompt should include:
-            *   The user's original query (e.g., "Explain this file").
-            *   The file path.
-            *   The full file content (or a significant portion if very large, with a note).
-            *   The current working directory (`cwd`).
-            *   A specific instruction to the AI, e.g.:
-                ```
-                "The user has provided the content of the file '{filepath}' located in their current working directory '{cwd}'.
-                File Content:
-                ---
-                {file_content}
-                ---
-                Based on this file and their query '{user_query}', please provide an explanation.
-                If relevant, identify any other files or modules it appears to reference or interact with, considering standard import statements or common patterns for its file type.
-                Focus on its role within a typical project structure if it seems to be part of a larger application in '{cwd}'."
-                ```
+        *   If successful, construct a system prompt including file content, path, CWD.
+        *   The user query part of the prompt will be a **predefined template**, e.g.,
+            ```
+            "The user wants an explanation of the file '{filepath}' (absolute path: '{abs_filepath}') located in their current working directory '{cwd}'.
+            File Content:
+            ---
+            {file_content}
+            ---
+            Please summarize this file, explain its likely purpose, and describe its context within a typical project structure found in this directory.
+            If relevant, also identify any other files or modules it appears to reference or interact with."
+            ```
+        *   The `user_query` passed to the AI provider will be this predefined template.
+    *   Else if `--read-file <filepath>` is used (and `--explain` was not):
+        *   Set `file_path_to_read = args.read_file`.
+        *   Call `file_reader.read_project_file()`.
+        *   If successful, construct a system prompt including file content, path, CWD, and the **user's actual query (`args.query`)**.
+        *   The prompt should guide the AI to use the file content to answer the user's specific query, e.g.:
+            ```
+            "The user has provided the content of the file '{filepath}' located in their current working directory '{cwd}'.
+            File Content:
+            ---
+            {file_content}
+            ---
+            Based on this file and their query '{user_query}', please provide an explanation.
+            If relevant, identify any other files or modules it appears to reference or interact with, considering standard import statements or common patterns for its file type.
+            Focus on its role within a typical project structure if it seems to be part of a larger application in '{cwd}'."
+            ```
 
 ### 3.4. Identifying File Interactions (Initial Simple Approach)
 
@@ -133,8 +154,9 @@ AI:(provider)> /read_explain path/to/file.py What does this do?
 
 ## 7. Example Workflow (Internal)
 
-1.  User runs: `ai --read-file my_app/config.py "Explain this config and what uses it."`
-2.  `terminalai_cli.py`: `parse_args()` gets `read_file="my_app/config.py"` and query.
+**Scenario 1: User uses `--read-file`**
+1.  User runs: `ai --read-file my_app/config.py "What is the timeout setting in this config?"`
+2.  `terminalai_cli.py`: `parse_args()` gets `read_file="my_app/config.py"` and `query="What is the timeout..."`.
 3.  `terminalai_cli.py` calls `file_reader.read_project_file("my_app/config.py", os.getcwd())`.
 4.  `file_reader.py`:
     *   Validates path (e.g., `os.path.abspath("my_app/config.py")` starts with `os.path.abspath(os.getcwd())`).
@@ -144,5 +166,14 @@ AI:(provider)> /read_explain path/to/file.py What does this do?
 5.  `terminalai_cli.py`: Constructs a detailed prompt for the AI, including the CWD, file path, file content, and user's query.
 6.  Sends prompt to the configured AI provider.
 7.  Receives response and prints using `print_ai_answer_with_rich`.
+
+**Scenario 2: User uses `--explain`**
+1.  User runs: `ai --explain my_app/config.py` (optionally also `"some other query"` which gets ignored for the explanation part)
+2.  `terminalai_cli.py`: `parse_args()` gets `explain="my_app/config.py"`.
+3.  `terminalai_cli.py` calls `file_reader.read_project_file("my_app/config.py", os.getcwd())`.
+4.  `file_reader.py` returns content.
+5.  `terminalai_cli.py`: Constructs a detailed prompt for the AI using the **predefined explanation query template**, including CWD, file path, and file content.
+6.  Sends prompt to the configured AI provider.
+7.  Receives response (summary/explanation) and prints it.
 
 This plan provides a roadmap for implementing the desired functionality.
