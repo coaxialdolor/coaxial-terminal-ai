@@ -27,6 +27,13 @@ from terminalai.formatting import print_ai_answer_with_rich
 # Use the more specific get_commands_interactive (alias for extract_commands) from 021offshoot
 from terminalai.command_extraction import extract_commands as get_commands_interactive
 from terminalai.__init__ import __version__
+from terminalai.color_utils import (
+    colorize_success, colorize_error, colorize_info, 
+    colorize_prompt, colorize_highlight, AI_COLOR, COMMAND_COLOR, INFO_COLOR, 
+    ERROR_COLOR, SUCCESS_COLOR, PROMPT_COLOR, HIGHLIGHT_COLOR, RESET, BOLD
+)
+import requests # Add this import for Ollama model fetching
+import json # Add this import for parsing Ollama response
 
 # System Prompt for AI Risk Assessment (Hardcoded)
 _RISK_ASSESSMENT_SYSTEM_PROMPT = """
@@ -648,11 +655,21 @@ def interactive_mode(chat_mode=False):
     while True:
         # Add visual separation between interactions
         console.print("")
-        provider_name = load_config().get("default_provider", "Unknown") # Get provider name
+        current_config = load_config() # Load config to get provider and model info
+        provider_name = current_config.get("default_provider", "Unknown")
+        
+        display_provider_name = provider_name
+        if provider_name == "ollama":
+            ollama_model = current_config.get("providers", {}).get("ollama", {}).get("model", "")
+            if ollama_model:
+                display_provider_name = f"ollama-{ollama_model}"
+            else:
+                display_provider_name = "ollama (model not set)" # Fallback if model isn't in config
+
         prompt = Text()
         prompt.append("AI:", style="bold cyan")
         prompt.append("(", style="bold green")
-        prompt.append(provider_name, style="bold green")
+        prompt.append(display_provider_name, style="bold green") # Use the potentially modified name
         prompt.append(")", style="bold green")
         prompt.append("> ", style="bold cyan")
         console.print(prompt, end="")
@@ -829,21 +846,83 @@ def setup_wizard():
             if sel.isdigit() and 1 <= int(sel) <= len(providers):
                 pname = providers[int(sel)-1]
                 if pname == 'ollama':
-                    current = config['providers'][pname].get('host', '')
-                    console.print(f"Current host: {current}")
+                    # Configure Ollama Host
+                    current_host = config['providers'][pname].get('host', 'http://localhost:11434')
+                    console.print(f"Current Ollama host: {current_host}")
                     ollama_host_prompt = (
-                        "Enter new Ollama host (e.g., http://localhost:11434): "
+                        "Enter new Ollama host (leave blank to keep current): "
                     )
-                    new_host = console.input(ollama_host_prompt).strip()
-                    if new_host:
-                        config['providers'][pname]['host'] = new_host
-                        save_config(config)
+                    new_host_input = console.input(ollama_host_prompt).strip()
+                    if new_host_input:
+                        config['providers'][pname]['host'] = new_host_input
+                        host_to_use = new_host_input # Use the newly entered host for API check
                         console.print(
                             "[bold green]Ollama host updated.[/bold green]"
                         )
                     else:
-                        console.print("[yellow]No changes made.[/yellow]")
-                else:
+                        host_to_use = current_host # Use current host if new one wasn't entered
+                        console.print("[yellow]Ollama host unchanged.[/yellow]")
+
+                    # Configure Ollama Model
+                    current_model = config['providers'][pname].get('model', 'llama3') # Default if not set
+                    console.print(f"Current Ollama model: {current_model}")
+                    
+                    available_models = []
+                    try:
+                        tags_url = f"{host_to_use}/api/tags"
+                        console.print(f"[dim]Fetching models from {tags_url}...[/dim]")
+                        response = requests.get(tags_url, timeout=5)
+                        response.raise_for_status()
+                        models_data = response.json().get("models", [])
+                        if models_data:
+                            available_models = [m.get("name") for m in models_data if m.get("name")]
+                        
+                        if available_models:
+                            console.print("[bold]Available Ollama models:[/bold]")
+                            for i, model_name_option in enumerate(available_models, 1):
+                                console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
+                            
+                            model_choice_prompt = (
+                                "[bold green]Choose a model number, or enter a model name directly (e.g., mistral:latest): [/bold green]"
+                            )
+                            model_sel = console.input(model_choice_prompt).strip()
+                            
+                            selected_model_name = ""
+                            if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
+                                selected_model_name = available_models[int(model_sel)-1]
+                            elif model_sel: # User entered a name directly
+                                selected_model_name = model_sel
+                            
+                            if selected_model_name:
+                                config['providers'][pname]['model'] = selected_model_name
+                                console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
+                            else:
+                                console.print("[yellow]No model selected/entered, keeping current or default.[/yellow]")
+                        else:
+                            console.print("[yellow]No models found via Ollama API or API not reachable.[/yellow]")
+                            console.print("[yellow]You can still enter a model name manually.[/yellow]")
+                            manual_model_prompt = f"Enter Ollama model name (e.g., mistral:latest, default: {current_model}): "
+                            manual_model_input = console.input(manual_model_prompt).strip()
+                            if manual_model_input:
+                                config['providers'][pname]['model'] = manual_model_input
+                                console.print(f"[bold green]Ollama model set to: {manual_model_input}[/bold green]")
+                            else:
+                                console.print("[yellow]No model entered, keeping current or default.[/yellow]")
+
+                    except requests.exceptions.RequestException as e:
+                        console.print(f"[red]Error fetching Ollama models: {e}[/red]")
+                        console.print("[yellow]Please ensure Ollama is running and accessible at the specified host.[/yellow]")
+                        console.print("[yellow]You can enter a model name manually.[/yellow]")
+                        manual_model_prompt_on_error = f"Enter Ollama model name (e.g., mistral:latest, default: {current_model}): "
+                        manual_model_input_on_error = console.input(manual_model_prompt_on_error).strip()
+                        if manual_model_input_on_error:
+                            config['providers'][pname]['model'] = manual_model_input_on_error
+                            console.print(f"[bold green]Ollama model set to: {manual_model_input_on_error}[/bold green]")
+                        else:
+                            console.print("[yellow]No model entered, keeping current or default.[/yellow]")
+                    
+                    save_config(config) # Save config after host and model changes for Ollama
+                else: # For other providers (OpenRouter, Gemini, Mistral)
                     current = config['providers'][pname].get('api_key', '')
                     display_key = '(not set)' if not current else '[hidden]'
                     console.print(f"Current API key: {display_key}")

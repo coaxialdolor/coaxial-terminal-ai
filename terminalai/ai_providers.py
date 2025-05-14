@@ -8,6 +8,7 @@ get_system_context() function, which passes the detected OS information to these
 """
 import requests
 from terminalai.config import load_config
+import json
 
 class AIProvider:
     """Base class for all AI providers."""
@@ -229,53 +230,70 @@ class OllamaProvider(AIProvider):
 
         Args:
             host: The host URL for the Ollama server.
-            model: The model name to use (defaults to llama3)
+            model: The model name to use (e.g., "mistral:latest", "llama3")
         """
         self.host = host
-        self.model = model
+        self.model = model # Ensure this is set to e.g., "mistral:latest" in your config
 
     def query(self, prompt):
         """Query Ollama API with the given prompt.
 
         Args:
-            prompt: The text prompt to send to Ollama.
+            prompt: The combined system and user prompt.
 
         Returns:
             The response text from Ollama.
         """
-        url = f"{self.host}/api/chat"
+        url = f"{self.host}/api/generate"
         headers = {
             "Content-Type": "application/json"
         }
 
-        # Check if the prompt includes a system prompt section
-        if "\n\n" in prompt:
-            system_prompt, user_prompt = prompt.split("\n\n", 1)
-            data = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "stream": False
-            }
-        else:
-            # Just a user prompt without system instructions
-            data = {
-                "model": self.model,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "stream": False
-            }
+        data = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False
+        }
 
+        response = None
         try:
-            # Longer timeout for local models
             response = requests.post(url, headers=headers, json=data, timeout=60)
             response.raise_for_status()
-            return response.json()["message"]["content"]
-        except (requests.RequestException, KeyError) as e:
-            return f"[Ollama API error] {e}"
+            
+            response_json = response.json()
+            return response_json.get("response", "").strip()
+        
+        except requests.exceptions.HTTPError as http_err:
+            error_message = f"HTTP error occurred: {http_err}"
+            if response is not None:
+                error_message += f" - Response Text: {response.text}"
+            print(f"[OllamaProvider ERROR] {error_message}")
+            return f"[Ollama API error] {error_message}"
+        except requests.exceptions.RequestException as req_err:
+            error_message = f"Request exception occurred: {req_err}"
+            print(f"[OllamaProvider ERROR] {error_message}")
+            return f"[Ollama API error] {error_message}"
+        except json.JSONDecodeError as json_err:
+            error_message = f"JSON decode error: {json_err}"
+            if response is not None:
+                error_message += f" - Received text was: {response.text}"
+            print(f"[OllamaProvider ERROR] {error_message}")
+            return f"[Ollama API error] {error_message}"
+        except KeyError as key_err:
+            error_message = f"KeyError: '{key_err}' not found in response."
+            if response is not None:
+                try:
+                    error_message += f" - Full JSON response: {response.json()}"
+                except json.JSONDecodeError:
+                    error_message += f" - Could not parse JSON from: {response.text}"
+            print(f"[OllamaProvider ERROR] {error_message}")
+            return f"[Ollama API error] {error_message}"
+        except Exception as e:
+            error_message = f"An unexpected error occurred: {e}"
+            if response is not None:
+                error_message += f" - Response Text: {response.text}"
+            print(f"[OllamaProvider ERROR] {error_message}")
+            return f"[Ollama API error] {error_message}"
 
 def get_provider(provider_name=None):
     """Get the provider instance for the specified name or the default one.

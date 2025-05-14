@@ -1,5 +1,4 @@
 requests
 pygments
 rich
-
 pyperclip
