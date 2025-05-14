@@ -28,8 +28,8 @@ from terminalai.formatting import print_ai_answer_with_rich
 from terminalai.command_extraction import extract_commands as get_commands_interactive
 from terminalai.__init__ import __version__
 from terminalai.color_utils import (
-    colorize_success, colorize_error, colorize_info, 
-    colorize_prompt, colorize_highlight, AI_COLOR, COMMAND_COLOR, INFO_COLOR, 
+    colorize_success, colorize_error, colorize_info,
+    colorize_prompt, colorize_highlight, AI_COLOR, COMMAND_COLOR, INFO_COLOR,
     ERROR_COLOR, SUCCESS_COLOR, PROMPT_COLOR, HIGHLIGHT_COLOR, RESET, BOLD
 )
 import requests # Add this import for Ollama model fetching
@@ -51,7 +51,9 @@ Instructions:
 """
 
 def parse_args():
-    """Parse command line arguments."""
+    """Parse command line arguments, ignoring --eval-mode and unknown arguments for shell integration compatibility."""
+    # Remove --eval-mode if present, to avoid argparse errors from shell integration
+    filtered_argv = [arg for arg in sys.argv[1:] if arg != "--eval-mode"]
     description_text = """TerminalAI: Your command-line AI assistant.
 Ask questions or request commands in natural language.
 
@@ -205,7 +207,7 @@ Project: https://github.com/coaxialdolor/terminalai"""
     )
 
     # Ensure --read-file and --explain are mutually exclusive
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args(filtered_argv)
     if args.read_file and args.explain:
         parser.error("argument --explain: not allowed with argument --read-file")
     return args
@@ -220,9 +222,9 @@ def _get_ai_risk_assessment(command, console, provider):
     try:
         cwd = os.getcwd()
         risk_query = f"<RISK_CONFIRMATION> Explain the potential consequences and dangers of running the following command(s) if my current working directory is '{cwd}':\n---\n{command}\n---"
-        
+
         # Increased delay for API rate limits
-        time.sleep(1.5) 
+        time.sleep(1.5)
 
         risk_response = provider.generate_response(
             risk_query,
@@ -256,16 +258,12 @@ def handle_commands(commands, auto_confirm=False):
 
     if not commands:
         return
-    
+
     n_commands = len(commands)
 
-    # ANSI color codes (can be defined elsewhere or kept if simple enough)
     color_reset = "\033[0m"
     color_bold_green = "\033[1;32m"
     color_bold_yellow = "\033[1;33m"
-    # color_bold_red = "\033[1;31m" # Defined by Rich styles now
-    # color_bold_cyan = "\033[1;36m" # Defined by Rich styles now
-    # color_dim = "\033[2m"         # Defined by Rich styles now
 
     if n_commands == 1:
         command = commands[0]
@@ -281,6 +279,16 @@ def handle_commands(commands, auto_confirm=False):
                 expand=False
             ))
 
+        if auto_confirm:
+            if is_stateful_cmd:
+                copy_to_clipboard(command)
+                console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
+                return
+            else:
+                console.print(f"[green]Auto-executing: {command}[/green]")
+                run_command(command)
+                return
+
         if is_stateful_cmd:
             prompt_text = (
                 f"[STATEFUL COMMAND] '{command}' changes shell state. "
@@ -294,15 +302,8 @@ def handle_commands(commands, auto_confirm=False):
             return # Done with this single stateful command
 
         # Non-stateful command
-        if auto_confirm and not is_risky_cmd:
-            console.print(f"[green]Auto-executing: {command}[/green]")
-            run_command(command)
-            return
-
-        # Needs confirmation (either risky, or not auto_confirm for non-risky)
         default_choice = "n" if is_risky_cmd else "y"
         prompt_style = "red bold" if is_risky_cmd else "green"
-        # Using Rich Text for prompt for better styling control
         prompt_msg_text = Text("Execute '", style=prompt_style)
         prompt_msg_text.append(command, style=prompt_style + " underline")
         prompt_msg_text.append("'? ", style=prompt_style)
@@ -311,7 +312,7 @@ def handle_commands(commands, auto_confirm=False):
 
         console.print(prompt_msg_text, end="")
         choice = input().lower() or default_choice
-        
+
         if choice == "y":
             run_command(command)
         else:
@@ -320,11 +321,32 @@ def handle_commands(commands, auto_confirm=False):
 
     # Multiple commands
     else:
+        if auto_confirm:
+            for cmd_item in commands:
+                is_stateful_item = is_stateful_command(cmd_item)
+                is_risky_item = is_risky_command(cmd_item)
+                if is_stateful_item:
+                    copy_to_clipboard(cmd_item)
+                    console.print(f"[green]Command copied to clipboard: {cmd_item}[/green]")
+                elif not is_risky_item:
+                    console.print(f"[green]Auto-executing: {cmd_item}[/green]")
+                    run_command(cmd_item)
+                else:
+                    risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
+                    console.print(Panel(
+                        Text(risk_explanation, style="yellow"),
+                        title="[bold red]AI Risk Assessment[/bold red]",
+                        border_style="red",
+                        expand=False
+                    ))
+                    # For risky commands, do not auto-execute, just print risk and skip
+                    console.print(f"[yellow]Skipped risky command: {cmd_item}[/yellow]")
+            return
         cmd_list_display = []
         for i, cmd_text_item in enumerate(commands, 1):
             is_risky_item = is_risky_command(cmd_text_item)
             is_stateful_item = is_stateful_command(cmd_text_item)
-            
+
             display_item = Text()
             display_item.append(f"{i}", style="cyan")
             display_item.append(f": {cmd_text_item}", style="white")
@@ -333,7 +355,7 @@ def handle_commands(commands, auto_confirm=False):
             if is_stateful_item:
                 display_item.append(" [STATEFUL]", style="bold yellow")
             cmd_list_display.append(display_item)
-        
+
         # Create a single Text object for the panel content
         panel_content = Text("\n").join(cmd_list_display)
         console.print(Panel(
@@ -341,7 +363,7 @@ def handle_commands(commands, auto_confirm=False):
             title=f"Found {n_commands} commands",
             border_style="blue"
         ))
-        
+
         prompt_message = Text("Enter command number, 'a' for all, or 'q' to quit: ", style="bold cyan")
         console.print(prompt_message, end="")
         user_choice = input().lower()
@@ -364,7 +386,7 @@ def handle_commands(commands, auto_confirm=False):
                         border_style="red",
                         expand=False
                     ))
-                
+
                 if is_stateful_item:
                     copy_prompt_text = Text(f"[STATEFUL COMMAND] '{cmd_item}'. Copy to clipboard? [Y/n]: ", style="yellow bold")
                     console.print(copy_prompt_text, end="")
@@ -432,7 +454,7 @@ def handle_commands(commands, auto_confirm=False):
                     run_command(cmd_to_run)
             else:
                 console.print(f"[red]Invalid choice: {user_choice}[/red]")
-            return 
+            return
         else: # Invalid choice from multi-command prompt
             console.print(f"[red]Invalid selection: {user_choice}[/red]")
             return
@@ -493,7 +515,7 @@ def interactive_mode(chat_mode=False):
         console.print("")
         current_config = load_config() # Load config to get provider and model info
         provider_name = current_config.get("default_provider", "Unknown")
-        
+
         display_provider_name = provider_name
         if provider_name == "ollama":
             ollama_model = current_config.get("providers", {}).get("ollama", {}).get("model", "")
@@ -544,7 +566,7 @@ def interactive_mode(chat_mode=False):
             #    cleaned_response = temp_response[match.end():]
             # else:
             #    cleaned_response = temp_response
-            
+
             # Simpler string method approach, which should be sufficient here:
             cleaned_response = temp_response
             if temp_response.lower().startswith("[ai]"):
@@ -609,67 +631,89 @@ def _set_default_provider_interactive(console: Console):
 # New refactored function for setting Ollama model
 def _set_ollama_model_interactive(console: Console):
     """Interactively sets the Ollama model and saves it to config."""
+    import sys
+    import os
+    DEBUG = os.environ.get("TERMINALAI_DEBUG", "0") == "1"
+    if DEBUG:
+        print("[DEBUG] Entered _set_ollama_model_interactive", file=sys.stderr)
     config = load_config()
     pname = 'ollama' # We are specifically configuring Ollama here
 
     if pname not in config['providers']:
         config['providers'][pname] = {} # Ensure ollama provider entry exists
 
-    # Configure Ollama Host (can be part of this, or assumed to be set)
     current_host = config['providers'][pname].get('host', 'http://localhost:11434')
     console.print(f"Current Ollama host: {current_host}")
     ollama_host_prompt = (
         "Enter Ollama host (leave blank to keep current, e.g., http://localhost:11434): "
     )
+    sys.stdout.flush()
+    if DEBUG:
+        print("[DEBUG] About to prompt for Ollama host", file=sys.stderr)
     new_host_input = console.input(ollama_host_prompt).strip()
+    console.print()  # Add a blank line for separation
+    if DEBUG:
+        print(f"[DEBUG] Got Ollama host input: '{new_host_input}'", file=sys.stderr)
     host_to_use = current_host
     if new_host_input:
         config['providers'][pname]['host'] = new_host_input
         host_to_use = new_host_input
         console.print("[bold green]Ollama host updated.[/bold green]")
-    else:
-        console.print("[yellow]Ollama host unchanged.[/yellow]")
 
-    # Configure Ollama Model
-    current_model = config['providers'][pname].get('model', 'llama3') 
+    current_model = config['providers'][pname].get('model', 'llama3')
     console.print(f"Current Ollama model: {current_model}")
-    
+
     available_models = []
     try:
         tags_url = f"{host_to_use}/api/tags"
         console.print(f"[dim]Fetching models from {tags_url}...[/dim]")
+        sys.stdout.flush()
+        if DEBUG:
+            print(f"[DEBUG] About to fetch models from {tags_url}", file=sys.stderr)
         response = requests.get(tags_url, timeout=5)
         response.raise_for_status()
         models_data = response.json().get("models", [])
+        if DEBUG:
+            print(f"[DEBUG] Models data: {models_data}", file=sys.stderr)
         if models_data:
             available_models = [m.get("name") for m in models_data if m.get("name")]
-        
+
         if available_models:
             console.print("[bold]Available Ollama models:[/bold]")
             for i, model_name_option in enumerate(available_models, 1):
                 console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
-            
+            if DEBUG:
+                print(f"[DEBUG] Printed {len(available_models)} models", file=sys.stderr)
             model_choice_prompt = (
-                "[bold green]Choose a model number, or enter a model name directly: [/bold green]"
+                "[bold green]Choose a model number, or enter 'c' to cancel: [/bold green]"
             )
-            model_sel = console.input(model_choice_prompt).strip()
-            
-            selected_model_name = ""
-            if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
-                selected_model_name = available_models[int(model_sel)-1]
-            elif model_sel: 
-                selected_model_name = model_sel
-            
-            if selected_model_name:
-                config['providers'][pname]['model'] = selected_model_name
-                console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
-            else:
-                console.print("[yellow]No model selected/entered. Model remains: {current_model}[/yellow]")
+            sys.stdout.flush()
+            if DEBUG:
+                print("[DEBUG] About to prompt for model selection", file=sys.stderr)
+            while True:
+                model_sel = console.input(model_choice_prompt).strip()
+                if DEBUG:
+                    print(f"[DEBUG] Got model selection input: '{model_sel}'", file=sys.stderr)
+                if model_sel.lower() == 'c':
+                    console.print(f"[yellow]Model selection cancelled. Model remains: {current_model}[/yellow]")
+                    break
+                if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
+                    selected_model_name = available_models[int(model_sel)-1]
+                    config['providers'][pname]['model'] = selected_model_name
+                    console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
+                    break
+                else:
+                    console.print(f"[red]Invalid selection. Please enter a number between 1 and {len(available_models)}, or 'c' to cancel.[/red]")
         else:
-            console.print("[yellow]No models found via Ollama API or API not reachable at {host_to_use}.[/yellow]")
+            console.print(f"[yellow]No models found via Ollama API or API not reachable at {host_to_use}.[/yellow]")
             console.print("[yellow]You can still enter a model name manually.[/yellow]")
             manual_model_prompt = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
+            sys.stdout.flush()
+            if DEBUG:
+                print("[DEBUG] About to prompt for manual model entry", file=sys.stderr)
             manual_model_input = console.input(manual_model_prompt).strip()
+            if DEBUG:
+                print(f"[DEBUG] Got manual model input: '{manual_model_input}'", file=sys.stderr)
             if manual_model_input:
                 config['providers'][pname]['model'] = manual_model_input
                 console.print(f"[bold green]Ollama model set to: {manual_model_input}[/bold green]")
@@ -681,14 +725,27 @@ def _set_ollama_model_interactive(console: Console):
         console.print("[yellow]Please ensure Ollama is running and accessible at the specified host.[/yellow]")
         console.print("[yellow]You can enter a model name manually.[/yellow]")
         manual_model_prompt_on_error = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
+        sys.stdout.flush()
+        if DEBUG:
+            print("[DEBUG] About to prompt for manual model entry after error", file=sys.stderr)
         manual_model_input_on_error = console.input(manual_model_prompt_on_error).strip()
+        if DEBUG:
+            print(f"[DEBUG] Got manual model input after error: '{manual_model_input_on_error}'", file=sys.stderr)
         if manual_model_input_on_error:
             config['providers'][pname]['model'] = manual_model_input_on_error
             console.print(f"[bold green]Ollama model set to: {manual_model_input_on_error}[/bold green]")
         else:
             console.print(f"[yellow]No model entered. Model remains: {current_model}[/yellow]")
-    
+
+    # Print summary of current host and model
+    summary_host = config['providers'][pname].get('host', host_to_use)
+    summary_model = config['providers'][pname].get('model', current_model)
+    console.print("\n[bold cyan]Ollama configuration summary:[/bold cyan]")
+    console.print(f"  [bold]Host:[/bold] [green]{summary_host}[/green]")
+    console.print(f"  [bold]Model:[/bold] [yellow]{summary_model}[/yellow]\n")
     save_config(config)
+    if DEBUG:
+        print("[DEBUG] Exiting _set_ollama_model_interactive", file=sys.stderr)
     return True # Assuming success unless an unhandled exception occurs
 
 def setup_wizard():
@@ -744,7 +801,7 @@ def setup_wizard():
                        "for more info about an option.")
         console.print(f"[dim]{info_prompt}[/dim]")
         choice = console.input("[bold green]Choose an action (1-12): [/bold green]").strip()
-        
+
         if choice.startswith('i') and choice[1:].isdigit():
             info_num = choice[1:]
             if info_num in menu_info:
