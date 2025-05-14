@@ -1,5 +1,6 @@
 import subprocess
 import platform # Import platform module to check OS
+import os # Import os for path manipulation
 
 COMMON_POWERSHELL_CMDLET_STARTS = [
     "remove-item", "get-childitem", "copy-item", "move-item", "new-item", "set-location", 
@@ -45,6 +46,56 @@ def run_shell_command(cmd):
                 # Using & { ... } ensures PowerShell treats it as a command invocation,
                 # especially important if the command string contains spaces or special characters
                 # that might be misinterpreted by powershell -Command without the script block.
+            elif main_cmd_lower == "del":
+                # Handle path normalization for 'del' on Windows
+                path_to_delete = " ".join(command_parts[1:]) # Reconstruct the path part
+                if path_to_delete:
+                    # Resolve ~ if present
+                    if path_to_delete.startswith('~') or path_to_delete.startswith('"~') or path_to_delete.startswith("'~"):
+                        # Handle quoted tilde paths
+                        quote_char = ''
+                        actual_path = path_to_delete
+                        if path_to_delete.startswith('"~') or path_to_delete.startswith("'~"):
+                            quote_char = path_to_delete[0]
+                            actual_path = path_to_delete[1:-1] if path_to_delete.endswith(quote_char) else path_to_delete[1:]
+                        
+                        if actual_path.startswith('~'): # Should be true now
+                           actual_path = os.path.expanduser('~') + actual_path[1:]
+                        
+                        # Re-quote if originally quoted
+                        if quote_char:
+                            path_to_delete = f"{quote_char}{actual_path}{quote_char}"
+                        else:
+                            path_to_delete = actual_path
+                    
+                    # Replace forward slashes with backslashes
+                    # Only do this if it looks like a path and not a switch
+                    # A simple heuristic: if it contains '/' and not a common switch pattern like /Q, /F, /S, /A
+                    # For `del`, common switches are /P, /F, /S, /Q, /A[:attributes]
+                    # This is tricky. A robust way is to only normalize if tilde was present or it contains / and no known switches.
+                    # For now, let's assume AI gives paths with / that need conversion for `del`.
+                    # We should be careful not to replace slashes in actual switches.
+                    
+                    # If path_to_delete is quoted, normalize inside the quotes
+                    if (path_to_delete.startswith('"') and path_to_delete.endswith('"')) or \
+                       (path_to_delete.startswith("'") and path_to_delete.endswith("'")):
+                        quote_char = path_to_delete[0]
+                        inner_path = path_to_delete[1:-1]
+                        normalized_inner_path = inner_path.replace('/', '\\')
+                        path_to_delete_normalized = f"{quote_char}{normalized_inner_path}{quote_char}"
+                    else:
+                        # Check for unquoted paths that might contain switches
+                        # If a part starts with / and is short (e.g. /Q, /F), it's likely a switch
+                        parts_for_slash_check = path_to_delete.split()
+                        processed_parts = []
+                        for part in parts_for_slash_check:
+                            if part.startswith('/') and len(part) <= 2: # e.g. /F, /Q. len(part) <=3 for /A:R etc.
+                                processed_parts.append(part) # Keep as is
+                            else:
+                                processed_parts.append(part.replace('/', '\\'))
+                        path_to_delete_normalized = " ".join(processed_parts)
+                    
+                    executable_cmd = f"del {path_to_delete_normalized}"
 
     try:
         # Show what's being executed
