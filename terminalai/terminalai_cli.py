@@ -20,6 +20,7 @@ from terminalai.cli_interaction import (
 )
 from terminalai.color_utils import colorize_command
 from rich.console import Console
+from rich.text import Text
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -120,7 +121,37 @@ def main():
 
     # Format and print response
     rich_to_stderr = getattr(args, 'eval_mode', False)
-    print_ai_answer_with_rich(response, to_stderr=rich_to_stderr)
+
+    console_for_direct = Console(stderr=rich_to_stderr, force_terminal=True)
+    
+    # Print an empty line before the prompt for direct queries
+    console_for_direct.print()
+
+    # Construct and print the display prompt for direct queries
+    display_provider_for_direct_query = provider_to_use
+    if provider_to_use == "ollama":
+        ollama_model_for_direct = config.get("providers", {}).get("ollama", {}).get("model", "")
+        if ollama_model_for_direct:
+            display_provider_for_direct_query = f"ollama-{ollama_model_for_direct}"
+        else:
+            display_provider_for_direct_query = "ollama (model not set)"
+    
+    direct_query_prompt_text = Text()
+    direct_query_prompt_text.append("AI:", style="bold cyan")
+    direct_query_prompt_text.append("(", style="bold green")
+    direct_query_prompt_text.append(display_provider_for_direct_query, style="bold green")
+    direct_query_prompt_text.append(")", style="bold green")
+    # No space or > here, as the response will be on the next line.
+    
+    console_for_direct.print(direct_query_prompt_text)
+
+    # The original response from the AI provider might start with "[AI] "
+    cleaned_response = response
+    if response.startswith("[AI] "):
+        cleaned_response = response[len("[AI] "):]
+
+    # Print the cleaned AI response (which will start on a new line)
+    print_ai_answer_with_rich(cleaned_response, to_stderr=rich_to_stderr)
 
     # Extract and handle commands from the response
     commands = extract_commands_from_output(response)

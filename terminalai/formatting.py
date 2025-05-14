@@ -8,75 +8,82 @@ from terminalai.color_utils import colorize_ai
 from terminalai.command_extraction import is_likely_command
 import os
 import sys
+from rich.text import Text
 
 def print_ai_answer_with_rich(ai_response, to_stderr=False):
-    """Print the AI response using rich formatting for code blocks, replacing home dir with ~. If to_stderr is True, print to stderr."""
-    console = Console(file=sys.stderr if to_stderr else None)
+    """Print the AI response using rich formatting. 
+       This function NO LONGER handles a prefix; prefix should be printed by the caller.
+    
+    Args:
+        ai_response (str): The raw response string from the AI, (cleaned of any initial [AI] by caller).
+        to_stderr (bool): If True, print to stderr.
+    """
+    console = Console(file=sys.stderr if to_stderr else None, force_terminal=True if to_stderr else False)
     home = os.path.expanduser("~")
-    # Replace /Users/<username> or /home/<username> with ~ in code blocks and command lines
+
     def home_replace(text):
-        # Replace both /Users/<username> and /home/<username> with ~
-        text = re.sub(rf"{re.escape(home)}", "~", text)
-        return text
+        return re.sub(rf"{re.escape(home)}", "~", text)
 
-    # Check if this is likely a pure factual response
-    factual_response_patterns = [
-        r'^\[AI\] [A-Z].*\.$',  # Starts with capital, ends with period
-        r'^\[AI\] approximately',  # Approximate numerical answer
-        r'^\[AI\] about',  # Approximate answer with "about"
-        r'^\[AI\] [0-9]',  # Starts with a number
-    ]
+    # AI response is now expected to be pre-cleaned by the caller if necessary.
+    processed_ai_response = ai_response 
 
-    is_likely_factual = False
-    for pattern in factual_response_patterns:
-        if re.search(pattern, ai_response, re.IGNORECASE):
-            # If response is short and doesn't have code blocks, it's likely just factual
-            if len(ai_response.split()) < 50 and '```' not in ai_response:
-                is_likely_factual = True
-                break
+    # Ensure response starts on a new line IF a prefix was printed by the caller.
+    # However, this function doesn't know if a prefix was printed. 
+    # The caller should handle newlines appropriately.
+    # For now, we assume the caller printed a prefix ending with a space or newline.
 
-    # For factual answers, just print them directly without special formatting
-    if is_likely_factual:
-        console.print(f"[cyan]{ai_response}[/cyan]")
-        return
-
-    # For command-based responses, format them specially
-    # Made the \n after ``` optional
     code_block_pattern = re.compile(r'```(bash|sh)?\n?([\s\S]*?)```')
     last_end = 0
-
-    # Count how many commands we've found - for cleaner UI
     command_count = 0
-    max_displayed_commands = 3  # Limit number of command panels displayed
+    content_printed = False
 
-    for match in code_block_pattern.finditer(ai_response):
-        before = ai_response[last_end:match.start()]
+    for match in code_block_pattern.finditer(processed_ai_response):
+        before = processed_ai_response[last_end:match.start()]
         if before.strip():
-            console.print(f"[cyan]{home_replace(before.strip())}[/cyan]")
+            console.print(home_replace(before.strip()))
+            content_printed = True
 
         code = match.group(2)
         # Split code block into lines and display each command separately if valid
+        block_has_command = False
+        temp_command_buffer = []
         for line in code.splitlines():
             stripped = line.strip()
             if not stripped or stripped.startswith('#'):
+                if stripped.startswith('#') : temp_command_buffer.append(Syntax(home_replace(stripped), "bash", theme="monokai"))
                 continue
             if is_likely_command(stripped):
+                # Print any preceding comments in the block
+                for comment_syntax in temp_command_buffer:
+                    console.print(comment_syntax)
+                temp_command_buffer = []
                 console.print(Panel(Syntax(home_replace(stripped), "bash", theme="monokai", line_numbers=False),
                                    title="Command", border_style="yellow"))
                 command_count += 1
-
-        # If no detected commands, just print the code block as regular text
-        if command_count == 0 and code.strip():
-            console.print("[cyan]```[/cyan]")
-            for line_in_code in code.splitlines():
-                console.print(f"[cyan]{home_replace(line_in_code)}[/cyan]")
-            console.print("[cyan]```[/cyan]")
-
+                block_has_command = True
+            else:
+                 temp_command_buffer.append(Syntax(home_replace(stripped), "bash", theme="monokai"))
+        
+        # If the block had commands, and there are still comments in buffer, print them (comments after last command)
+        if block_has_command:
+            for item_syntax in temp_command_buffer:
+                console.print(item_syntax)
+        # If the entire block had no commands, print it as a single syntax block
+        elif not block_has_command and code.strip(): 
+            console.print(Syntax(home_replace(code.strip()), "bash", theme="monokai", background_color="default", line_numbers=False))
+        
+        content_printed = True
         last_end = match.end()
 
-    after = ai_response[last_end:]
+    after = processed_ai_response[last_end:]
     if after.strip():
-        console.print(f"[cyan]{home_replace(after.strip())}[/cyan]")
+        console.print(home_replace(after.strip()))
+        content_printed = True
+    
+    if not content_printed and processed_ai_response: # If loop didn't run but there was non-whitespace response
+        console.print(home_replace(processed_ai_response.strip()))
+    elif not processed_ai_response.strip(): # If response was empty or just whitespace
+        console.print() # Newline for empty responses after a prompt.
 
 class ColoredHelpFormatter(argparse.RawDescriptionHelpFormatter):
     """Custom argparse formatter with colored output."""
