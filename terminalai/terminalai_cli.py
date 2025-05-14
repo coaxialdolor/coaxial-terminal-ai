@@ -18,11 +18,13 @@ from terminalai.cli_interaction import (
     _set_default_provider_interactive,
     _set_ollama_model_interactive
 )
+from terminalai.query_utils import preprocess_query
 from terminalai.color_utils import colorize_command
 from rich.console import Console
 from rich.text import Text
 from terminalai.file_reader import read_project_file
 from rich.panel import Panel
+import re
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -215,16 +217,27 @@ File Location and Context:
         if user_query is None:
             user_query = "" # Default to empty string if None (e.g. if only --explain was used and no actual query text)
 
+        # Preprocess query to clarify potentially ambiguous requests
+        processed_query = preprocess_query(user_query)
+
+        # Format and print response
+        console_for_direct = Console(file=sys.stderr if rich_output_to_stderr else None, force_terminal=True if rich_output_to_stderr else False)
+        console_for_direct.print()
+
+        # Show clarification message if query was modified
+        if processed_query != user_query:
+            console_for_direct.print(Panel(
+                Text(f"Note: Clarified your query to: \"{processed_query}\"", style="cyan"),
+                border_style="cyan",
+                expand=False
+            ))
+
         response = provider.generate_response(
-            user_query, final_system_context, verbose=args.verbose or args.long
+            processed_query, final_system_context, verbose=args.verbose or args.long
         )
     except (ValueError, TypeError, ConnectionError, requests.RequestException) as e:
         print(colorize_command(f"Error from AI provider: {str(e)}"), file=sys.stderr)
         sys.exit(1)
-
-    # Format and print response
-    console_for_direct = Console(file=sys.stderr if rich_output_to_stderr else None, force_terminal=True if rich_output_to_stderr else False)
-    console_for_direct.print()
 
     # Construct and print the display prompt for direct queries
     display_provider_for_direct_query = provider_to_use

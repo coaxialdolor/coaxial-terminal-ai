@@ -32,6 +32,7 @@ from terminalai.color_utils import (
     colorize_prompt, colorize_highlight, AI_COLOR, COMMAND_COLOR, INFO_COLOR,
     ERROR_COLOR, SUCCESS_COLOR, PROMPT_COLOR, HIGHLIGHT_COLOR, RESET, BOLD
 )
+from terminalai.query_utils import preprocess_query
 import requests # Add this import for Ollama model fetching
 import json # Add this import for parsing Ollama response
 
@@ -263,6 +264,9 @@ def handle_commands(commands, auto_confirm=False):
     """
     console = Console()
 
+    # Check if stdin is a terminal or a pipe
+    is_interactive = sys.stdin.isatty()
+
     provider_instance = None
     if commands:
         try:
@@ -283,6 +287,59 @@ def handle_commands(commands, auto_confirm=False):
     color_bold_green = "\033[1;32m"
     color_bold_yellow = "\033[1;33m"
 
+    # Non-interactive mode with pipe input special handling
+    if not is_interactive:
+        console.print("[dim]Running in non-interactive mode (input from pipe)[/dim]")
+
+        # If auto-confirm is on, proceed as normal
+        if auto_confirm:
+            # Process continues with existing auto-confirm logic
+            pass
+        # If not auto-confirm but we have commands, execute the first one automatically
+        elif n_commands == 1:
+            command = commands[0]
+            is_stateful_cmd = is_stateful_command(command)
+            is_risky_cmd = is_risky_command(command)
+
+            if is_stateful_cmd:
+                console.print("[yellow]Stateful command detected in non-interactive mode. Command will be copied to clipboard.[/yellow]")
+                copy_to_clipboard(command)
+                console.print(f"[green]Command copied to clipboard: {command}[/green]")
+                return
+
+            if is_risky_cmd:
+                console.print("[red]Risky command detected in non-interactive mode. Command will not be executed.[/red]")
+                return
+
+            # Run first command automatically if not risky or stateful
+            console.print(f"[green]Auto-executing first command in non-interactive mode: {command}[/green]")
+            run_command(command, auto_confirm=True)
+            return
+        elif n_commands > 1:
+            # With multiple commands and no auto-confirm, just print the commands
+            console.print("[yellow]Multiple commands detected in non-interactive mode without auto-confirm.[/yellow]")
+            console.print("[yellow]First command will be executed automatically if not risky or stateful.[/yellow]")
+
+            cmd_first = commands[0]
+            is_stateful_first = is_stateful_command(cmd_first)
+            is_risky_first = is_risky_command(cmd_first)
+
+            if is_stateful_first:
+                console.print("[yellow]First command is stateful. Command will be copied to clipboard.[/yellow]")
+                copy_to_clipboard(cmd_first)
+                console.print(f"[green]Command copied to clipboard: {cmd_first}[/green]")
+                return
+
+            if is_risky_first:
+                console.print("[red]First command is risky. Command will not be executed.[/red]")
+                return
+
+            # Run first command automatically if not risky or stateful
+            console.print(f"[green]Auto-executing first command: {cmd_first}[/green]")
+            run_command(cmd_first, auto_confirm=True)
+            return
+
+    # Proceed with normal interactive handling
     if n_commands == 1:
         command = commands[0]
         is_stateful_cmd = is_stateful_command(command)
@@ -590,6 +647,9 @@ def interactive_mode(chat_mode=False):
     """Run TerminalAI in interactive mode. If chat_mode is True, stay in a loop."""
     console = Console()
 
+    # Check if stdin is a terminal or a pipe
+    is_interactive = sys.stdin.isatty()
+
     if chat_mode:
         console.print(Panel.fit(
             Text("TerminalAI AI Chat Mode: You are now chatting with the AI. Type 'exit' to quit.", style="bold magenta"),
@@ -610,6 +670,69 @@ def interactive_mode(chat_mode=False):
             panel_text,
             border_style="cyan" # Keep border cyan
         ))
+
+    # Special handling for non-interactive mode (pipe input)
+    if not is_interactive:
+        console.print("[dim]Running in non-interactive mode (input from pipe)[/dim]")
+        try:
+            # Read a single line from stdin (the piped content)
+            query = sys.stdin.readline().strip()
+            console.print(f"AI:(stdin)> {query}")
+
+            if not query:
+                console.print("[yellow]No input received from pipe.[/yellow]")
+                return
+
+            # Process the query
+            system_context = get_system_context()
+            provider = get_provider(load_config().get("default_provider", ""))
+            if not provider:
+                console.print("[bold red]No AI provider configured. Please run 'ai setup' first.[/bold red]")
+                return
+
+            # Show thinking indicator
+            console.print("[dim]Thinking...[/dim]")
+
+            # Preprocess the query
+            processed_query = preprocess_query(query)
+            if processed_query != query:
+                console.print(Panel(
+                    Text(f"Note: Clarified your query to: \"{processed_query}\"", style="cyan"),
+                    border_style="cyan",
+                    expand=False
+                ))
+
+            # Get response
+            response_from_provider = provider.generate_response(processed_query, system_context, verbose=False)
+
+            # Show response
+            console.print(Rule(style="dim"))
+
+            # Clean response
+            cleaned_response = response_from_provider.strip()
+            if cleaned_response.lower().startswith("[ai]"):
+                cleaned_response = cleaned_response[4:].lstrip()
+            elif cleaned_response.lower().startswith("ai:"):
+                cleaned_response = cleaned_response[3:].lstrip()
+
+            print_ai_answer_with_rich(cleaned_response)
+
+            # Extract and handle commands with auto-execute for first non-risky command
+            commands = get_commands_interactive(cleaned_response, max_commands=3)
+            if commands:
+                # Auto-confirm in pipe mode for non-interactive use
+                handle_commands(commands, auto_confirm=True)
+
+            return
+
+        except EOFError:
+            console.print("[yellow]No input received from pipe.[/yellow]")
+            return
+        except Exception as e:
+            console.print(f"[bold red]Error processing piped input: {str(e)}[/bold red]")
+            import traceback
+            traceback.print_exc()
+            return
 
     while True:
         # Add visual separation between interactions
@@ -652,7 +775,16 @@ def interactive_mode(chat_mode=False):
             # Show a thinking indicator
             console.print("[dim]Thinking...[/dim]")
 
-            response_from_provider = provider.generate_response(query, system_context, verbose=False)
+            # Preprocess query to clarify potentially ambiguous requests
+            processed_query = preprocess_query(query)
+            if processed_query != query:
+                console.print(Panel(
+                    Text(f"Note: Clarified your query to: \"{processed_query}\"", style="cyan"),
+                    border_style="cyan",
+                    expand=False
+                ))
+
+            response_from_provider = provider.generate_response(processed_query, system_context, verbose=False)
 
             # Clear the thinking indicator with a visual separator
             console.print(Rule(style="dim"))
