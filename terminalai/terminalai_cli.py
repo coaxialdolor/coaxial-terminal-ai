@@ -112,7 +112,7 @@ def main():
 
     if hasattr(args, 'explain') and args.explain:
         file_path_to_read = args.explain
-        content, error = read_project_file(file_path_to_read, cwd)
+        content, error, context = read_project_file(file_path_to_read, cwd)
         if error:
             print(colorize_command(error))
             sys.exit(1)
@@ -123,11 +123,21 @@ def main():
         file_content_for_prompt = content
         abs_file_path = os.path.abspath(os.path.join(cwd, file_path_to_read))
 
+        # Build context information for the prompt
+        context_info = ""
+        if context:
+            context_info = f"""
+File Location and Context:
+- File is located in: {context['parent_dir']}
+- Sibling files in the same directory: {', '.join(context['sibling_files']) if context['sibling_files'] else 'None'}
+- Files in parent directory: {', '.join(context['parent_dir_files']) if context['parent_dir_files'] else 'None'}
+"""
+
         # For --explain, the user_query becomes the predefined explanation query
         user_query = (
             f"The user wants an explanation of the file '{file_path_to_read}' (absolute path: '{abs_file_path}') "
             f"located in their current working directory '{cwd}'. "
-            f"Please summarize this file, explain its likely purpose, and describe its context within a typical project structure found in this directory. "
+            f"Please summarize this file, explain its likely purpose, and describe its context within the file system. "
             f"If relevant, also identify any other files or modules it appears to reference or interact with."
         )
 
@@ -135,17 +145,18 @@ def main():
         final_system_context = (
             f"""You are assisting a user who wants to understand a file. Their current working directory is '{cwd}'.
 The file in question is '{file_path_to_read}' (absolute path: '{abs_file_path}').
+{context_info}
 File Content of '{file_path_to_read}':
 -------------------------------------------------------
 {file_content_for_prompt}
 -------------------------------------------------------
 
-Please process the request which is to summarize this file, explain its likely purpose, and describe its context within a typical project structure. If relevant, also identify any other files or modules it appears to reference or interact with."""
+Please process the request which is to summarize this file, explain its likely purpose, and describe its context within the file system. If relevant, also identify any other files or modules it appears to reference or interact with."""
         )
 
-    elif hasattr(args, 'read_file') and args.read_file: # Ensure this is elif
+    elif hasattr(args, 'read_file') and args.read_file:
         file_path_to_read = args.read_file
-        content, error = read_project_file(file_path_to_read, cwd)
+        content, error, context = read_project_file(file_path_to_read, cwd)
         if error:
             print(colorize_command(error))
             sys.exit(1)
@@ -156,11 +167,22 @@ Please process the request which is to summarize this file, explain its likely p
         file_content_for_prompt = content
         abs_file_path = os.path.abspath(os.path.join(cwd, file_path_to_read))
 
+        # Build context information for the prompt
+        context_info = ""
+        if context:
+            context_info = f"""
+File Location and Context:
+- File is located in: {context['parent_dir']}
+- Sibling files in the same directory: {', '.join(context['sibling_files']) if context['sibling_files'] else 'None'}
+- Files in parent directory: {', '.join(context['parent_dir_files']) if context['parent_dir_files'] else 'None'}
+"""
+
         # For --read-file, user_query is the original user query.
         # The system context includes file content and guides the AI to use it for the user's query.
         final_system_context = (
             f"The user is in the directory: {cwd}.\n"
             f"They have provided the content of the file: '{file_path_to_read}' (absolute path: '{abs_file_path}').\n"
+            f"{context_info}\n"
             f"Their query related to this file is: '{user_query}'.\n\n"
             f"File Content:\n"
             f"-------------------------------------------------------\n"
@@ -169,7 +191,7 @@ Please process the request which is to summarize this file, explain its likely p
             f"Based on the file content and the user's query, please provide an explanation or perform the requested task. "
             f"If relevant, identify any other files or modules it appears to reference or interact with, "
             f"considering standard import statements or common patterns for its file type. "
-            f"Focus on its role within a typical project structure if it seems to be part of a larger application in '{cwd}'."
+            f"Focus on its role within the file system and its relationship to other files in its directory."
         )
     else:
         # Original behavior if not reading a file, just add CWD to system_context
