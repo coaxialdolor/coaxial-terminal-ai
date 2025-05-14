@@ -14,9 +14,12 @@ from terminalai.command_extraction import extract_commands_from_output
 from terminalai.formatting import print_ai_answer_with_rich
 from terminalai.shell_integration import get_system_context
 from terminalai.cli_interaction import (
-    parse_args, handle_commands, interactive_mode, setup_wizard
+    parse_args, handle_commands, interactive_mode, setup_wizard,
+    _set_default_provider_interactive,
+    _set_ollama_model_interactive
 )
 from terminalai.color_utils import colorize_command
+from rich.console import Console
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -37,6 +40,18 @@ def main():
         setup_wizard()
         sys.exit(0)
 
+    # Handle --set-default flag
+    if args.set_default:
+        console = Console()
+        _set_default_provider_interactive(console)
+        sys.exit(0)
+
+    # Handle --set-ollama flag
+    if args.set_ollama:
+        console = Console()
+        _set_ollama_model_interactive(console)
+        sys.exit(0)
+
     # Check if first argument is "setup" (positional argument)
     if args.query and args.query == "setup":
         setup_wizard()
@@ -45,24 +60,35 @@ def main():
     # Load configuration
     config = load_config()
 
-    # Check if AI provider is configured
-    provider_name = config.get("default_provider", "")
-    if not provider_name:
+    # Determine provider: override > config > setup prompt
+    provider_to_use = None
+    if args.provider: # Check for command-line override first
+        provider_to_use = args.provider
+    else:
+        provider_to_use = config.get("default_provider", "")
+
+    if not provider_to_use:
         print(colorize_command("No AI provider configured. Running setup wizard..."))
-        setup_wizard()
-        sys.exit(0)
+        setup_wizard() # This will allow user to set a default
+        # After setup, try to load config again or exit if user quit setup
+        config = load_config()
+        provider_to_use = config.get("default_provider", "")
+        if not provider_to_use:
+            print(colorize_command("Setup was not completed. Exiting."))
+            sys.exit(1)
 
     # Run in interactive mode if no query provided or chat explicitly requested
+    # (and not a config shortcut command that would have exited earlier)
     is_chat_request = getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c')
     if not args.query or is_chat_request:
-        interactive_mode(chat_mode=is_chat_request) # Pass True only if chat was explicit
+        interactive_mode(chat_mode=is_chat_request)
         sys.exit(0)
 
-    # Get AI provider
-    provider = get_provider(provider_name)
+    # Get AI provider instance
+    provider = get_provider(provider_to_use) # Use the determined provider_to_use
     if not provider:
-        print(colorize_command(f"Error: Provider '{provider_name}' is not configured properly."))
-        print(colorize_command("Please run 'ai setup' to configure an AI provider."))
+        print(colorize_command(f"Error: Provider '{provider_to_use}' is not configured properly or is unknown."))
+        print(colorize_command("Please run 'ai setup' to configure an AI provider, or check the provider name."))
         sys.exit(1)
 
     # Get system context

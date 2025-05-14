@@ -107,6 +107,9 @@ AVAILABLE FLAGS:
                      Example: ai -l "explain git rebase workflow"
   --setup           Run the interactive setup wizard.
   --version         Show program's version number and exit.
+  --set-default     Shortcut to set the default AI provider.
+  --set-ollama      Shortcut to configure the Ollama model.
+  --provider        Override the default AI provider for this query only.
 
 -----------------------------------------------------------------------
 AI FORMATTING EXPECTATIONS:
@@ -167,6 +170,24 @@ Project: https://github.com/coaxialdolor/terminalai"""
         "--chat",
         action="store_true",
         help=argparse.SUPPRESS
+    )
+
+    parser.add_argument(
+        "--set-default",
+        action="store_true",
+        help="Shortcut to set the default AI provider."
+    )
+
+    parser.add_argument(
+        "--set-ollama",
+        action="store_true",
+        help="Shortcut to configure the Ollama model."
+    )
+
+    parser.add_argument(
+        "--provider",
+        choices=["ollama", "openrouter", "gemini", "mistral"],
+        help="Override the default AI provider for this query only."
     )
 
     return parser.parse_args()
@@ -727,6 +748,115 @@ def interactive_mode(chat_mode=False):
     # If the loop was broken (only happens if not chat_mode), exit cleanly.
     sys.exit(0)
 
+# New refactored function for setting default provider
+def _set_default_provider_interactive(console: Console):
+    """Interactively sets the default AI provider and saves it to config."""
+    config = load_config()
+    providers = list(config['providers'].keys())
+    console.print("\n[bold]Available providers:[/bold]")
+    for idx, p_item in enumerate(providers, 1):
+        is_default = ""
+        if p_item == config.get('default_provider'):
+            is_default = ' (default)'
+        console.print(f"[bold yellow]{idx}[/bold yellow]. {p_item}{is_default}")
+    sel_prompt = f"[bold green]Select provider (1-{len(providers)}): [/bold green]"
+    sel = console.input(sel_prompt).strip()
+    if sel.isdigit() and 1 <= int(sel) <= len(providers):
+        selected_provider = providers[int(sel)-1]
+        config['default_provider'] = selected_provider
+        save_config(config)
+        console.print(f"[bold green]Default provider set to "
+                      f"{selected_provider}.[/bold green]")
+        return True
+    else:
+        console.print("[red]Invalid selection.[/red]")
+        return False
+
+# New refactored function for setting Ollama model
+def _set_ollama_model_interactive(console: Console):
+    """Interactively sets the Ollama model and saves it to config."""
+    config = load_config()
+    pname = 'ollama' # We are specifically configuring Ollama here
+
+    if pname not in config['providers']:
+        config['providers'][pname] = {} # Ensure ollama provider entry exists
+
+    # Configure Ollama Host (can be part of this, or assumed to be set)
+    current_host = config['providers'][pname].get('host', 'http://localhost:11434')
+    console.print(f"Current Ollama host: {current_host}")
+    ollama_host_prompt = (
+        "Enter Ollama host (leave blank to keep current, e.g., http://localhost:11434): "
+    )
+    new_host_input = console.input(ollama_host_prompt).strip()
+    host_to_use = current_host
+    if new_host_input:
+        config['providers'][pname]['host'] = new_host_input
+        host_to_use = new_host_input
+        console.print("[bold green]Ollama host updated.[/bold green]")
+    else:
+        console.print("[yellow]Ollama host unchanged.[/yellow]")
+
+    # Configure Ollama Model
+    current_model = config['providers'][pname].get('model', 'llama3') 
+    console.print(f"Current Ollama model: {current_model}")
+    
+    available_models = []
+    try:
+        tags_url = f"{host_to_use}/api/tags"
+        console.print(f"[dim]Fetching models from {tags_url}...[/dim]")
+        response = requests.get(tags_url, timeout=5)
+        response.raise_for_status()
+        models_data = response.json().get("models", [])
+        if models_data:
+            available_models = [m.get("name") for m in models_data if m.get("name")]
+        
+        if available_models:
+            console.print("[bold]Available Ollama models:[/bold]")
+            for i, model_name_option in enumerate(available_models, 1):
+                console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
+            
+            model_choice_prompt = (
+                "[bold green]Choose a model number, or enter a model name directly: [/bold green]"
+            )
+            model_sel = console.input(model_choice_prompt).strip()
+            
+            selected_model_name = ""
+            if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
+                selected_model_name = available_models[int(model_sel)-1]
+            elif model_sel: 
+                selected_model_name = model_sel
+            
+            if selected_model_name:
+                config['providers'][pname]['model'] = selected_model_name
+                console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
+            else:
+                console.print("[yellow]No model selected/entered. Model remains: {current_model}[/yellow]")
+        else:
+            console.print("[yellow]No models found via Ollama API or API not reachable at {host_to_use}.[/yellow]")
+            console.print("[yellow]You can still enter a model name manually.[/yellow]")
+            manual_model_prompt = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
+            manual_model_input = console.input(manual_model_prompt).strip()
+            if manual_model_input:
+                config['providers'][pname]['model'] = manual_model_input
+                console.print(f"[bold green]Ollama model set to: {manual_model_input}[/bold green]")
+            else:
+                console.print(f"[yellow]No model entered. Model remains: {current_model}[/yellow]")
+
+    except requests.exceptions.RequestException as e:
+        console.print(f"[red]Error fetching Ollama models: {e}[/red]")
+        console.print("[yellow]Please ensure Ollama is running and accessible at the specified host.[/yellow]")
+        console.print("[yellow]You can enter a model name manually.[/yellow]")
+        manual_model_prompt_on_error = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
+        manual_model_input_on_error = console.input(manual_model_prompt_on_error).strip()
+        if manual_model_input_on_error:
+            config['providers'][pname]['model'] = manual_model_input_on_error
+            console.print(f"[bold green]Ollama model set to: {manual_model_input_on_error}[/bold green]")
+        else:
+            console.print(f"[yellow]No model entered. Model remains: {current_model}[/yellow]")
+    
+    save_config(config)
+    return True # Assuming success unless an unhandled exception occurs
+
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
     console = Console()
@@ -780,7 +910,7 @@ def setup_wizard():
                        "for more info about an option.")
         console.print(f"[dim]{info_prompt}[/dim]")
         choice = console.input("[bold green]Choose an action (1-12): [/bold green]").strip()
-        config = load_config()
+        
         if choice.startswith('i') and choice[1:].isdigit():
             info_num = choice[1:]
             if info_num in menu_info:
@@ -791,29 +921,15 @@ def setup_wizard():
                 console.print("[red]No info available for that option.[/red]")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '1':
-            providers = list(config['providers'].keys())
-            console.print("\n[bold]Available providers:[/bold]")
-            for idx, p_item in enumerate(providers, 1):
-                is_default = ""
-                if p_item == config.get('default_provider'):
-                    is_default = ' (default)'
-                console.print(f"[bold yellow]{idx}[/bold yellow]. {p_item}{is_default}")
-            sel_prompt = f"[bold green]Select provider (1-{len(providers)}): [/bold green]"
-            sel = console.input(sel_prompt).strip()
-            if sel.isdigit() and 1 <= int(sel) <= len(providers):
-                selected_provider = providers[int(sel)-1]
-                config['default_provider'] = selected_provider
-                save_config(config)
-                console.print(f"[bold green]Default provider set to "
-                              f"{selected_provider}.[/bold green]")
-            else:
-                console.print("[red]Invalid selection.[/red]")
+            _set_default_provider_interactive(console)
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '2':
+            config = load_config() # Ensure config is loaded if not through other paths
             console.print("\n[bold]Current system prompt:[/bold]\n")
             console.print(get_system_prompt())
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '3':
+            config = load_config()
             console.print("\n[bold]Current system prompt:[/bold]\n")
             console.print(config.get('system_prompt', ''))
             new_prompt_input = (
@@ -831,11 +947,13 @@ def setup_wizard():
                 console.print("[yellow]No changes made.[/yellow]")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '4':
+            config = load_config()
             config['system_prompt'] = DEFAULT_SYSTEM_PROMPT
             save_config(config)
             console.print("[bold green]System prompt reset to default.[/bold green]")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '5':
+            config = load_config()
             providers = list(config['providers'].keys())
             console.print("\n[bold]Providers:[/bold]")
             for idx, p_item in enumerate(providers, 1):
@@ -844,95 +962,20 @@ def setup_wizard():
                           f"(1-{len(providers)}): [/bold green]")
             sel = console.input(sel_prompt).strip()
             if sel.isdigit() and 1 <= int(sel) <= len(providers):
-                pname = providers[int(sel)-1]
-                if pname == 'ollama':
-                    # Configure Ollama Host
-                    current_host = config['providers'][pname].get('host', 'http://localhost:11434')
-                    console.print(f"Current Ollama host: {current_host}")
-                    ollama_host_prompt = (
-                        "Enter new Ollama host (leave blank to keep current): "
-                    )
-                    new_host_input = console.input(ollama_host_prompt).strip()
-                    if new_host_input:
-                        config['providers'][pname]['host'] = new_host_input
-                        host_to_use = new_host_input # Use the newly entered host for API check
-                        console.print(
-                            "[bold green]Ollama host updated.[/bold green]"
-                        )
-                    else:
-                        host_to_use = current_host # Use current host if new one wasn't entered
-                        console.print("[yellow]Ollama host unchanged.[/yellow]")
-
-                    # Configure Ollama Model
-                    current_model = config['providers'][pname].get('model', 'llama3') # Default if not set
-                    console.print(f"Current Ollama model: {current_model}")
-                    
-                    available_models = []
-                    try:
-                        tags_url = f"{host_to_use}/api/tags"
-                        console.print(f"[dim]Fetching models from {tags_url}...[/dim]")
-                        response = requests.get(tags_url, timeout=5)
-                        response.raise_for_status()
-                        models_data = response.json().get("models", [])
-                        if models_data:
-                            available_models = [m.get("name") for m in models_data if m.get("name")]
-                        
-                        if available_models:
-                            console.print("[bold]Available Ollama models:[/bold]")
-                            for i, model_name_option in enumerate(available_models, 1):
-                                console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
-                            
-                            model_choice_prompt = (
-                                "[bold green]Choose a model number, or enter a model name directly (e.g., mistral:latest): [/bold green]"
-                            )
-                            model_sel = console.input(model_choice_prompt).strip()
-                            
-                            selected_model_name = ""
-                            if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
-                                selected_model_name = available_models[int(model_sel)-1]
-                            elif model_sel: # User entered a name directly
-                                selected_model_name = model_sel
-                            
-                            if selected_model_name:
-                                config['providers'][pname]['model'] = selected_model_name
-                                console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
-                            else:
-                                console.print("[yellow]No model selected/entered, keeping current or default.[/yellow]")
-                        else:
-                            console.print("[yellow]No models found via Ollama API or API not reachable.[/yellow]")
-                            console.print("[yellow]You can still enter a model name manually.[/yellow]")
-                            manual_model_prompt = f"Enter Ollama model name (e.g., mistral:latest, default: {current_model}): "
-                            manual_model_input = console.input(manual_model_prompt).strip()
-                            if manual_model_input:
-                                config['providers'][pname]['model'] = manual_model_input
-                                console.print(f"[bold green]Ollama model set to: {manual_model_input}[/bold green]")
-                            else:
-                                console.print("[yellow]No model entered, keeping current or default.[/yellow]")
-
-                    except requests.exceptions.RequestException as e:
-                        console.print(f"[red]Error fetching Ollama models: {e}[/red]")
-                        console.print("[yellow]Please ensure Ollama is running and accessible at the specified host.[/yellow]")
-                        console.print("[yellow]You can enter a model name manually.[/yellow]")
-                        manual_model_prompt_on_error = f"Enter Ollama model name (e.g., mistral:latest, default: {current_model}): "
-                        manual_model_input_on_error = console.input(manual_model_prompt_on_error).strip()
-                        if manual_model_input_on_error:
-                            config['providers'][pname]['model'] = manual_model_input_on_error
-                            console.print(f"[bold green]Ollama model set to: {manual_model_input_on_error}[/bold green]")
-                        else:
-                            console.print("[yellow]No model entered, keeping current or default.[/yellow]")
-                    
-                    save_config(config) # Save config after host and model changes for Ollama
+                pname_selected = providers[int(sel)-1]
+                if pname_selected == 'ollama':
+                    _set_ollama_model_interactive(console) # Call the refactored function for Ollama
                 else: # For other providers (OpenRouter, Gemini, Mistral)
-                    current = config['providers'][pname].get('api_key', '')
-                    display_key = '(not set)' if not current else '[hidden]'
+                    current_api_key = config['providers'][pname_selected].get('api_key', '')
+                    display_key = '(not set)' if not current_api_key else '[hidden]'
                     console.print(f"Current API key: {display_key}")
-                    new_key_prompt = f"Enter new API key for {pname}: "
+                    new_key_prompt = f"Enter new API key for {pname_selected}: "
                     new_key = console.input(new_key_prompt).strip()
                     if new_key:
-                        config['providers'][pname]['api_key'] = new_key
+                        config['providers'][pname_selected]['api_key'] = new_key
                         save_config(config)
                         console.print(
-                            f"[bold green]API key for {pname} updated.[/bold green]"
+                            f"[bold green]API key for {pname_selected} updated.[/bold green]"
                         )
                     else:
                         console.print("[yellow]No changes made.[/yellow]")
@@ -940,6 +983,7 @@ def setup_wizard():
                 console.print("[red]Invalid selection.[/red]")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '6':
+            config = load_config()
             providers = list(config['providers'].keys())
             console.print("\n[bold]Current API keys / hosts:[/bold]")
             for p_item in providers:
