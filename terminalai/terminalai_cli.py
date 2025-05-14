@@ -284,6 +284,9 @@ def handle_eval_mode_commands(commands, auto_confirm=False):
     In eval mode, we need to print the command ONLY to stdout (for shell execution)
     but ONLY after user confirmation. All other output goes to stderr.
 
+    NOTE: Commands with shell operators (|, >, <, etc.) work correctly in this mode because
+    the raw command string is printed directly to stdout, where it's evaluated by the shell.
+
     Args:
         commands: List of commands to handle
         auto_confirm: Whether to auto-confirm non-risky commands

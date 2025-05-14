@@ -540,21 +540,37 @@ def run_command(command, auto_confirm=False):
     import subprocess
     import shlex
 
+    # Check if command contains shell operators (|, >, <, &&, ||, ;, etc.)
+    has_shell_operators = any(op in command for op in ['|', '>', '<', '&&', '||', ';', '$', '`', '*', '?', '{', '['])
+
     try:
         # Run the command and capture its output
-        process = subprocess.run(
-            shlex.split(command),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        if has_shell_operators:
+            # Use shell=True for commands with shell operators
+            process = subprocess.run(
+                command,  # Pass command as string when using shell=True
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        else:
+            # Use shlex.split for regular commands without shell operators
+            process = subprocess.run(
+                shlex.split(command),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
 
         # Show command output with a clear label
         if process.stdout:
-            console.print(Text("[Command output]", style="bold magenta"))
             console.print(Panel(
                 process.stdout.strip(),
-                border_style="magenta",
+                title="[bold cyan]Command Result[/bold cyan]",
+                title_align="center",
+                border_style="cyan",
+                padding=(1, 2),
                 expand=False
             ))
 
