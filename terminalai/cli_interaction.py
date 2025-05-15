@@ -725,10 +725,32 @@ def interactive_mode(chat_mode=False, auto_mode=False):
                     expand=False
                 ))
 
-            try:
-                # Get response
+            # In auto mode, proactively explore filesystem to enhance response
+            exploration_results = ""
+            if auto_mode:
+                exploration_commands = extract_exploration_commands(processed_query)
+                if exploration_commands:
+                    console.print("[dim]Auto mode is exploring your filesystem to answer the question...[/dim]")
+                    exploration_results = execute_exploration_commands(exploration_commands, console)
+
+                    # Get initial response
+                    initial_response = provider.generate_response(processed_query, system_context, verbose=False)
+
+                    # Enhance query with exploration results and get a better response
+                    if exploration_results:
+                        enhanced_query = f"Based on the exploration results, {processed_query}\n\nExploration results:\n{exploration_results}"
+                        enhanced_system = system_context + "\n\nExploration results:\n" + exploration_results
+                        response_from_provider = provider.generate_response(enhanced_query, enhanced_system, verbose=False)
+                    else:
+                        response_from_provider = initial_response
+                else:
+                    # No exploration needed, proceed with normal query
+                    response_from_provider = provider.generate_response(processed_query, system_context, verbose=False)
+            else:
+                # Not in auto mode, just get the normal response
                 response_from_provider = provider.generate_response(processed_query, system_context, verbose=False)
 
+            try:
                 # Show response
                 console.print(Rule(style="dim"))
 
@@ -870,10 +892,32 @@ def interactive_mode(chat_mode=False, auto_mode=False):
                     expand=False
                 ))
 
-            try:
-                # Get response
+            # In auto mode, proactively explore filesystem to enhance response
+            exploration_results = ""
+            if auto_mode:
+                exploration_commands = extract_exploration_commands(processed_query)
+                if exploration_commands:
+                    console.print("[dim]Auto mode is exploring your filesystem to answer the question...[/dim]")
+                    exploration_results = execute_exploration_commands(exploration_commands, console)
+
+                    # Get initial response
+                    initial_response = provider.generate_response(processed_query, system_context, verbose=False)
+
+                    # Enhance query with exploration results and get a better response
+                    if exploration_results:
+                        enhanced_query = f"Based on the exploration results, {processed_query}\n\nExploration results:\n{exploration_results}"
+                        enhanced_system = system_context + "\n\nExploration results:\n" + exploration_results
+                        response_from_provider = provider.generate_response(enhanced_query, enhanced_system, verbose=False)
+                    else:
+                        response_from_provider = initial_response
+                else:
+                    # No exploration needed, proceed with normal query
+                    response_from_provider = provider.generate_response(processed_query, system_context, verbose=False)
+            else:
+                # Not in auto mode, just get the normal response
                 response_from_provider = provider.generate_response(processed_query, system_context, verbose=False)
 
+            try:
                 # Show response
                 console.print(Rule(style="dim"))
 
@@ -966,6 +1010,10 @@ def extract_exploration_commands(query):
 
     if "count" in query.lower() and "files" in query.lower():
         exploration_commands.append("find . -type f | wc -l")
+
+    # Add specific command for finding Python files
+    if "find" in query.lower() and (".py" in query.lower() or "python" in query.lower()):
+        exploration_commands.append("find . -name '*.py' -type f")
 
     # Start with identifying locations mentioned in the query
     locations = []
