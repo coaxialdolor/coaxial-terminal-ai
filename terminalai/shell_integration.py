@@ -239,6 +239,7 @@ ai() {
        [ "$1" = "--version" ] || \
        [ "$1" = "--read-file" ] || \
        [ "$1" = "--explain" ] || \
+       [ "$1" = "--auto" ] || \
        [ "$(basename "$0")" = "ai-c" ]; then
         command ai "$@"
     else
@@ -354,6 +355,7 @@ ai() {
             ($firstArg -eq "--help") -or ($firstArg -eq "-h") -or \r
             ($firstArg -eq "--version") -or \r
             ($firstArg -eq "--set-default") -or \r
+            ($firstArg -eq "--auto") -or \r
             ($firstArg -eq "--set-ollama")) {
             $isDirectQuery = $false
         }

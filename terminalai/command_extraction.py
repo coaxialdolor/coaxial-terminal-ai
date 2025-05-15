@@ -19,9 +19,9 @@ _WINDOWS_CMD_COMMANDS = [
 ]
 
 _POWERSHELL_CMDLET_KEYWORDS = [ # Keywords from COMMON_POWERSHELL_CMDLET_STARTS in command_utils.py
-    "remove-item", "get-childitem", "copy-item", "move-item", "new-item", "set-location", 
-    "select-string", "get-content", "set-content", "clear-content", "start-process", 
-    "stop-process", "get-process", "get-service", "start-service", "stop-service", 
+    "remove-item", "get-childitem", "copy-item", "move-item", "new-item", "set-location",
+    "select-string", "get-content", "set-content", "clear-content", "start-process",
+    "stop-process", "get-process", "get-service", "start-service", "stop-service",
     "invoke-webrequest", "invoke-restmethod", "get-command", "get-help", "test-path",
     "resolve-path", "get-date", "measure-object", "write-output", "write-host"
 ]
@@ -49,6 +49,16 @@ def is_likely_command(line):
     if not line or line.startswith("#"):
         return False
 
+    # Filter out command examples with shell prompts
+    prompt_pattern = r'^[~\w\-\.\/]*[$#>]\s+'
+    if re.match(prompt_pattern, line):
+        return False
+
+    # Filter out commands with user/machine prefixes like "user@machine:~$"
+    user_machine_pattern = r'^[\w\-]+@[\w\-]+:.*[$#>]\s+'
+    if re.match(user_machine_pattern, line):
+        return False
+
     words = line.split()
     if not words:
         return False
@@ -68,10 +78,10 @@ def is_likely_command(line):
              return False
 
     first_word_lower = words[0].lower()
-    
+
     if first_word_lower in KNOWN_COMMANDS or first_word_lower in STATEFUL_COMMANDS:
         return True
-    
+
     shell_operators_regex = r'(?:\s|^)(?:\||&&|\|\||>|>>|<)(?:\s|$)' # Non-capturing groups for spaces/start/end
     if re.search(shell_operators_regex, line):
         for cmd_keyword in KNOWN_COMMANDS:
@@ -82,7 +92,7 @@ def is_likely_command(line):
     option_flag_with_command_regex = rf'^(?:{known_cmds_pattern})\s+(-[a-zA-Z0-9]+(?:=[^\s]+)?|--[a-zA-Z0-9-]+(?:=[^\s]+)?)(?:\s|$)'
     if re.search(option_flag_with_command_regex, line, re.IGNORECASE):
         return True
-        
+
     # Heuristic for commands like `some/path/script.sh --arg value` or `variable=value command`
     if (re.search(r'\s(-[a-zA-Z0-9]|--[a-zA-Z0-9-]+)', line) or \
         re.search(r'^[a-zA-Z_][a-zA-Z0-9_]*=.*\s+[a-zA-Z_]', line)) and \
@@ -92,15 +102,58 @@ def is_likely_command(line):
 
     return False
 
-def extract_commands(ai_response, max_commands=None):
+def extract_commands(ai_response, max_commands=None, auto_mode=False):
     """
     Extract shell commands from AI response.
     It processes lines within any ```...``` code blocks using is_likely_command.
     This function is typically used for interactive mode (aliased as get_commands_interactive).
+
+    Args:
+        ai_response: The AI's response text
+        max_commands: Maximum number of commands to extract
+        auto_mode: If True, be more conservative about what counts as a command
     """
     extracted_commands = []
     code_block_pattern = re.compile(r'```([a-zA-Z0-9_\.-]*)?\n?([\s\S]*?)```') # Allow . and - in lang tag
-    
+
+    # More aggressive filtering in auto mode
+    if auto_mode:
+        # Look for indications of example commands or command outputs in the text
+        example_indicators = [
+            "example", "example:", "for example", "as an example",
+            "output", "output:", "result:", "console output:",
+            "terminal output", "shell output", "command output",
+            "this would produce", "you would see", "you'll see"
+        ]
+
+        # If any of these indicators are present, be very careful about command extraction
+        has_examples = any(indicator in ai_response.lower() for indicator in example_indicators)
+
+        if has_examples:
+            # Only extract commands from code blocks with explicit bash/shell language tags
+            tagged_code_blocks = re.compile(r'```(bash|shell|sh)\n?([\s\S]*?)```')
+
+            for match in tagged_code_blocks.finditer(ai_response):
+                block_content = match.group(2)
+                # For blocks with command tags, take only the first line as a potential command
+                lines = block_content.strip().splitlines()
+                if lines:
+                    first_line = lines[0].strip()
+                    if is_likely_command(first_line) and not first_line.startswith('#'):
+                        extracted_commands.append(first_line)
+                        if max_commands and len(extracted_commands) >= max_commands:
+                            break
+
+            # Deduplicate and return the filtered commands
+            seen = set()
+            final_commands = []
+            for cmd in extracted_commands:
+                if cmd and cmd not in seen:
+                    seen.add(cmd)
+                    final_commands.append(cmd)
+            return final_commands
+
+    # Standard extraction for non-auto mode or when no example indicators are found
     for match in code_block_pattern.finditer(ai_response):
         block_content = match.group(2)
         for line_in_block in block_content.splitlines():
@@ -111,7 +164,7 @@ def extract_commands(ai_response, max_commands=None):
                     break
         if max_commands and len(extracted_commands) >= max_commands:
             break
-            
+
     seen = set()
     final_commands = []
     for cmd in extracted_commands:
@@ -135,10 +188,10 @@ def extract_commands_from_output(output_text, max_commands=None):
     for match in code_block_pattern.finditer(output_text):
         plain_text_segment = output_text[last_block_end:match.start()]
         processed_segments.append(plain_text_segment)
-        
+
         block_content = match.group(2)
         processed_segments.append(block_content) # Add block content itself as a segment to be line-split
-            
+
         last_block_end = match.end()
 
     remaining_plain_text = output_text[last_block_end:]
@@ -153,7 +206,7 @@ def extract_commands_from_output(output_text, max_commands=None):
                     break
         if max_commands and len(extracted_commands) >= max_commands:
             break
-            
+
     seen = set()
     final_commands = []
     for cmd in extracted_commands:

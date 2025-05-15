@@ -149,7 +149,7 @@ rm -rf /tmp/test
 
         # Test that handle_commands was called with the extracted command
         # and auto-confirm set to True for non-interactive mode
-        self.mock_handle_commands.assert_called_once_with(["date"], auto_confirm=True)
+        self.mock_handle_commands.assert_called_once_with(["date"], auto_confirm=True, auto_mode=False)
 
         # Get the output and verify it mentions non-interactive mode
         output = self.mock_stdout.getvalue() + self.mock_stderr.getvalue()
@@ -173,7 +173,7 @@ rm -rf /tmp/test
 
         # Test that handle_commands was called with the extracted command
         # and auto-confirm set to True for non-interactive mode
-        self.mock_handle_commands.assert_called_once_with(["ls ~/Desktop"], auto_confirm=True)
+        self.mock_handle_commands.assert_called_once_with(["ls ~/Desktop"], auto_confirm=True, auto_mode=False)
 
     def test_pipe_input_with_multiple_commands(self):
         """Test pipe input handling with query that returns multiple commands."""
@@ -184,7 +184,7 @@ rm -rf /tmp/test
         commands = ["ls -la", "df -h", "free -m"]
 
         # Mock the handle_commands implementation to print something we can check
-        def mock_handle_impl(cmds, auto_confirm):
+        def mock_handle_impl(cmds, auto_confirm, auto_mode=False):
             if len(cmds) > 1:
                 print("Multiple commands detected, executing:", cmds)
             return True
@@ -203,7 +203,7 @@ rm -rf /tmp/test
                         interactive_mode()
 
         # Verify handle_commands was called with all commands
-        self.mock_handle_commands.assert_called_once_with(commands, auto_confirm=True)
+        self.mock_handle_commands.assert_called_once_with(commands, auto_confirm=True, auto_mode=False)
 
         # Get the output and check for the message about multiple commands
         output = self.mock_stdout.getvalue() + self.mock_stderr.getvalue()
@@ -215,7 +215,7 @@ rm -rf /tmp/test
         mock_stdin = io.StringIO("how to change directory to Documents?\n")
 
         # Setup a custom implementation for handle_commands that handles stateful commands
-        def mock_handle_stateful_cmds(cmds, auto_confirm):
+        def mock_handle_stateful_cmds(cmds, auto_confirm, auto_mode=False):
             if len(cmds) > 0:
                 cmd = cmds[0]
                 if is_stateful_command(cmd):
@@ -252,7 +252,7 @@ rm -rf /tmp/test
                                 interactive_mode()
 
         # Verify handle_commands was called with the command
-        self.mock_handle_commands.assert_called_once_with(["cd ~/Documents"], auto_confirm=True)
+        self.mock_handle_commands.assert_called_once_with(["cd ~/Documents"], auto_confirm=True, auto_mode=False)
 
         # Get the output and check messages
         output = self.mock_stdout.getvalue() + self.mock_stderr.getvalue()

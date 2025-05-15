@@ -35,6 +35,7 @@ from terminalai.color_utils import (
 from terminalai.query_utils import preprocess_query
 import requests # Add this import for Ollama model fetching
 import json # Add this import for parsing Ollama response
+import re # Add this import for regular expressions
 
 # System Prompt for AI Risk Assessment (Hardcoded)
 _RISK_ASSESSMENT_SYSTEM_PROMPT = """
@@ -262,6 +263,29 @@ def _get_ai_risk_assessment(command, console, provider):
 
 # --- Main Command Handling Logic ---
 
+def is_filesystem_modification(command):
+    """Check if a command modifies the filesystem.
+
+    Args:
+        command: The command to check
+
+    Returns:
+        True if the command modifies the filesystem, False otherwise
+    """
+    fs_modification_patterns = [
+        r'\bmv\b', r'\bcp\b', r'\brm\b', r'\brmdir\b', r'\bmkdir\b',
+        r'\btouch\b', r'\bchmod\b', r'\bchown\b', r'\bln\b', r'\btruncate\b',
+        r'\b(>|>>)\b', r'\bdd\b', r'\binstall\b', r'\brename\b', r'\bpatch\b',
+        r'\bsed\b.*\b-i\b', r'\bawk\b.*\b(>|>>)\b', r'\bcreate\b', r'\bdelete\b',
+        r'\bmove\b', r'\bcopy\b', r'\bremove\b', r'\bedit\b', r'\bwrite\b'
+    ]
+
+    for pattern in fs_modification_patterns:
+        if re.search(pattern, command):
+            return True
+
+    return False
+
 def handle_commands(commands, auto_confirm=False, auto_mode=False):
     """Handle extracted commands, prompting the user and executing if confirmed.
 
@@ -308,15 +332,16 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
             command = commands[0]
             is_stateful_cmd = is_stateful_command(command)
             is_risky_cmd = is_risky_command(command)
+            is_fs_mod = is_filesystem_modification(command)
 
             if is_stateful_cmd:
                 console.print("[yellow]Stateful command detected in non-interactive mode. Command will be copied to clipboard.[/yellow]")
                 copy_to_clipboard(command)
                 console.print(f"[green]Command copied to clipboard: {command}[/green]")
-                return
+        return
 
-            if is_risky_cmd:
-                console.print("[red]Risky command detected in non-interactive mode. Command will not be executed.[/red]")
+            if is_risky_cmd or is_fs_mod:
+                console.print("[red]Risky or filesystem modifying command detected in non-interactive mode. Command will not be executed.[/red]")
                 return
 
             # Run first command automatically if not risky or stateful
@@ -331,6 +356,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
             cmd_first = commands[0]
             is_stateful_first = is_stateful_command(cmd_first)
             is_risky_first = is_risky_command(cmd_first)
+            is_fs_mod_first = is_filesystem_modification(cmd_first)
 
             if is_stateful_first:
                 console.print("[yellow]First command is stateful. Command will be copied to clipboard.[/yellow]")
@@ -338,8 +364,8 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                 console.print(f"[green]Command copied to clipboard: {cmd_first}[/green]")
                 return
 
-            if is_risky_first:
-                console.print("[red]First command is risky. Command will not be executed.[/red]")
+            if is_risky_first or is_fs_mod_first:
+                console.print("[red]First command is risky or modifies the filesystem. Command will not be executed.[/red]")
                 return
 
             # Run first command automatically if not risky or stateful
@@ -352,6 +378,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
         command = commands[0]
         is_stateful_cmd = is_stateful_command(command)
         is_risky_cmd = is_risky_command(command)
+        is_fs_mod = is_filesystem_modification(command)
 
         if is_risky_cmd:
             risk_explanation = _get_ai_risk_assessment(command, console, provider_instance)
@@ -375,14 +402,14 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                 console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
             return # Done with this single stateful command
 
-        # Auto-confirm for non-stateful, non-risky commands
-        if (auto_confirm or auto_mode) and not is_risky_cmd:
+        # Auto-confirm for non-stateful, non-risky, non-fs-modifying commands
+        if (auto_confirm or auto_mode) and not is_risky_cmd and not is_fs_mod:
             console.print(Text("\n[Auto-executing command]", style="bold blue"))
             console.print(Panel(Text(command, style="cyan bold"),
                                border_style="blue",
                                expand=False))
             run_command(command, auto_confirm=True)
-            return
+                return
 
         # Risky commands always require confirmation, even in auto mode
         if is_risky_cmd:
@@ -395,10 +422,24 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
             if choice == "y":
                 run_command(command, auto_confirm=auto_confirm)
             else:
+                 console.print("[Cancelled]")
+            return
+
+        # Filesystem modifying commands require confirmation, even in auto mode
+        if is_fs_mod:
+            prompt_style = "yellow bold"
+            prompt_msg_text = Text("[FILESYSTEM MODIFICATION] Execute '", style=prompt_style)
+            prompt_msg_text.append(command, style=prompt_style + " underline")
+            prompt_msg_text.append("'? [y/N]: ", style=prompt_style)
+            console.print(prompt_msg_text, end="")
+            choice = input().lower() or "n"  # Default to no for fs modifications
+            if choice == "y":
+                run_command(command, auto_confirm=auto_confirm)
+    else:
                 console.print("[Cancelled]")
             return
 
-        # Regular non-risky, non-stateful command without auto_confirm
+        # Regular non-risky, non-stateful, non-fs-modifying command without auto_confirm
         prompt_style = "green"
         prompt_msg_text = Text("Execute '", style=prompt_style)
         prompt_msg_text.append(command, style=prompt_style + " underline")
@@ -419,28 +460,40 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
             for cmd_item in commands:
                 is_stateful_item = is_stateful_command(cmd_item)
                 is_risky_item = is_risky_command(cmd_item)
+                is_fs_mod_item = is_filesystem_modification(cmd_item)
 
                 if is_stateful_item:
                     copy_to_clipboard(cmd_item)
                     console.print(f"[green]Command copied to clipboard: {cmd_item}[/green]")
-                elif not is_risky_item:
+                elif not is_risky_item and not is_fs_mod_item:
                     console.print(f"[green]Auto-executing: {cmd_item}[/green]")
                     run_command(cmd_item, auto_confirm=True)
-                else:
+                elif is_risky_item:
                     # For risky commands, show assessment and ask for confirmation
                     risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
                     console.print(Panel(
-                        Text(risk_explanation, style="yellow"),
-                        title="[bold red]AI Risk Assessment[/bold red]",
-                        border_style="red",
-                        expand=False
-                    ))
+                            Text(risk_explanation, style="yellow"),
+                            title="[bold red]AI Risk Assessment[/bold red]",
+                            border_style="red",
+                            expand=False
+                        ))
                     prompt_style = "red bold"
                     prompt_msg_text = Text("[RISKY] Execute '", style=prompt_style)
                     prompt_msg_text.append(cmd_item, style=prompt_style + " underline")
                     prompt_msg_text.append("'? [y/N]: ", style=prompt_style)
                     console.print(prompt_msg_text, end="")
                     choice = input().lower() or "n"  # Default to no for risky commands
+                    if choice == "y":
+                        run_command(cmd_item, auto_confirm=auto_confirm)
+                    else:
+                        console.print(f"[Skipped: {cmd_item}]")
+                else:  # Filesystem modification command
+                    prompt_style = "yellow bold"
+                    prompt_msg_text = Text("[FILESYSTEM MODIFICATION] Execute '", style=prompt_style)
+                    prompt_msg_text.append(cmd_item, style=prompt_style + " underline")
+                    prompt_msg_text.append("'? [y/N]: ", style=prompt_style)
+                    console.print(prompt_msg_text, end="")
+                    choice = input().lower() or "n"  # Default to no for fs modifications
                     if choice == "y":
                         run_command(cmd_item, auto_confirm=auto_confirm)
                     else:
@@ -452,6 +505,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
         for i, cmd_text_item in enumerate(commands, 1):
             is_risky_item = is_risky_command(cmd_text_item)
             is_stateful_item = is_stateful_command(cmd_text_item)
+            is_fs_mod_item = is_filesystem_modification(cmd_text_item)
 
             display_item = Text()
             display_item.append(f"{i}", style="cyan")
@@ -460,6 +514,8 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                 display_item.append(" [RISKY]", style="bold red")
             if is_stateful_item:
                 display_item.append(" [STATEFUL]", style="bold yellow")
+            if is_fs_mod_item and not is_risky_item:  # Don't duplicate if it's already marked as risky
+                display_item.append(" [MODIFIES FILES]", style="bold yellow")
             cmd_list_display.append(display_item)
 
         # Create a single Text object for the panel content
@@ -483,15 +539,16 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                 console.print(f"Processing command {i+1}: {cmd_item}")
                 is_stateful_item = is_stateful_command(cmd_item)
                 is_risky_item = is_risky_command(cmd_item)
+                is_fs_mod_item = is_filesystem_modification(cmd_item)
 
                 if is_risky_item:
                     risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
-                    console.print(Panel(
-                        Text(risk_explanation, style="yellow"),
-                        title="[bold red]AI Risk Assessment[/bold red]",
-                        border_style="red",
-                        expand=False
-                    ))
+                        console.print(Panel(
+                            Text(risk_explanation, style="yellow"),
+                            title="[bold red]AI Risk Assessment[/bold red]",
+                            border_style="red",
+                            expand=False
+                        ))
 
                 if is_stateful_item:
                     copy_prompt_text = Text(f"[STATEFUL COMMAND] '{cmd_item}'. Copy to clipboard? [Y/n]: ", style="yellow bold")
@@ -503,7 +560,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                     continue # Move to next command in 'a'
 
                 # Non-stateful command in 'a'
-                if auto_confirm and not is_risky_item:
+                if auto_confirm and not is_risky_item and not is_fs_mod_item:
                     console.print(f"[green]Auto-executing: {cmd_item}[/green]")
                     run_command(cmd_item, auto_confirm=True)
                 elif is_risky_item: # Needs explicit confirmation even in 'a' if not auto_confirm
@@ -512,9 +569,17 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                     sub_choice = input().lower() or "n"
                     if sub_choice == "y":
                         run_command(cmd_item, auto_confirm=auto_confirm)
-                    else:
+                            else:
                         console.print(f"[Skipped: {cmd_item}]")
-                else: # Not risky, not stateful, not auto_confirm - prompt for this specific one in 'a'
+                elif is_fs_mod_item: # Filesystem modifications need confirmation
+                    exec_prompt_text = Text(f"[FILESYSTEM MODIFICATION] Execute '{cmd_item}'? [y/N]: ", style="yellow bold")
+                    console.print(exec_prompt_text, end="")
+                    sub_choice = input().lower() or "n"
+                    if sub_choice == "y":
+                        run_command(cmd_item, auto_confirm=auto_confirm)
+                            else:
+                        console.print(f"[Skipped: {cmd_item}]")
+                else: # Not risky, not stateful, not filesystem modification - prompt for this specific one in 'a'
                     exec_prompt_text = Text(f"Execute '{cmd_item}'? [Y/n]: ", style="green")
                     console.print(exec_prompt_text, end="")
                     sub_choice = input().lower() or "y"
@@ -530,15 +595,16 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                 cmd_to_run = commands[idx]
                 is_stateful_cmd_num = is_stateful_command(cmd_to_run)
                 is_risky_cmd_num = is_risky_command(cmd_to_run)
+                is_fs_mod_cmd_num = is_filesystem_modification(cmd_to_run)
 
                 if is_risky_cmd_num:
                     risk_explanation_num = _get_ai_risk_assessment(cmd_to_run, console, provider_instance)
-                    console.print(Panel(
+                        console.print(Panel(
                         Text(risk_explanation_num, style="yellow"),
-                        title="[bold red]AI Risk Assessment[/bold red]",
-                        border_style="red",
-                        expand=False
-                    ))
+                            title="[bold red]AI Risk Assessment[/bold red]",
+                            border_style="red",
+                            expand=False
+                        ))
 
                 if is_stateful_cmd_num:
                     copy_prompt_text_num = Text(f"[STATEFUL COMMAND] '{cmd_to_run}'. Copy to clipboard? [Y/n]: ", style="yellow bold")
@@ -555,7 +621,15 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                         run_command(cmd_to_run, auto_confirm=auto_confirm)
                     else:
                         console.print("[Cancelled]")
-                else: # Not stateful, not risky - chosen by number, execute directly.
+                elif is_fs_mod_cmd_num: # Not stateful, not risky, but modifies filesystem
+                    exec_prompt_text_num = Text(f"[FILESYSTEM MODIFICATION] Execute '{cmd_to_run}'? [y/N]: ", style="yellow bold")
+                    console.print(exec_prompt_text_num, end="")
+                    sub_choice_num = input().lower() or "n"
+                    if sub_choice_num == "y":
+                        run_command(cmd_to_run, auto_confirm=auto_confirm)
+                            else:
+                                console.print("[Cancelled]")
+                else: # Not stateful, not risky, not modifying filesystem - chosen by number, execute directly.
                     console.print(f"[green]Executing selected command: {cmd_to_run}[/green]")
                     run_command(cmd_to_run, auto_confirm=auto_confirm)
             else:
@@ -566,7 +640,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
             return
 
     # Should be unreachable if all paths above return
-    return
+            return
 
 def run_command(command, auto_confirm=False):
     """Execute a shell command with error handling.
@@ -598,7 +672,7 @@ def run_command(command, auto_confirm=False):
     else:
         console.print(Text("\n[Executing command]", style="bold green"))
         console.print(Panel(Text(command, style="cyan bold"),
-                           border_style="green",
+                       border_style="green",
                            expand=False))
 
     # Capture the output to display it properly
@@ -663,6 +737,11 @@ def interactive_mode(chat_mode=False, auto_mode=False):
     # Track conversation history for chat and auto modes
     conversation_history = []
 
+    # Track context for follow-up questions in auto mode - using a dictionary
+    context = {
+        'last_location': os.path.expanduser("~/Desktop")  # Default to Desktop
+    }
+
     # Check if stdin is a terminal or a pipe
     is_interactive = sys.stdin.isatty()
 
@@ -670,7 +749,7 @@ def interactive_mode(chat_mode=False, auto_mode=False):
         mode_description = "Chat Mode"
         if auto_mode:
             mode_description = "Auto Mode"
-            console.print(Panel.fit(
+        console.print(Panel.fit(
                 Text("Auto Mode allows the AI to explore your filesystem to answer questions. It will automatically execute safe commands but will always ask for confirmation before making changes.", style="yellow"),
                 border_style="yellow"
             ))
@@ -761,8 +840,8 @@ def interactive_mode(chat_mode=False, auto_mode=False):
 
     while True:
         try:
-            # Add visual separation between interactions
-            console.print("")
+        # Add visual separation between interactions
+        console.print("")
             current_config = load_config() # Load config to get provider and model info
             provider_name = current_config.get("default_provider", "Unknown")
 
@@ -774,30 +853,30 @@ def interactive_mode(chat_mode=False, auto_mode=False):
                 else:
                     display_provider_name = "ollama (model not set)" # Fallback if model isn't in config
 
-            prompt = Text()
-            prompt.append("AI:", style="bold cyan")
-            prompt.append("(", style="bold green")
+        prompt = Text()
+        prompt.append("AI:", style="bold cyan")
+        prompt.append("(", style="bold green")
             prompt.append(display_provider_name, style="bold green") # Use the potentially modified name
-            prompt.append(")", style="bold green")
-            prompt.append("> ", style="bold cyan")
-            console.print(prompt, end="")
+        prompt.append(")", style="bold green")
+        prompt.append("> ", style="bold cyan")
+        console.print(prompt, end="")
 
             # Use a timeout to avoid hanging on input (10 seconds)
-            query = input().strip()
+        query = input().strip()
 
             # Skip blank inputs and prevent the command itself from being interpreted as a query
             if not query or query.lower() in ["ai --auto", "ai -auto", "--auto", "-auto"]:
                 continue
 
-            if query.lower() in ["exit", "quit", "q"]:
-                console.print("[bold cyan]Goodbye![/bold cyan]")
-                break
+        if query.lower() in ["exit", "quit", "q"]:
+            console.print("[bold cyan]Goodbye![/bold cyan]")
+            break
 
-            if not query:
-                continue
+        if not query:
+            continue
 
             # Build the system context
-            system_context = get_system_context()
+        system_context = get_system_context()
 
             # Add conversation history to system context for chat and auto modes
             if (chat_mode or auto_mode) and conversation_history:
@@ -805,6 +884,10 @@ def interactive_mode(chat_mode=False, auto_mode=False):
                 for idx, (q, a) in enumerate(conversation_history, 1):
                     history_context += f"User ({idx}): {q}\nAI ({idx}): {a}\n\n"
                 system_context += history_context
+
+            # Track the last explored location for follow-up questions
+            if not hasattr(conversation_history, '__dict__'):
+                conversation_history.__dict__ = {}
 
             # Add auto mode instruction to system context if enabled
             if auto_mode:
@@ -827,12 +910,15 @@ def interactive_mode(chat_mode=False, auto_mode=False):
                 auto_mode_context += "- NEVER execute commands that modify, delete, or move files without explicit user confirmation\n"
                 auto_mode_context += "- Always explain what information you're looking for before executing commands\n"
                 auto_mode_context += "- All exploration commands will be shown to the user as they execute\n"
+                auto_mode_context += "- ONLY refer to files and directories that actually exist based on the exploration results\n"
+                auto_mode_context += "- NEVER claim to have found, read, or analyzed a file that wasn't shown in the exploration results\n"
+                auto_mode_context += "- For questions that don't involve the filesystem, don't use exploration - answer directly\n"
                 system_context += auto_mode_context
 
-            provider = get_provider(load_config().get("default_provider", ""))
-            if not provider:
-                console.print("[bold red]No AI provider configured. Please run 'ai setup' first.[/bold red]")
-                break
+        provider = get_provider(load_config().get("default_provider", ""))
+        if not provider:
+            console.print("[bold red]No AI provider configured. Please run 'ai setup' first.[/bold red]")
+            break
 
             # Show a thinking indicator
             console.print("[dim]Thinking...[/dim]")
@@ -865,7 +951,7 @@ def interactive_mode(chat_mode=False, auto_mode=False):
 
             # In auto mode, check if we need to do exploration before showing the response
             if auto_mode:
-                exploration_commands = extract_exploration_commands(cleaned_response, processed_query)
+                exploration_commands = extract_exploration_commands(cleaned_response, processed_query, context)
 
                 if exploration_commands:
                     # Skip showing the initial response when we know we'll do exploration and have an enhanced response
@@ -881,12 +967,41 @@ def interactive_mode(chat_mode=False, auto_mode=False):
                         exploration_context = system_context + "\n\nExploration results:\n" + exploration_results
 
                         # Create a more specific query based on the original query type
+                        current_location = context['last_location']
                         if any(word in processed_query.lower() for word in ["what are", "which files", "list files", "show files", "file names"]):
-                            enhanced_query = f"Based on the exploration results, provide a clear list of the file names found. Response format: First list visible files, then hidden files if any were found. Then give folder counts."
+                            enhanced_query = f"""Based on the exploration results, provide a clear list of the file names found in {current_location}.
+                            Response format should be exactly:
+
+                            **Visible Files:**
+                            - file1
+                            - file2
+                            ...
+
+                            **Hidden Files:**
+                            - .file1
+                            - .file2
+                            ...
+
+                            **Folder Count:** X folders
+                            """
                         elif any(word in processed_query.lower() for word in ["content", "what is in", "what's in", "read", "show content"]):
-                            enhanced_query = f"Based on the exploration results, provide the content of the file that was read. If the file is a text file, summarize its content. If no file was read, explain why."
+                            # Check if user wants full content or summary
+                            wants_full_content = any(word in processed_query.lower() for word in ["full", "entire", "complete", "literal", "exactly", "all of", "raw", "verbatim"])
+
+                            if wants_full_content:
+                                enhanced_query = f"Based on the exploration results, provide the COMPLETE, EXACT content of the file that was read in {current_location}. Do NOT summarize - display the entire raw content exactly as it appears in the file."
+                            else:
+                                enhanced_query = f"Based on the exploration results, provide a concise summary of the content of the file that was read in {current_location}. If the file is a text file, analyze and summarize its main points. If no file was read, explain why."
                         else:
-                            enhanced_query = f"Based on the exploration results, provide a concise answer to: {processed_query}. Always include both file and folder counts separately in your response."
+                            enhanced_query = f"""Based on the exploration results for {context['last_location']}, format your response EXACTLY as follows:
+
+There are X files
+There are Y folders
+In {context['last_location']}
+
+(In addition there are also Z hidden files and W hidden folders)
+
+Where X, Y, Z, and W are the actual numbers from the exploration. The last line about hidden files should be displayed in a dimmer color."""
 
                         enhanced_response = provider.generate_response(enhanced_query, exploration_context, verbose=False)
 
@@ -914,7 +1029,7 @@ def interactive_mode(chat_mode=False, auto_mode=False):
                         # Extract and handle commands from the ENHANCED response only (skip initial response)
                         commands = get_commands_interactive(enhanced_cleaned_response, max_commands=3, auto_mode=True)
 
-                        if commands:
+            if commands:
                             # In auto mode, only allow automatic execution of safe commands that aren't examples
                             safe_commands = [cmd for cmd in commands if not is_risky_command(cmd)]
 
@@ -964,12 +1079,13 @@ def interactive_mode(chat_mode=False, auto_mode=False):
     # If the loop was broken (only happens if not chat_mode), exit cleanly.
     sys.exit(0)
 
-def extract_exploration_commands(response, query):
+def extract_exploration_commands(response, query, context=None):
     """Extract commands that should be executed to explore the filesystem and gather information.
 
     Args:
         response: The AI's response text
         query: The user's query
+        context: Dictionary containing context for follow-up questions
 
     Returns:
         List of exploration commands to execute
@@ -993,6 +1109,9 @@ def extract_exploration_commands(response, query):
     exploration_commands = []
     cwd = os.getcwd()
 
+    # Check if this is a follow-up query about files or folders
+    is_followup = any(word in query.lower() for word in ["those", "these", "them", "the files", "the folders", "names"])
+
     # Start with identifying locations mentioned in the query
     locations = []
 
@@ -1007,9 +1126,13 @@ def extract_exploration_commands(response, query):
             if path:
                 locations.append(path)
 
-    # If no locations specified, use current directory
+    # If no locations specified, use desktop for follow-up questions about files
     if not locations:
-        locations = [cwd]
+        if is_followup and context and 'last_location' in context:
+            # Use the last explored location if this is a follow-up
+            locations = [context['last_location']]
+        else:
+            locations = [cwd]
 
     # Set a strict max depth limit to avoid deep traversals
     max_depth = 1  # Default to 1 level for better performance and focus
@@ -1023,11 +1146,21 @@ def extract_exploration_commands(response, query):
 
     # For location-specific queries, be more targeted
     if "desktop" in query.lower():
-        locations = [os.path.expanduser("~/Desktop")]
+        desktop_path = os.path.expanduser("~/Desktop")
+        locations = [desktop_path]
+        # Store this location for future reference
+        if context is not None:
+            context['last_location'] = desktop_path
     elif "documents" in query.lower():
-        locations = [os.path.expanduser("~/Documents")]
+        documents_path = os.path.expanduser("~/Documents")
+        locations = [documents_path]
+        if context is not None:
+            context['last_location'] = documents_path
     elif "downloads" in query.lower():
-        locations = [os.path.expanduser("~/Downloads")]
+        downloads_path = os.path.expanduser("~/Downloads")
+        locations = [downloads_path]
+        if context is not None:
+            context['last_location'] = downloads_path
 
     # For each identified location, add appropriate exploration commands
     for location in locations:
@@ -1059,6 +1192,9 @@ def extract_exploration_commands(response, query):
 
         # For questions about file content
         if any(word in query.lower() for word in ["content", "what is in", "what's in", "read", "show content", "display", "cat", "text in"]):
+            # Check if user wants full content or summary
+            show_full_content = any(word in query.lower() for word in ["full", "entire", "complete", "literal", "exactly", "all of", "raw", "verbatim"])
+
             # If specific file types are mentioned
             if "txt" in query.lower() or "text" in query.lower():
                 # First list any text files for information
@@ -1080,8 +1216,8 @@ def extract_exploration_commands(response, query):
     # Count files - limit depth to prevent resource issues
     if any(word in query.lower() for word in ["count", "how many"]) and any(word in query.lower() for word in ["files", "directory", "folder"]):
         for location in locations:
-            exploration_commands.append(f"find {location} -type f -maxdepth {max_depth} | wc -l")
-            exploration_commands.append(f"find {location} -type d -maxdepth {max_depth} | wc -l")
+            exploration_commands.append(f"find {location} -type f -maxdepth 1 | wc -l")
+            exploration_commands.append(f"find {location} -type d -maxdepth 1 | wc -l")
 
     # Disk usage for specific locations only
     if any(word in query.lower() for word in ["size", "disk", "storage", "space"]):
