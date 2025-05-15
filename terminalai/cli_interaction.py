@@ -804,9 +804,18 @@ def interactive_mode(chat_mode=False, auto_mode=False):
             auto_mode_context += "1. Proactively explore the filesystem to find information needed to answer questions\n"
             auto_mode_context += "2. Read files to understand their contents when relevant\n"
             auto_mode_context += "3. Suggest and automatically execute non-risky commands\n"
-            auto_mode_context += "When exploring, use commands like 'ls', 'find', 'grep', 'cat', etc. to gather information.\n"
-            auto_mode_context += "Always explain what information you're looking for before executing commands.\n"
-            auto_mode_context += "IMPORTANT: Never execute commands that modify, delete, or move files without explicit user confirmation.\n"
+            auto_mode_context += "\nExploration Guidelines:\n"
+            auto_mode_context += "- ALWAYS prefer non-stateful commands for exploration\n"
+            auto_mode_context += "- Instead of using 'cd /path && ls', directly use 'ls /path'\n"
+            auto_mode_context += "- Instead of 'cd /path && grep pattern file', use 'grep pattern /path/file'\n"
+            auto_mode_context += "- When exploring an unknown structure, first use 'ls -la /starting/path' before diving deeper\n"
+            auto_mode_context += "- Use absolute paths when possible for clarity and to avoid stateful navigation\n"
+            auto_mode_context += "- Use commands like 'find', 'grep', 'cat', 'head', 'tail', 'wc', etc. with full paths\n"
+            auto_mode_context += "- NEVER use 'cd' or other stateful commands for exploration, as they won't work properly in this mode\n"
+            auto_mode_context += "\nSafety Rules:\n"
+            auto_mode_context += "- Always explain what information you're looking for before executing commands\n"
+            auto_mode_context += "- IMPORTANT: Never execute commands that modify, delete, or move files without explicit user confirmation\n"
+            auto_mode_context += "- All exploration commands will be shown to the user as they execute\n"
             system_context += auto_mode_context
 
         provider = get_provider(load_config().get("default_provider", ""))
@@ -934,7 +943,8 @@ def extract_exploration_commands(response, query):
     """
     exploration_keywords = [
         "files", "directory", "folder", "search", "find", "locate",
-        "list", "count", "size", "disk", "storage"
+        "list", "count", "size", "disk", "storage", "space", "content",
+        "what's in", "show me", "how many", "where is", "look for"
     ]
 
     # Check if the query is asking about files, directories, or system info
@@ -945,55 +955,148 @@ def extract_exploration_commands(response, query):
 
     # Define safe exploration commands based on the query
     exploration_commands = []
+    cwd = os.getcwd()
 
-    # Basic filesystem exploration
-    if any(word in query.lower() for word in ["list", "files", "directory", "folder", "show"]):
-        exploration_commands.append("ls -la")
+    # Start with identifying locations mentioned in the query
+    locations = []
 
-    # Find files
-    if any(word in query.lower() for word in ["find", "search", "locate"]):
-        # Extract potential filenames or patterns from the query
-        words = query.lower().split()
-        file_pattern = None
+    # Check for specific paths mentioned in the query
+    for word in query.lower().split():
+        if '/' in word:
+            # Clean up the path from punctuation
+            path = word.strip("\"'.,?!:;()[]{}").rstrip("/")
+            if path and not path.startswith('/'):
+                # Make relative path absolute
+                path = os.path.join(cwd, path)
+            if path:
+                locations.append(path)
 
-        # Check for file extensions in the query
-        for word in words:
-            # Look for words that might be file extensions or patterns
-            if "." in word and len(word) >= 2:
-                file_pattern = word.strip("\"'.,?!")
-                break
+    # If no locations specified, use current directory
+    if not locations:
+        locations = [cwd]
 
-        # If we didn't find a specific pattern but the query mentions files
-        if not file_pattern and any(ext in query.lower() for ext in [".py", ".txt", ".md", ".json", ".js", ".html", ".css", ".java", ".c", ".h", ".cpp"]):
-            for ext in [".py", ".txt", ".md", ".json", ".js", ".html", ".css", ".java", ".c", ".h", ".cpp"]:
+    # For each identified location, add appropriate exploration commands
+    for location in locations:
+        # Basic directory exploration - list contents
+        if any(word in query.lower() for word in ["list", "files", "directory", "folder", "show", "what's in", "contents"]):
+            exploration_commands.append(f"ls -la {location}")
+
+            # If looking for details, add more comprehensive listing
+            if any(word in query.lower() for word in ["detail", "more", "all", "everything"]):
+                exploration_commands.append(f"find {location} -maxdepth 2 -type f | sort")
+
+        # Find files
+        if any(word in query.lower() for word in ["find", "search", "locate", "where"]):
+            # Extract potential filenames or patterns from the query
+            words = query.lower().split()
+            file_pattern = None
+
+            # Look for specific extensions or patterns
+            for ext in [".py", ".txt", ".md", ".json", ".js", ".html", ".css", ".java", ".c", ".h", ".cpp", ".go"]:
                 if ext in query.lower():
                     file_pattern = ext
                     break
 
-        # If we found a pattern, create a find command
-        if file_pattern:
-            exploration_commands.append(f"find . -name \"*{file_pattern}*\" -type f -maxdepth 3")
-        # Otherwise, use a general find
-        else:
-            # If we can detect what kind of files they're looking for
-            if "python" in query.lower() or "py" in query.lower():
-                exploration_commands.append("find . -name \"*.py\" -type f -maxdepth 3")
-            elif "text" in query.lower() or "txt" in query.lower():
-                exploration_commands.append("find . -name \"*.txt\" -type f -maxdepth 3")
+            # If we found a pattern, create a find command
+            if file_pattern:
+                exploration_commands.append(f"find {location} -name \"*{file_pattern}*\" -type f -maxdepth 4")
             else:
-                # Generic file search
-                exploration_commands.append("find . -type f -maxdepth 2 | head -n 20")
+                # Look for words that might indicate file types
+                type_indicators = {
+                    "python": "*.py",
+                    "text": "*.txt",
+                    "markdown": "*.md",
+                    "json": "*.json",
+                    "javascript": "*.js",
+                    "html": "*.html",
+                    "css": "*.css",
+                    "java": "*.java",
+                    "c": "*.c",
+                    "header": "*.h",
+                    "c++": "*.cpp",
+                    "cpp": "*.cpp",
+                    "go": "*.go"
+                }
+
+                for indicator, pattern in type_indicators.items():
+                    if indicator in query.lower():
+                        exploration_commands.append(f"find {location} -name \"{pattern}\" -type f -maxdepth 4")
+                        break
+                else:
+                    # Generic file search if no specific type mentioned
+                    exploration_commands.append(f"find {location} -type f -maxdepth 2 | head -n 20")
 
     # Count files
-    if "count" in query.lower() and any(word in query.lower() for word in ["files", "directory", "folder"]):
-        exploration_commands.append("find . -type f | wc -l")
+    if any(word in query.lower() for word in ["count", "how many"]) and any(word in query.lower() for word in ["files", "directory", "folder"]):
+        for location in locations:
+            # General file count
+            exploration_commands.append(f"find {location} -type f | wc -l")
+
+            # If specific file types are mentioned, count those
+            file_types = []
+            if "python" in query.lower() or ".py" in query.lower():
+                file_types.append("*.py")
+            if "text" in query.lower() or ".txt" in query.lower():
+                file_types.append("*.txt")
+            if "markdown" in query.lower() or ".md" in query.lower():
+                file_types.append("*.md")
+
+            for file_type in file_types:
+                exploration_commands.append(f"find {location} -name \"{file_type}\" -type f | wc -l")
+
+    # File content exploration
+    if any(word in query.lower() for word in ["content", "inside", "contain", "what's in", "read"]):
+        # Try to identify specific files
+        if "readme" in query.lower():
+            exploration_commands.append("cat README.md 2>/dev/null || cat */README.md 2>/dev/null || find . -name \"README*\" -maxdepth 2")
+
+        # If searching for specific content
+        if "search" in query.lower() or "find" in query.lower() or "contain" in query.lower():
+            search_terms = []
+
+            # Try to identify search terms after "containing" or "with"
+            content_indicators = ["containing", "with", "has", "having", "contains", "matching"]
+            for indicator in content_indicators:
+                if indicator in query.lower():
+                    parts = query.lower().split(indicator, 1)
+                    if len(parts) > 1 and parts[1].strip():
+                        # Extract the first word after the indicator as a search term
+                        term = parts[1].strip().split()[0].strip("\"'.,?!:;()[]{}")
+                        if term and len(term) > 2:  # Avoid very short terms
+                            search_terms.append(term)
+
+            # If we found search terms, create grep commands
+            for term in search_terms:
+                exploration_commands.append(f"grep -r \"{term}\" {cwd} --include=\"*.py\" | head -n 10")
 
     # Disk usage
     if any(word in query.lower() for word in ["size", "disk", "storage", "space"]):
         exploration_commands.append("df -h")
-        exploration_commands.append("du -h -d 1")
+        for location in locations:
+            exploration_commands.append(f"du -h -d 1 {location}")
 
-    return exploration_commands
+    # If the query is about the largest/biggest files
+    if any(word in query.lower() for word in ["largest", "biggest", "heaviest"]) and "file" in query.lower():
+        for location in locations:
+            exploration_commands.append(f"find {location} -type f -exec du -h {{}} \\; | sort -rh | head -n 10")
+
+    # Line counting for code files
+    if "line" in query.lower() and "code" in query.lower():
+        file_type_patterns = []
+        if "python" in query.lower() or ".py" in query.lower():
+            file_type_patterns.append("*.py")
+        elif len(file_type_patterns) == 0:
+            # Default to all common code files
+            file_type_patterns = ["*.py", "*.js", "*.java", "*.c", "*.cpp", "*.h", "*.go"]
+
+        for pattern in file_type_patterns:
+            exploration_commands.append(f"find {cwd} -name \"{pattern}\" -type f -exec wc -l {{}} \\; | sort -nr | head -n 10")
+
+    # Remove any commands that might include stateful operations or be risky
+    safe_commands = [cmd for cmd in exploration_commands
+                    if not is_stateful_command(cmd) and not is_risky_command(cmd)]
+
+    return safe_commands[:5]  # Limit to a reasonable number of exploration commands
 
 def execute_exploration_commands(commands, console):
     """Execute exploration commands and return their output.
