@@ -598,7 +598,6 @@ def run_command(command, auto_confirm=False):
                            expand=False))
 
     # Capture the output to display it properly
-    import subprocess
     import shlex
 
     # Check if command contains shell operators (|, >, <, &&, ||, ;, etc.)
@@ -1103,7 +1102,6 @@ def execute_exploration_commands(commands, console):
         console.print(f"[dim]Exploring: {cmd}[/dim]")
 
         # Execute the command
-        import subprocess
         import shlex
 
         # Check if command contains shell operators

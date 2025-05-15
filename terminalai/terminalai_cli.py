@@ -237,7 +237,12 @@ File Location and Context:
         processed_query = preprocess_query(user_query)
 
         # Format and print response
-        console_for_direct = Console(file=sys.stderr if rich_output_to_stderr else None, force_terminal=bool(rich_output_to_stderr))
+        console_file = sys.stderr if rich_output_to_stderr else None
+        force_term = bool(rich_output_to_stderr)
+        console_for_direct = Console(
+            file=console_file,
+            force_terminal=force_term
+        )
         console_for_direct.print()
 
         # Show clarification message if query was modified
@@ -422,7 +427,10 @@ def handle_eval_mode_commands(commands, auto_confirm=False, auto_mode=False):
 
                 # For stateful commands in shell integration
                 if is_stateful_item:
-                    console.print("[bold yellow]This command changes shell state and will be executed in your shell.[/bold yellow]")
+                    console.print(
+                        "[bold yellow]This command changes shell state "
+                        "and will be executed in your shell.[/bold yellow]"
+                    )
 
                 # Confirm execution for risky commands
                 if is_risky_item:
