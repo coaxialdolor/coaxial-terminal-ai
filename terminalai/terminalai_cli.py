@@ -92,16 +92,20 @@ def main():
             print(colorize_command("Setup was not completed. Exiting."), file=sys.stderr)
             sys.exit(1)
 
-    # Handle interactive mode or chat mode
-    if args.query is None:
-        # Enter interactive mode
+    # Determine mode: interactive vs direct query
+    is_interactive_mode = args.query is None
+
+    # Handle interactive mode (chat or regular)
+    if is_interactive_mode:
         if args.chat:
             interactive_mode(chat_mode=True)
         elif args.auto:
             interactive_mode(chat_mode=True, auto_mode=True)
         else:
             interactive_mode(chat_mode=False)
-    # Handle direct query
+        # interactive_mode handles its own exit, so we shouldn't reach here
+        sys.exit(0)
+    # For direct query mode, proceed with the rest of the function
     else:
         # We have a query, so we're in direct query mode
         user_query = args.query

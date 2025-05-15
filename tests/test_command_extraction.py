@@ -2,7 +2,6 @@ import pytest
 from terminalai.command_extraction import extract_commands
 
 # This test will now FAIL as expected with line-by-line processing
-@pytest.mark.xfail(reason="Heredocs are split by line-by-line processing with current reverted logic")
 def test_extract_multiline_heredoc():
     """Test extracting a multi-line heredoc command."""
     ai_response = """
@@ -137,7 +136,6 @@ def test_extract_empty_code_block():
 # The `is_likely_command` is the main filter after block extraction.
 # If a python block has something that `is_likely_command` thinks is a command, it would be extracted.
 # This test should now expect an empty list if the python block does not contain command-like strings.
-@pytest.mark.xfail(reason="Reverted regex might be too broad, needs check for non-bash block handling")
 def test_extract_non_bash_code_block():
     """Test response with a non-bash/sh code block."""
     ai_response = """Python code:

@@ -38,13 +38,14 @@ class TestAutoMode(unittest.TestCase):
         # Verify that input was not called, since the command should execute automatically
         mock_input.assert_not_called()
 
+    @patch('sys.stdin.isatty', return_value=True)
     @patch('terminalai.cli_interaction.run_command')
     @patch('terminalai.cli_interaction.is_risky_command')
     @patch('terminalai.cli_interaction.is_stateful_command')
     @patch('terminalai.cli_interaction.Console')
     @patch('builtins.input', return_value='y')
     def test_auto_mode_prompts_for_risky_commands(self, mock_input, mock_console,
-                                                mock_is_stateful, mock_is_risky, mock_run_command):
+                                                mock_is_stateful, mock_is_risky, mock_run_command, mock_isatty):
         """Test that auto_mode still prompts for risky commands."""
         # Setup mocks
         mock_is_stateful.return_value = False
