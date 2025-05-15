@@ -23,13 +23,14 @@ TERMINALAI_THEME = Theme({
     "explanation": "dim white",
 })
 
-def print_ai_answer_with_rich(text):
+def print_ai_answer_with_rich(text, to_stderr=False):
     """Print AI's answer with rich formatting.
 
     Args:
         text: The AI's answer text
+        to_stderr: If True, output to stderr instead of stdout
     """
-    console = Console(theme=TERMINALAI_THEME)
+    console = Console(theme=TERMINALAI_THEME, file=sys.stderr if to_stderr else None)
 
     # Extract and format code blocks
     parts = []

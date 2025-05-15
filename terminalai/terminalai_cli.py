@@ -6,25 +6,26 @@ This ensures all imports work correctly. If you run this file directly, you may 
 """
 import os
 import sys
+
 import requests
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+
 from terminalai.__init__ import __version__
-from terminalai.config import load_config
 from terminalai.ai_providers import get_provider
-from terminalai.command_extraction import extract_commands_from_output, is_stateful_command, is_risky_command
-from terminalai.formatting import print_ai_answer_with_rich
-from terminalai.shell_integration import get_system_context
 from terminalai.cli_interaction import (
     parse_args, handle_commands, interactive_mode, setup_wizard,
     _set_default_provider_interactive,
     _set_ollama_model_interactive
 )
-from terminalai.query_utils import preprocess_query
 from terminalai.color_utils import colorize_command
-from rich.console import Console
-from rich.text import Text
+from terminalai.command_extraction import extract_commands_from_output, is_stateful_command, is_risky_command
+from terminalai.config import load_config
 from terminalai.file_reader import read_project_file
-from rich.panel import Panel
-import re
+from terminalai.formatting import print_ai_answer_with_rich
+from terminalai.query_utils import preprocess_query
+from terminalai.shell_integration import get_system_context
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -35,6 +36,9 @@ def main():
     """Main entry point for the TerminalAI CLI."""
     # --- Argument Parsing and Initial Setup ---
     args = parse_args()
+
+    # Initialize user_query to prevent UnboundLocalError
+    user_query = None
 
     # Check if we're in eval mode (used by shell integration)
     is_eval_mode = getattr(args, 'eval_mode', False)
@@ -105,8 +109,10 @@ def main():
     # Get AI provider instance
     provider = get_provider(provider_to_use) # Use the determined provider_to_use
     if not provider:
-        print(colorize_command(f"Error: Provider '{provider_to_use}' is not configured properly or is unknown."), file=sys.stderr)
-        print(colorize_command("Please run 'ai setup' to configure an AI provider, or check the provider name."), file=sys.stderr)
+        error_msg = f"Error: Provider '{provider_to_use}' is not configured properly or is unknown."
+        print(colorize_command(error_msg), file=sys.stderr)
+        setup_msg = "Please run 'ai setup' to configure an AI provider, or check the provider name."
+        print(colorize_command(setup_msg), file=sys.stderr)
         sys.exit(1)
 
     # Get system context
@@ -124,7 +130,8 @@ def main():
             print(colorize_command(error), file=sys.stderr)
             sys.exit(1)
         if content is None:
-            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."), file=sys.stderr)
+            error_msg = f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."
+            print(colorize_command(error_msg), file=sys.stderr)
             sys.exit(1)
 
         file_content_for_prompt = content
@@ -158,7 +165,10 @@ File Content of '{file_path_to_read}':
 {file_content_for_prompt}
 -------------------------------------------------------
 
-Please process the request which is to summarize this file, explain its likely purpose, and describe its context within the file system. If relevant, also identify any other files or modules it appears to reference or interact with."""
+"""
+            f"""Please process the request which is to summarize this file, explain its likely purpose, """
+            f"""and describe its context within the file system. If relevant, also identify any other """
+            f"""files or modules it appears to reference or interact with."""
         )
 
     elif hasattr(args, 'read_file') and args.read_file:
@@ -168,7 +178,8 @@ Please process the request which is to summarize this file, explain its likely p
             print(colorize_command(error), file=sys.stderr)
             sys.exit(1)
         if content is None:
-            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."), file=sys.stderr)
+            error_msg = f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."
+            print(colorize_command(error_msg), file=sys.stderr)
             sys.exit(1)
 
         file_content_for_prompt = content
@@ -188,14 +199,16 @@ File Location and Context:
         # The system context includes file content and guides the AI to use it for the user's query.
         final_system_context = (
             f"The user is in the directory: {cwd}.\n"
-            f"They have provided the content of the file: '{file_path_to_read}' (absolute path: '{abs_file_path}').\n"
+            f"They have provided the content of the file: '{file_path_to_read}' "
+            f"(absolute path: '{abs_file_path}').\n"
             f"{context_info}\n"
             f"Their query related to this file is: '{user_query}'.\n\n"
             f"File Content:\n"
             f"-------------------------------------------------------\n"
             f"{file_content_for_prompt}\n"
             f"-------------------------------------------------------\n\n"
-            f"Based on the file content and the user's query, please provide an explanation or perform the requested task. "
+            f"Based on the file content and the user's query, please provide an explanation "
+            f"or perform the requested task. "
             f"If relevant, identify any other files or modules it appears to reference or interact with, "
             f"considering standard import statements or common patterns for its file type. "
             f"Focus on its role within the file system and its relationship to other files in its directory."
@@ -224,13 +237,14 @@ File Location and Context:
         processed_query = preprocess_query(user_query)
 
         # Format and print response
-        console_for_direct = Console(file=sys.stderr if rich_output_to_stderr else None, force_terminal=True if rich_output_to_stderr else False)
+        console_for_direct = Console(file=sys.stderr if rich_output_to_stderr else None, force_terminal=bool(rich_output_to_stderr))
         console_for_direct.print()
 
         # Show clarification message if query was modified
         if processed_query != user_query:
+            clarification_message = f"Note: Clarified your query to: \"{processed_query}\""
             console_for_direct.print(Panel(
-                Text(f"Note: Clarified your query to: \"{processed_query}\"", style="cyan"),
+                Text(clarification_message, style="cyan"),
                 border_style="cyan",
                 expand=False
             ))
@@ -261,7 +275,6 @@ File Location and Context:
     cleaned_response = response
     if response.startswith("[AI] "):
         cleaned_response = response[len("[AI] ") :]
-
     # Check if we need to output to stderr (in eval mode)
     print_ai_answer_with_rich(cleaned_response, to_stderr=rich_output_to_stderr)
 
@@ -340,7 +353,15 @@ def handle_eval_mode_commands(commands, auto_confirm=False, auto_mode=False):
         prompt_style = "red bold" if is_risky else "green"
         prompt_text = "[RISKY] " if is_risky else ""
 
-        console.print(f"[{prompt_style}]{prompt_text}Execute this command? [{default_choice.upper() if default_choice == 'y' else 'y'}/{default_choice.upper() if default_choice == 'n' else 'n'}]:[/{prompt_style}] ", end="")
+        # Format yes/no options based on default choice
+        yes_option = "Y" if default_choice == "y" else "y"
+        no_option = "N" if default_choice == "n" else "n"
+        yes_no_prompt = f"{yes_option}/{no_option}"
+
+        console.print(
+            f"[{prompt_style}]{prompt_text}Execute this command? [{yes_no_prompt}]:[/{prompt_style}] ",
+            end=""
+        )
 
         # Read from stdin (terminal input)
         try:
@@ -405,7 +426,7 @@ def handle_eval_mode_commands(commands, auto_confirm=False, auto_mode=False):
 
                 # Confirm execution for risky commands
                 if is_risky_item:
-                    console.print(Text(f"[RISKY] Execute this command? [y/N]: ", style="red bold"), end="")
+                    console.print(Text("[RISKY] Execute this command? [y/N]: ", style="red bold"), end="")
                     try:
                         confirm = input().lower() or "n"
                     except (KeyboardInterrupt, EOFError):

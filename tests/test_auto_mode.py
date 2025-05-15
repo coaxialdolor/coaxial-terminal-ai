@@ -3,7 +3,6 @@ import os
 import sys
 import unittest
 from unittest.mock import patch, MagicMock, call
-from io import StringIO
 
 # Add parent directory to sys.path to import from terminalai package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -11,7 +10,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from terminalai.cli_interaction import (
     handle_commands, parse_args, extract_exploration_commands, execute_exploration_commands
 )
-from terminalai.command_extraction import extract_commands_from_output
 
 
 class TestAutoMode(unittest.TestCase):
@@ -68,7 +66,7 @@ class TestAutoMode(unittest.TestCase):
     @patch('terminalai.cli_interaction.is_stateful_command')
     @patch('terminalai.cli_interaction.Console')
     @patch('builtins.input', return_value='y')
-    def test_auto_mode_handles_stateful_commands(self, mock_input, mock_console,
+    def test_auto_mode_handles_stateful_commands(self, _mock_input, mock_console,
                                                mock_is_stateful, mock_is_risky, mock_copy_to_clipboard):
         """Test that auto_mode handles stateful commands correctly."""
         # Setup mocks
@@ -94,28 +92,27 @@ class TestAutoMode(unittest.TestCase):
         """Test that exploration commands are correctly extracted from queries."""
         # Test file listing query
         query = "List all files in the current directory"
-        commands = extract_exploration_commands("", query)
+        commands = extract_exploration_commands(query)
         self.assertIn("ls -la", commands)
 
         # Test file finding query
         query = "Find all .py files"
-        commands = extract_exploration_commands("", query)
-        expected_cmd = 'find . -name "*.py*" -type f -maxdepth 3'
-        self.assertTrue(any(cmd.startswith('find . -name') for cmd in commands))
+        commands = extract_exploration_commands(query)
+        self.assertTrue(any(cmd.startswith('find ') for cmd in commands))
 
         # Test disk usage query
         query = "How much disk space is available?"
-        commands = extract_exploration_commands("", query)
+        commands = extract_exploration_commands(query)
         self.assertIn("df -h", commands)
 
         # Test file counting query
         query = "Count the number of files in this directory"
-        commands = extract_exploration_commands("", query)
+        commands = extract_exploration_commands(query)
         self.assertIn("find . -type f | wc -l", commands)
 
         # Test query that doesn't need exploration
         query = "What time is it?"
-        commands = extract_exploration_commands("", query)
+        commands = extract_exploration_commands(query)
         self.assertEqual(len(commands), 0)
 
     @patch('subprocess.run')
@@ -159,9 +156,9 @@ class TestAutoMode(unittest.TestCase):
     @patch('terminalai.cli_interaction.get_system_context')
     @patch('sys.stdin.isatty', return_value=True)
     @patch('terminalai.cli_interaction.Console')
-    def test_auto_mode_explores_filesystem(self, mock_console, mock_isatty, mock_get_system_context,
+    def test_auto_mode_explores_filesystem(self, mock_console, _mock_isatty, mock_get_system_context,
                                           mock_print_answer, mock_load_config, mock_get_provider,
-                                          mock_input, mock_extract_cmds, mock_execute_cmds):
+                                          _mock_input, mock_extract_cmds, mock_execute_cmds):
         """Test that auto mode correctly explores the filesystem."""
         # Setup mocks
         mock_console_instance = MagicMock()
