@@ -88,15 +88,19 @@ def main():
             print(colorize_command("Setup was not completed. Exiting."), file=sys.stderr)
             sys.exit(1)
 
-    # Run in interactive mode if no query provided AND no --explain flag AND no --read-file flag, or if chat explicitly requested
-    is_chat_request = getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c')
-    if (not args.query and not args.explain and not args.read_file) or is_chat_request:
-        interactive_mode(chat_mode=is_chat_request)
-        sys.exit(0)
-
-    # --- Direct Query Mode: process and exit ---
-    # If a query is provided (ai "query"), process it, print the answer, handle commands, and exit.
-    # Do NOT call interactive_mode after handling a direct query.
+    # Handle interactive mode or chat mode
+    if args.query is None:
+        # Enter interactive mode
+        if args.chat:
+            interactive_mode(chat_mode=True)
+        elif args.auto:
+            interactive_mode(chat_mode=True, auto_mode=True)
+        else:
+            interactive_mode(chat_mode=False)
+    # Handle direct query
+    else:
+        # We have a query, so we're in direct query mode
+        user_query = args.query
 
     # Get AI provider instance
     provider = get_provider(provider_to_use) # Use the determined provider_to_use
@@ -110,7 +114,6 @@ def main():
     # Add current working directory to context
     cwd = os.getcwd()
     final_system_context = system_context # Start with base system context
-    user_query = args.query # Initialize user_query from args
 
     file_content_for_prompt = None # Initialize
 
@@ -276,7 +279,7 @@ File Location and Context:
 
             # Use a custom handling function for eval mode that will print the selected command to stdout
             # ONLY after user confirmation
-            handle_eval_mode_commands(commands, auto_confirm=auto_confirm)
+            handle_eval_mode_commands(commands, auto_confirm=auto_confirm, auto_mode=args.auto)
 
             # After handling, exit without printing anything else to stdout
             sys.exit(0)
@@ -285,13 +288,14 @@ File Location and Context:
         auto_confirm = args.yes
         handle_commands(
             commands,
-            auto_confirm=auto_confirm
+            auto_confirm=auto_confirm,
+            auto_mode=args.auto
         )
 
     # After handling a direct query, exit immediately. Do NOT call interactive_mode here.
     sys.exit(0)
 
-def handle_eval_mode_commands(commands, auto_confirm=False):
+def handle_eval_mode_commands(commands, auto_confirm=False, auto_mode=False):
     """Special handler for commands in eval mode (shell integration).
 
     In eval mode, we need to print the command ONLY to stdout (for shell execution)
@@ -303,6 +307,7 @@ def handle_eval_mode_commands(commands, auto_confirm=False):
     Args:
         commands: List of commands to handle
         auto_confirm: Whether to auto-confirm non-risky commands
+        auto_mode: Whether to auto-execute non-risky commands in auto mode
     """
     if not commands:
         return
@@ -320,8 +325,8 @@ def handle_eval_mode_commands(commands, auto_confirm=False):
         console.print("\n[Suggested command]", style="bold green")
         console.print(Panel(Text(command, style="cyan bold"), border_style="green", expand=False))
 
-        # If auto-confirm is on and the command is not risky, execute without prompting
-        if auto_confirm and not is_risky and not is_stateful:
+        # If auto-confirm or auto mode is on and the command is not risky, execute without prompting
+        if (auto_confirm or auto_mode) and not is_risky and not is_stateful:
             # Print the command to stdout for shell execution
             print(command)
             return
@@ -350,7 +355,7 @@ def handle_eval_mode_commands(commands, auto_confirm=False):
         else:
             console.print("[yellow]Command execution cancelled.[/yellow]")
 
-    # Multiple commands
+    # Multiple commands - auto mode with auto_mode=True would handle the same as auto_confirm
     else:
         # Display the list of commands
         cmd_list_display = []

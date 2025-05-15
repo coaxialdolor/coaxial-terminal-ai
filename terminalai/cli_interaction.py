@@ -121,6 +121,7 @@ AVAILABLE FLAGS:
                     Read and automatically explain/summarize the specified file (any plain text file) in its project context.
                     Uses a predefined query and ignores any general query you provide.
                     Mutually exclusive with --read-file.
+  --auto            Enable auto mode: Allows the AI to explore your filesystem to answer questions. It will automatically execute safe commands to gather information and keep conversation context for follow-up questions.
 
 -----------------------------------------------------------------------
 AI FORMATTING EXPECTATIONS:
@@ -175,6 +176,12 @@ Project: https://github.com/coaxialdolor/terminalai"""
         "--chat",
         action="store_true",
         help=argparse.SUPPRESS
+    )
+
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Enable auto mode: Allows the AI to explore your filesystem to answer questions. It will automatically execute safe commands to gather information and keep conversation context for follow-up questions."
     )
 
     parser.add_argument(
@@ -255,12 +262,13 @@ def _get_ai_risk_assessment(command, console, provider):
 
 # --- Main Command Handling Logic ---
 
-def handle_commands(commands, auto_confirm=False):
+def handle_commands(commands, auto_confirm=False, auto_mode=False):
     """Handle extracted commands, prompting the user and executing if confirmed.
 
     Args:
         commands: List of commands to handle
         auto_confirm: If True, auto-confirm non-risky commands without prompting
+        auto_mode: If True, execute non-risky commands automatically and show results directly
     """
     console = Console()
 
@@ -368,7 +376,7 @@ def handle_commands(commands, auto_confirm=False):
             return # Done with this single stateful command
 
         # Auto-confirm for non-stateful, non-risky commands
-        if auto_confirm and not is_risky_cmd:
+        if (auto_confirm or auto_mode) and not is_risky_cmd:
             console.print(Text("\n[Auto-executing command]", style="bold blue"))
             console.print(Panel(Text(command, style="cyan bold"),
                                border_style="blue",
@@ -406,8 +414,8 @@ def handle_commands(commands, auto_confirm=False):
 
     # Multiple commands
     else:
-        # Auto-confirm case for multiple commands
-        if auto_confirm:
+        # Auto-confirm or auto_mode case for multiple commands
+        if auto_confirm or auto_mode:
             for cmd_item in commands:
                 is_stateful_item = is_stateful_command(cmd_item)
                 is_risky_item = is_risky_command(cmd_item)
@@ -643,16 +651,32 @@ def run_command(command, auto_confirm=False):
         console.print(f"[bold red]Failed to execute command: {e}[/bold red]")
         return False
 
-def interactive_mode(chat_mode=False):
-    """Run TerminalAI in interactive mode. If chat_mode is True, stay in a loop."""
+def interactive_mode(chat_mode=False, auto_mode=False):
+    """Run TerminalAI in interactive mode.
+
+    Args:
+        chat_mode: If True, stay in a loop for continuous conversation
+        auto_mode: If True, execute non-risky commands automatically without confirmation
+                   and allow AI to proactively explore filesystem to answer questions
+    """
     console = Console()
+    # Track conversation history for chat and auto modes
+    conversation_history = []
 
     # Check if stdin is a terminal or a pipe
     is_interactive = sys.stdin.isatty()
 
     if chat_mode:
+        mode_description = "Chat Mode"
+        if auto_mode:
+            mode_description = "Auto Mode"
+            console.print(Panel.fit(
+                Text("Auto Mode allows the AI to explore your filesystem to answer questions. It will automatically execute safe commands but will always ask for confirmation before making changes.", style="yellow"),
+                border_style="yellow"
+            ))
+
         console.print(Panel.fit(
-            Text("TerminalAI AI Chat Mode: You are now chatting with the AI. Type 'exit' to quit.", style="bold magenta"),
+            Text(f"TerminalAI AI {mode_description}: You are now chatting with the AI. Type 'exit' to quit.", style="bold magenta"),
             border_style="magenta"
         ))
         console.print("[dim]Type 'exit', 'quit', or 'q' to return to your shell.[/dim]")
@@ -721,7 +745,7 @@ def interactive_mode(chat_mode=False):
             commands = get_commands_interactive(cleaned_response, max_commands=3)
             if commands:
                 # Auto-confirm in pipe mode for non-interactive use
-                handle_commands(commands, auto_confirm=True)
+                handle_commands(commands, auto_confirm=True, auto_mode=auto_mode)
 
             return
 
@@ -764,7 +788,26 @@ def interactive_mode(chat_mode=False):
         if not query:
             continue
 
+        # Build the system context
         system_context = get_system_context()
+
+        # Add conversation history to system context for chat and auto modes
+        if (chat_mode or auto_mode) and conversation_history:
+            history_context = "\n\nPrevious conversation:\n"
+            for idx, (q, a) in enumerate(conversation_history, 1):
+                history_context += f"User ({idx}): {q}\nAI ({idx}): {a}\n\n"
+            system_context += history_context
+
+        # Add auto mode instruction to system context if enabled
+        if auto_mode:
+            auto_mode_context = "\n\nYou are running in Auto Mode. This means you can:\n"
+            auto_mode_context += "1. Proactively explore the filesystem to find information needed to answer questions\n"
+            auto_mode_context += "2. Read files to understand their contents when relevant\n"
+            auto_mode_context += "3. Suggest and automatically execute non-risky commands\n"
+            auto_mode_context += "When exploring, use commands like 'ls', 'find', 'grep', 'cat', etc. to gather information.\n"
+            auto_mode_context += "Always explain what information you're looking for before executing commands.\n"
+            auto_mode_context += "IMPORTANT: Never execute commands that modify, delete, or move files without explicit user confirmation.\n"
+            system_context += auto_mode_context
 
         provider = get_provider(load_config().get("default_provider", ""))
         if not provider:
@@ -811,11 +854,53 @@ def interactive_mode(chat_mode=False):
 
             print_ai_answer_with_rich(cleaned_response) # Pass cleaned response
 
+            # Store conversation history for chat and auto modes
+            if chat_mode or auto_mode:
+                # Add this Q&A pair to history (limit to last 5 exchanges to avoid context limits)
+                conversation_history.append((processed_query, cleaned_response))
+                if len(conversation_history) > 5:
+                    conversation_history.pop(0)
+
+            # In auto mode, proactively explore if needed
+            if auto_mode:
+                exploration_commands = extract_exploration_commands(cleaned_response, processed_query)
+                if exploration_commands:
+                    console.print(Panel.fit(
+                        Text("Exploring to find relevant information...", style="cyan"),
+                        border_style="cyan"
+                    ))
+                    exploration_results = execute_exploration_commands(exploration_commands, console)
+
+                    # If exploration yielded useful information, ask the AI to analyze it
+                    if exploration_results:
+                        console.print("[dim]Analyzing gathered information...[/dim]")
+                        exploration_context = system_context + "\n\nExploration results:\n" + exploration_results
+                        enhanced_query = f"Based on the exploration results, please provide a more detailed answer to: {processed_query}"
+                        enhanced_response = provider.generate_response(enhanced_query, exploration_context, verbose=False)
+
+                        # Clean and show the enhanced response
+                        enhanced_cleaned_response = enhanced_response.strip()
+                        if enhanced_cleaned_response.lower().startswith("[ai]"):
+                            enhanced_cleaned_response = enhanced_cleaned_response[4:].lstrip()
+                        elif enhanced_cleaned_response.lower().startswith("ai:"):
+                            enhanced_cleaned_response = enhanced_cleaned_response[3:].lstrip()
+
+                        console.print(Rule(style="dim"))
+                        console.print(Panel.fit(
+                            Text("Enhanced Answer Based on Exploration:", style="green"),
+                            border_style="green"
+                        ))
+                        print_ai_answer_with_rich(enhanced_cleaned_response)
+
+                        # Update the conversation history with the enhanced response
+                        if conversation_history and enhanced_cleaned_response != cleaned_response:
+                            conversation_history[-1] = (processed_query, enhanced_cleaned_response)
+
             # Extract and handle commands from the CLEANED response
             commands = get_commands_interactive(cleaned_response, max_commands=3)
 
             if commands:
-                handle_commands(commands, auto_confirm=False)
+                handle_commands(commands, auto_confirm=False, auto_mode=auto_mode)
 
         except SystemExit: # Allow SystemExit from handle_commands (eval mode) to pass through
             raise
@@ -836,6 +921,135 @@ def interactive_mode(chat_mode=False):
 
     # If the loop was broken (only happens if not chat_mode), exit cleanly.
     sys.exit(0)
+
+def extract_exploration_commands(response, query):
+    """Extract commands that should be executed to explore the filesystem and gather information.
+
+    Args:
+        response: The AI's response text
+        query: The user's query
+
+    Returns:
+        List of exploration commands to execute
+    """
+    exploration_keywords = [
+        "files", "directory", "folder", "search", "find", "locate",
+        "list", "count", "size", "disk", "storage"
+    ]
+
+    # Check if the query is asking about files, directories, or system info
+    query_needs_exploration = any(keyword in query.lower() for keyword in exploration_keywords)
+
+    if not query_needs_exploration:
+        return []
+
+    # Define safe exploration commands based on the query
+    exploration_commands = []
+
+    # Basic filesystem exploration
+    if any(word in query.lower() for word in ["list", "files", "directory", "folder", "show"]):
+        exploration_commands.append("ls -la")
+
+    # Find files
+    if any(word in query.lower() for word in ["find", "search", "locate"]):
+        # Extract potential filenames or patterns from the query
+        words = query.lower().split()
+        file_pattern = None
+
+        # Check for file extensions in the query
+        for word in words:
+            # Look for words that might be file extensions or patterns
+            if "." in word and len(word) >= 2:
+                file_pattern = word.strip("\"'.,?!")
+                break
+
+        # If we didn't find a specific pattern but the query mentions files
+        if not file_pattern and any(ext in query.lower() for ext in [".py", ".txt", ".md", ".json", ".js", ".html", ".css", ".java", ".c", ".h", ".cpp"]):
+            for ext in [".py", ".txt", ".md", ".json", ".js", ".html", ".css", ".java", ".c", ".h", ".cpp"]:
+                if ext in query.lower():
+                    file_pattern = ext
+                    break
+
+        # If we found a pattern, create a find command
+        if file_pattern:
+            exploration_commands.append(f"find . -name \"*{file_pattern}*\" -type f -maxdepth 3")
+        # Otherwise, use a general find
+        else:
+            # If we can detect what kind of files they're looking for
+            if "python" in query.lower() or "py" in query.lower():
+                exploration_commands.append("find . -name \"*.py\" -type f -maxdepth 3")
+            elif "text" in query.lower() or "txt" in query.lower():
+                exploration_commands.append("find . -name \"*.txt\" -type f -maxdepth 3")
+            else:
+                # Generic file search
+                exploration_commands.append("find . -type f -maxdepth 2 | head -n 20")
+
+    # Count files
+    if "count" in query.lower() and any(word in query.lower() for word in ["files", "directory", "folder"]):
+        exploration_commands.append("find . -type f | wc -l")
+
+    # Disk usage
+    if any(word in query.lower() for word in ["size", "disk", "storage", "space"]):
+        exploration_commands.append("df -h")
+        exploration_commands.append("du -h -d 1")
+
+    return exploration_commands
+
+def execute_exploration_commands(commands, console):
+    """Execute exploration commands and return their output.
+
+    Args:
+        commands: List of commands to execute
+        console: Console object for output
+
+    Returns:
+        String containing combined output from all commands
+    """
+    results = []
+
+    for cmd in commands:
+        # Skip risky or stateful commands
+        if is_risky_command(cmd) or is_stateful_command(cmd):
+            console.print(f"[yellow]Skipping unsafe exploration command: {cmd}[/yellow]")
+            continue
+
+        console.print(f"[dim]Exploring: {cmd}[/dim]")
+
+        # Execute the command
+        import subprocess
+        import shlex
+
+        # Check if command contains shell operators
+        has_shell_operators = any(op in cmd for op in ['|', '>', '<', '&&', '||', ';', '$', '`', '*', '?', '{', '['])
+
+        try:
+            # Run the command and capture output
+            if has_shell_operators:
+                process = subprocess.run(
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            else:
+                process = subprocess.run(
+                    shlex.split(cmd),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            # Add command output to results
+            if process.returncode == 0 and process.stdout:
+                results.append(f"Command: {cmd}\nOutput:\n{process.stdout.strip()}\n")
+            elif process.stderr:
+                results.append(f"Command: {cmd}\nError: {process.stderr.strip()}\n")
+
+        except Exception as e:
+            console.print(f"[red]Error executing exploration command: {e}[/red]")
+
+    return "\n".join(results)
 
 # New refactored function for setting default provider
 def _set_default_provider_interactive(console: Console):
