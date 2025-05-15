@@ -88,41 +88,77 @@ def format_text_section(text):
     # Highlight commands outside of code blocks
     cmd_pattern = r'`([^`]+)`'
 
+    # Highlight the hidden files/folders line
+    hidden_pattern = r'\(In addition there are also .*? hidden files and .*? hidden folders\)'
+
     # Variables to track current position
     current_pos = 0
 
-    # Process command highlights
-    for match in re.finditer(cmd_pattern, text):
-        # Add text before the match
+    # First check for hidden files line and handle it specially
+    for match in re.finditer(hidden_pattern, text):
         if match.start() > current_pos:
-            result.append(text[current_pos:match.start()])
+            # Process the text before the hidden files line
+            pre_text = text[current_pos:match.start()]
+            temp_pos = 0
 
-        # Add the highlighted command
-        cmd = match.group(1)
-        result.append(cmd, style="command")
+            # Process commands in pre-text
+            for cmd_match in re.finditer(cmd_pattern, pre_text):
+                if cmd_match.start() > temp_pos:
+                    result.append(pre_text[temp_pos:cmd_match.start()])
+
+                # Add the highlighted command
+                cmd = cmd_match.group(1)
+                result.append(cmd, style="command")
+
+                temp_pos = cmd_match.end()
+
+            # Add any remaining pre-text
+            if temp_pos < len(pre_text):
+                result.append(pre_text[temp_pos:])
+
+        # Add the hidden files line with dim style
+        hidden_line = match.group(0)
+        result.append(hidden_line, style="dim")
 
         current_pos = match.end()
 
-    # Add any remaining text
+    # Process the rest of the text if needed
     if current_pos < len(text):
         remaining = text[current_pos:]
 
-        # Process path highlights in the remaining text
-        current_pos_remaining = 0
-        for match in re.finditer(path_pattern, remaining):
-            # Add text before the path
-            if match.start() > current_pos_remaining:
-                result.append(remaining[current_pos_remaining:match.start()])
+        # Process command highlights
+        temp_pos = 0
+        for match in re.finditer(cmd_pattern, remaining):
+            # Add text before the match
+            if match.start() > temp_pos:
+                result.append(remaining[temp_pos:match.start()])
 
-            # Add the highlighted path
-            path = match.group(0)
-            result.append(path, style="path")
+            # Add the highlighted command
+            cmd = match.group(1)
+            result.append(cmd, style="command")
 
-            current_pos_remaining = match.end()
+            temp_pos = match.end()
 
-        # Add final remaining text
-        if current_pos_remaining < len(remaining):
-            result.append(remaining[current_pos_remaining:])
+        # Add any remaining text
+        if temp_pos < len(remaining):
+            remaining_text = remaining[temp_pos:]
+
+            # Process path highlights in the remaining text
+            path_pos = 0
+            for match in re.finditer(path_pattern, remaining_text):
+                # Add text before the path
+                if match.start() > path_pos:
+                    result.append(remaining_text[path_pos:match.start()])
+
+                # Add the highlighted path
+                path = match.group(0)
+                result.append(path, style="path")
+
+                path_pos = match.end()
+
+            # Add final remaining text
+            if path_pos < len(remaining_text):
+                result.append(remaining_text[path_pos:])
 
     return result
 

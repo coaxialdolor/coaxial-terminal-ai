@@ -3,7 +3,7 @@ import os
 import sys
 import argparse
 import time # Import time module for sleep
-from terminalai.command_utils import run_shell_command, is_shell_command
+from terminalai.command_utils import is_shell_command
 from terminalai.command_extraction import is_stateful_command, is_risky_command
 from terminalai.clipboard_utils import copy_to_clipboard
 
@@ -27,14 +27,8 @@ from terminalai.formatting import print_ai_answer_with_rich, create_response_pan
 # Use the more specific get_commands_interactive (alias for extract_commands) from 021offshoot
 from terminalai.command_extraction import extract_commands as get_commands_interactive
 from terminalai.__init__ import __version__
-from terminalai.color_utils import (
-    colorize_success, colorize_error, colorize_info,
-    colorize_prompt, colorize_highlight, AI_COLOR, COMMAND_COLOR, INFO_COLOR,
-    ERROR_COLOR, SUCCESS_COLOR, PROMPT_COLOR, HIGHLIGHT_COLOR, RESET, BOLD
-)
 from terminalai.query_utils import preprocess_query
 import requests # Add this import for Ollama model fetching
-import json # Add this import for parsing Ollama response
 
 # System Prompt for AI Risk Assessment (Hardcoded)
 _RISK_ASSESSMENT_SYSTEM_PROMPT = """
@@ -223,7 +217,7 @@ Project: https://github.com/coaxialdolor/terminalai"""
     )
 
     # Ensure --read-file and --explain are mutually exclusive
-    args, unknown = parser.parse_known_args(filtered_argv)
+    args, _ = parser.parse_known_args(filtered_argv)
     if args.read_file and args.explain:
         parser.error("argument --explain: not allowed with argument --read-file")
 
@@ -235,7 +229,7 @@ Project: https://github.com/coaxialdolor/terminalai"""
 
 # --- Helper Function for AI Risk Assessment ---
 
-def _get_ai_risk_assessment(command, console, provider):
+def _get_ai_risk_assessment(command, provider):
     """Gets a risk assessment for a command using a secondary AI call."""
     if not provider:
         return "Risk assessment requires a configured AI provider."
@@ -255,7 +249,7 @@ def _get_ai_risk_assessment(command, console, provider):
         )
         risk_explanation = risk_response.strip()
         if not risk_explanation:
-             return "AI returned empty risk assessment."
+            return "AI returned empty risk assessment."
         return risk_explanation
     except Exception as e:
         return f"Risk assessment failed. Error: {e}"
@@ -290,10 +284,6 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
         return
 
     n_commands = len(commands)
-
-    color_reset = "\033[0m"
-    color_bold_green = "\033[1;32m"
-    color_bold_yellow = "\033[1;33m"
 
     # Non-interactive mode with pipe input special handling
     if not is_interactive:
@@ -354,7 +344,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
         is_risky_cmd = is_risky_command(command)
 
         if is_risky_cmd:
-            risk_explanation = _get_ai_risk_assessment(command, console, provider_instance)
+            risk_explanation = _get_ai_risk_assessment(command, provider_instance)
             console.print(Panel(
                 Text(risk_explanation, style="yellow"),
                 title="[bold red]AI Risk Assessment[/bold red]",
@@ -428,7 +418,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                     run_command(cmd_item, auto_confirm=True)
                 else:
                     # For risky commands, show assessment and ask for confirmation
-                    risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
+                    risk_explanation = _get_ai_risk_assessment(cmd_item, provider_instance)
                     console.print(Panel(
                         Text(risk_explanation, style="yellow"),
                         title="[bold red]AI Risk Assessment[/bold red]",
@@ -485,7 +475,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                 is_risky_item = is_risky_command(cmd_item)
 
                 if is_risky_item:
-                    risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
+                    risk_explanation = _get_ai_risk_assessment(cmd_item, provider_instance)
                     console.print(Panel(
                         Text(risk_explanation, style="yellow"),
                         title="[bold red]AI Risk Assessment[/bold red]",
@@ -532,7 +522,7 @@ def handle_commands(commands, auto_confirm=False, auto_mode=False):
                 is_risky_cmd_num = is_risky_command(cmd_to_run)
 
                 if is_risky_cmd_num:
-                    risk_explanation_num = _get_ai_risk_assessment(cmd_to_run, console, provider_instance)
+                    risk_explanation_num = _get_ai_risk_assessment(cmd_to_run, provider_instance)
                     console.print(Panel(
                         Text(risk_explanation_num, style="yellow"),
                         title="[bold red]AI Risk Assessment[/bold red]",
@@ -882,11 +872,11 @@ def interactive_mode(chat_mode=False, auto_mode=False):
 
                         # Create a more specific query based on the original query type
                         if any(word in processed_query.lower() for word in ["what are", "which files", "list files", "show files", "file names"]):
-                            enhanced_query = f"Based on the exploration results, provide a clear list of the file names found. Response format: First list visible files, then hidden files if any were found. Then give folder counts."
+                            enhanced_query = "Based on the exploration results, provide a clear list of the file names found. Response format: First list visible files, then hidden files if any were found. Then give folder counts."
                         elif any(word in processed_query.lower() for word in ["content", "what is in", "what's in", "read", "show content"]):
-                            enhanced_query = f"Based on the exploration results, provide the content of the file that was read. If the file is a text file, summarize its content. If no file was read, explain why."
+                            enhanced_query = "Based on the exploration results, provide the content of the file that was read. If the file is a text file, summarize its content. If no file was read, explain why."
                         else:
-                            enhanced_query = f"Based on the exploration results, provide a concise answer to: {processed_query}. Always include both file and folder counts separately in your response."
+                            enhanced_query = f"Based on the exploration results, provide a concise answer to: {processed_query}. Your response MUST use exactly this format:\n\nThere are X files\nThere are Y folders\nIn ~/Desktop\n\n(In addition there are also A hidden files and B hidden folders)\n\nThe last line about hidden files should be in a dimmer color. Do not include any notes or explanations about paths or current directories."
 
                         enhanced_response = provider.generate_response(enhanced_query, exploration_context, verbose=False)
 
@@ -968,7 +958,7 @@ def extract_exploration_commands(response, query):
     """Extract commands that should be executed to explore the filesystem and gather information.
 
     Args:
-        response: The AI's response text
+        response: The AI's response text (not used but kept for compatibility)
         query: The user's query
 
     Returns:
@@ -1018,8 +1008,10 @@ def extract_exploration_commands(response, query):
     if "subdirectories" in query.lower() or "subfolders" in query.lower():
         max_depth = 2
 
-    # For queries that clearly want ALL files/folders, use recursive counting
-    needs_recursive_count = any(word in query.lower() for word in ["all files", "all folders", "total files", "total folders", "total count", "recursively", "everything inside"])
+    # For queries that clearly want ALL files/folders, use recursive listing
+    if any(word in query.lower() for word in ["all files", "all folders", "total files", "total folders", "total count", "recursively", "everything inside"]):
+        # Allow greater depth for recursive searches
+        max_depth = 3
 
     # For location-specific queries, be more targeted
     if "desktop" in query.lower():
@@ -1204,8 +1196,6 @@ def _set_default_provider_interactive(console: Console):
 # New refactored function for setting Ollama model
 def _set_ollama_model_interactive(console: Console):
     """Interactively sets the Ollama model and saves it to config."""
-    import sys
-    import os
     DEBUG = os.environ.get("TERMINALAI_DEBUG", "0") == "1"
     if DEBUG:
         print("[DEBUG] Entered _set_ollama_model_interactive", file=sys.stderr)
