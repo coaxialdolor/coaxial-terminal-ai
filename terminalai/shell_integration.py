@@ -226,7 +226,7 @@ def install_shell_integration():
 # Prompts and errors from the Python script are sent to stderr and are visible in the terminal.
 ai() {
     export TERMINALAI_SHELL_INTEGRATION=1
-    # Bypass eval for interactive/chat/setup/help/version/config modes
+    # Bypass eval for interactive/chat/setup/help/version/config modes and all interactive flags
     if [ $# -eq 0 ] || \
        [ "$1" = "setup" ] || \
        [ "$1" = "--setup" ] || \
@@ -240,6 +240,8 @@ ai() {
        [ "$1" = "--read-file" ] || \
        [ "$1" = "--explain" ] || \
        [ "$1" = "--auto" ] || \
+       [ "$1" = "-a" ] || \
+       [ "$1" = "--clarify" ] || \
        [ "$(basename "$0")" = "ai-c" ]; then
         command ai "$@"
     else
@@ -350,12 +352,13 @@ ai() {
         $isDirectQuery = $false
     } else {
         $firstArg = $args[0].ToLower()
-        if (($firstArg -eq "setup") -or \r
-            ($firstArg -eq "--chat") -or ($firstArg -eq "-c") -or \r
-            ($firstArg -eq "--help") -or ($firstArg -eq "-h") -or \r
-            ($firstArg -eq "--version") -or \r
-            ($firstArg -eq "--set-default") -or \r
-            ($firstArg -eq "--auto") -or \r
+        if (($firstArg -eq "setup") -or \
+            ($firstArg -eq "--chat") -or ($firstArg -eq "-c") -or \
+            ($firstArg -eq "--help") -or ($firstArg -eq "-h") -or \
+            ($firstArg -eq "--version") -or \
+            ($firstArg -eq "--set-default") -or \
+            ($firstArg -eq "--auto") -or ($firstArg -eq "-a") -or \
+            ($firstArg -eq "--clarify") -or \
             ($firstArg -eq "--set-ollama")) {
             $isDirectQuery = $false
         }

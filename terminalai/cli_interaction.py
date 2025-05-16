@@ -117,7 +117,7 @@ AVAILABLE FLAGS:
                     Uses a predefined query and ignores any general query you provide.
                     Mutually exclusive with --read-file.
   -a, --auto        Enable auto mode: Allows the AI to explore your filesystem to answer questions. It will automatically execute safe commands to gather information and keep conversation context for follow-up questions.
-  --no-clarify      Suppress clarification messages about query rewording.
+  --clarify         Show clarification messages about query rewording. (Default: suppressed)
 
 -----------------------------------------------------------------------
 AI FORMATTING EXPECTATIONS:
@@ -181,9 +181,9 @@ Project: https://github.com/coaxialdolor/terminalai"""
     )
 
     parser.add_argument(
-        "--no-clarify",
+        "--clarify",
         action="store_true",
-        help="Suppress clarification messages about query rewording."
+        help="Show clarification messages about query rewording. (Default: suppressed)"
     )
 
     parser.add_argument(
