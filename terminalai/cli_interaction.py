@@ -116,7 +116,8 @@ AVAILABLE FLAGS:
                     Read and automatically explain/summarize the specified file (any plain text file) in its project context.
                     Uses a predefined query and ignores any general query you provide.
                     Mutually exclusive with --read-file.
-  --auto            Enable auto mode: Allows the AI to explore your filesystem to answer questions. It will automatically execute safe commands to gather information and keep conversation context for follow-up questions.
+  -a, --auto        Enable auto mode: Allows the AI to explore your filesystem to answer questions. It will automatically execute safe commands to gather information and keep conversation context for follow-up questions.
+  --no-clarify      Suppress clarification messages about query rewording.
 
 -----------------------------------------------------------------------
 AI FORMATTING EXPECTATIONS:
@@ -174,9 +175,15 @@ Project: https://github.com/coaxialdolor/terminalai"""
     )
 
     parser.add_argument(
-        "--auto",
+        "-a", "--auto",
         action="store_true",
         help="Enable auto mode: Allows the AI to explore your filesystem to answer questions. It will automatically execute safe commands to gather information and keep conversation context for follow-up questions."
+    )
+
+    parser.add_argument(
+        "--no-clarify",
+        action="store_true",
+        help="Suppress clarification messages about query rewording."
     )
 
     parser.add_argument(
@@ -868,6 +875,11 @@ def interactive_mode(chat_mode=False, auto_mode=False):
                 auto_mode_context += "- When the user asks about file content, attempt to read and display the relevant file\n"
                 auto_mode_context += "- NEVER include shell prompts (like 'user$' or '$') in command examples\n"
                 auto_mode_context += "- Use ```bash\ncommand\n``` format for commands without shell prompts\n"
+                auto_mode_context += "- When the user asks about files of a specific type (e.g., text files) in a directory, use 'find <dir> -maxdepth 1 -type f -name \"*.ext\"' to match only that type in the top-level directory.\n"
+                auto_mode_context += "\nCommon Examples:\n"
+                auto_mode_context += "- To count text files on the Desktop: find ~/Desktop -maxdepth 1 -type f -name '*.txt' | wc -l\n"
+                auto_mode_context += "- To list PNG files in Downloads: find ~/Downloads -maxdepth 1 -type f -name '*.png'\n"
+                auto_mode_context += "- To show the content of a text file: cat ~/Desktop/filename.txt\n"
                 auto_mode_context += "\nSafety Rules:\n"
                 auto_mode_context += "- NEVER execute commands that modify, delete, or move files without explicit user confirmation\n"
                 auto_mode_context += "- Always explain what information you're looking for before executing commands\n"
@@ -1048,6 +1060,10 @@ def extract_exploration_commands(query):
     # For location-specific queries, be more targeted
     if "desktop" in query.lower():
         locations = [os.path.expanduser("~/Desktop")]
+        # Special handling for text file queries on Desktop
+        if ("txt" in query.lower() or "text file" in query.lower() or ".txt" in query.lower()):
+            exploration_commands.append(f"find {locations[0]} -maxdepth 1 -type f -name '*.txt' | wc -l")
+            return exploration_commands
     elif "documents" in query.lower():
         locations = [os.path.expanduser("~/Documents")]
     elif "downloads" in query.lower():
