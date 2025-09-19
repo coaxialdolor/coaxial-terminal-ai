@@ -596,13 +596,25 @@ def run_command(command, auto_confirm=False):
     # Capture the output to display it properly
     import subprocess
     import shlex
+    import platform
+
+    # On Windows, many commands are shell built-ins (e.g., 'dir'). Always use the shell there.
+    system_name = platform.system()
 
     # Check if command contains shell operators (|, >, <, &&, ||, ;, etc.)
     has_shell_operators = any(op in command for op in ['|', '>', '<', '&&', '||', ';', '$', '`', '*', '?', '{', '['])
 
     try:
         # Run the command and capture its output
-        if has_shell_operators:
+        if system_name == "Windows":
+            process = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        elif has_shell_operators:
             # Use shell=True for commands with shell operators
             process = subprocess.run(
                 command,  # Pass command as string when using shell=True

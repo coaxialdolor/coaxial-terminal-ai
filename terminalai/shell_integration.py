@@ -389,22 +389,10 @@ ai() {
 
         $evalArgs = @("--eval-mode") + @($args)
 
-        # Run 'ai --eval-mode ...' and capture its stdout (which should be the command to eval)
-        # Stderr from 'ai' will go to the console directly.
-        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
-        $processInfo.FileName = $aiCommandPath # Use resolved path
-        $processInfo.Arguments = $evalArgs -join ' '
-        $processInfo.RedirectStandardOutput = $true
-        $processInfo.RedirectStandardError = $false # Let errors pass through
-        $processInfo.UseShellExecute = $false
-        $processInfo.CreateNoWindow = $true
-
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo = $processInfo
-        $process.Start() | Out-Null
-        $outputToEval = $process.StandardOutput.ReadToEnd()
-        $process.WaitForExit()
-        $aiExitCode = $process.ExitCode
+        # Run 'ai --eval-mode ...' and capture only stdout (command to eval).
+        # Use native PowerShell invocation to preserve argument quoting and avoid pipe deadlocks.
+        $outputToEval = & $aiCommandPath @evalArgs
+        $aiExitCode = $LASTEXITCODE
 
         if ($aiExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($outputToEval)) {
             try {

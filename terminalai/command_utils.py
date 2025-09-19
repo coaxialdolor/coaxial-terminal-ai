@@ -62,16 +62,40 @@ def is_shell_command(command):
 def run_shell_command(command):
     """Execute a shell command and return whether it was successful."""
     try:
-        # Use shlex to properly split the command while respecting quotes
-        args = shlex.split(command)
+        system_name = platform.system()
 
-        # Run the command and capture output (both stdout and stderr)
-        result = subprocess.run(
-            args,
-            check=False,  # Don't raise exception on non-zero exit
-            capture_output=True,
-            text=True
-        )
+        # On Windows, many commands are shell built-ins (e.g., 'dir') and redirection
+        # is processed by the shell. Use shell=True so built-ins and operators work.
+        if system_name == "Windows":
+            result = subprocess.run(
+                command,
+                shell=True,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            # On POSIX, decide based on presence of shell operators
+            has_shell_ops = bool(re.search(r"[|&;><]", command))
+            if has_shell_ops:
+                # Let the shell handle pipelines/redirection. Prefer bash if available.
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    executable=os.environ.get("SHELL", "/bin/bash"),
+                )
+            else:
+                # Execute direct binary without a shell
+                args = shlex.split(command)
+                result = subprocess.run(
+                    args,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
 
         # Print the stdout
         if result.stdout:
