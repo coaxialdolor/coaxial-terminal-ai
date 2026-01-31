@@ -34,7 +34,7 @@ def sanitize_command(cmd):
         cmd (str): Command to sanitize
         
     Returns:
-        str: Sanitized command or None if invalid
+        str: Sanitized command
     """
     if not cmd or not isinstance(cmd, str):
         return None
@@ -45,6 +45,20 @@ def sanitize_command(cmd):
     
     # Remove leading/trailing whitespace and normalize
     cmd = ' '.join(cmd.split())
+    
+    return cmd
+
+def is_dangerous_command(cmd):
+    """Check if a command is potentially dangerous.
+    
+    Args:
+        cmd (str): Command to check
+        
+    Returns:
+        bool: True if command is potentially dangerous
+    """
+    if not cmd:
+        return False
     
     # Check for dangerous patterns that could lead to command injection
     dangerous_patterns = [
@@ -70,7 +84,7 @@ def sanitize_command(cmd):
     
     for pattern in dangerous_patterns:
         if re.search(pattern, cmd, re.IGNORECASE):
-            return None  # Reject dangerous commands
+            return True  # Command is potentially dangerous
     
     # Check for command injection attempts
     injection_patterns = [
@@ -90,9 +104,9 @@ def sanitize_command(cmd):
     
     for pattern in injection_patterns:
         if re.search(pattern, cmd, re.IGNORECASE):
-            return None  # Reject potential injection attempts
+            return True  # Command is potentially dangerous
     
-    return cmd
+    return False
 
 def run_shell_command(cmd):
     """Execute a shell command with security validation and print its output.
@@ -110,8 +124,24 @@ def run_shell_command(cmd):
     # Sanitize the command
     sanitized_cmd = sanitize_command(cmd)
     if sanitized_cmd is None:
-        print("Error: Command contains potentially dangerous operations and was rejected for security reasons.")
+        print("Error: Invalid command")
         return False
+    
+    # Check if command is potentially dangerous
+    if is_dangerous_command(sanitized_cmd):
+        print(f"⚠️  WARNING: This command appears to be potentially dangerous:")
+        print(f"   {sanitized_cmd}")
+        print("This command could:")
+        print("- Delete files or directories")
+        print("- Modify system settings")
+        print("- Change user permissions")
+        print("- Affect system security")
+        print()
+        confirm = input("Are you sure you want to execute this command? [y/N]: ").lower().strip()
+        if confirm != 'y':
+            print("Command execution cancelled.")
+            return False
+        print("Proceeding with command execution...")
     
     try:
         # Show what's being executed
