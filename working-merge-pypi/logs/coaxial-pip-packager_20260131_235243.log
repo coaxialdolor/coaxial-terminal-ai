@@ -1,0 +1,17 @@
+2026-01-31 23:52:43,701 - INFO - Started logging to coaxial-pip-packager_20260131_235243.log
+2026-01-31 23:52:43,702 - INFO - Writing logs to ***TOKEN***.log
+2026-01-31 23:52:43,702 - INFO - Using specified project path: .
+2026-01-31 23:52:43,702 - INFO - Changed working directory to: /Users/petter/Desktop/Egnacodinggrejer/terminalai/working-merge-pypi
+2026-01-31 23:52:43,702 - INFO - Searching for current version...
+2026-01-31 23:52:43,703 - INFO - Found version '0.3.5' in pyproject.toml
+2026-01-31 23:52:43,703 - INFO - Using specified version: 0.3.5
+2026-01-31 23:52:43,704 - WARNING - New version is the same as the current version. Nothing to update in files.
+2026-01-31 23:52:43,704 - INFO - 
+Performing Git operations...
+2026-01-31 23:52:43,704 - INFO - 
+$ git rev-parse --is-inside-work-tree
+2026-01-31 23:52:43,723 - WARNING - No version files were updated. Checking for other git changes...
+2026-01-31 23:52:43,724 - INFO - 
+$ git status --porcelain
+2026-01-31 23:52:43,746 - INFO - 
+$ git add .
