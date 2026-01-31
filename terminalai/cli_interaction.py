@@ -2,6 +2,7 @@
 import os
 import sys
 import argparse
+from rich.text import Text
 from terminalai.command_utils import run_shell_command, is_shell_command
 from terminalai.command_extraction import is_stateful_command, is_risky_command
 from terminalai.formatting import ColoredDescriptionFormatter
@@ -640,7 +641,6 @@ You're now ready to use TerminalAI! Here's how:
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '12':
             # List available Ollama models
-            from rich.text import Text
             console.print("\n[bold cyan]Fetching available Ollama models...[/bold cyan]")
             
             models = get_available_models()
