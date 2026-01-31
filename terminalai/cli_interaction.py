@@ -356,7 +356,16 @@ def get_available_models():
     
     config = load_config()
     ollama_config = config.get("providers", {}).get("ollama", {})
+    
+    # Validate that Ollama is configured
+    if not ollama_config:
+        return "[Ollama API error] Ollama is not configured. Please run 'ai setup' and configure Ollama host."
+    
     host = ollama_config.get("host", "http://localhost:11434")
+    
+    # Validate host format
+    if not host or not isinstance(host, str):
+        return "[Ollama API error] Invalid Ollama host configuration."
     
     provider = OllamaProvider(host)
     models = provider.list_models()
