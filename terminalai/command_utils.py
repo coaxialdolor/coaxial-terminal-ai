@@ -344,11 +344,12 @@ def is_informational_command(cmd):
     
     return False
 
-def run_shell_command(cmd):
+def run_shell_command(cmd, show_command_box=True):
     """Execute a shell command with security validation and print its output.
 
     Args:
         cmd (str): Command to execute
+        show_command_box (bool): Whether to show the command in a small box format
         
     Returns:
         bool: True if the command succeeded, False otherwise.
@@ -362,6 +363,42 @@ def run_shell_command(cmd):
     if sanitized_cmd is None:
         print("Error: Invalid command")
         return False
+    
+    # Check if command is informational and should execute immediately
+    if is_informational_command(sanitized_cmd):
+        # For informational commands, execute immediately with small command box
+        if show_command_box:
+            print(f"\n[Small box showing command executed to find out]")
+            print(f"    {sanitized_cmd}")
+            print()
+        
+        try:
+            # Use shlex.split for safer command parsing
+            try:
+                cmd_args = shlex.split(sanitized_cmd)
+            except ValueError as e:
+                print(f"Error: Invalid command syntax: {e}")
+                return False
+
+            # Run the command with shell=False for better security
+            result = subprocess.run(cmd_args, check=True, capture_output=True, text=True)
+
+            # Always print the output, even if it's empty
+            if result.stdout:
+                print(result.stdout.rstrip())
+            else:
+                print("Command executed successfully. No output.")
+            
+            return True
+        except subprocess.CalledProcessError as e:
+            if e.stderr:
+                print(f"Error: {e.stderr.strip()}")
+            else:
+                print(f"Command failed with exit code {e.returncode}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return False
     
     # Check if command is potentially dangerous
     if is_dangerous_command(sanitized_cmd):
