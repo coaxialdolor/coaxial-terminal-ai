@@ -64,8 +64,8 @@ def sanitize_command(cmd):
         r'iptables\s+.*-F',  # Firewall flushing
         r'netstat\s+.*-p',  # Network process info
         r'kill\s+-9\s+1',  # Killing init process
-        r'echo\s+.*>/proc/',  # Writing to proc filesystem
-        r'echo\s+.*>/sys/',  # Writing to sys filesystem
+        r'echo\s+.*>\s*/proc/',  # Writing to proc filesystem
+        r'echo\s+.*>\s*/sys/',  # Writing to sys filesystem
     ]
     
     for pattern in dangerous_patterns:
