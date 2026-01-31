@@ -372,9 +372,6 @@ def run_shell_command(cmd, show_command_box=True):
             # Create a properly formatted command box
             box_width = 72
             title = "Command executed"
-            padding = box_width - len(title) - 4  # 4 for the borders
-            left_pad = padding // 2
-            right_pad = padding - left_pad
             
             print(f"\n{colorize_info('┌' + '─' * (box_width - 2) + '┐')}")
             print(f"{colorize_info('│')} {title:^{box_width - 4}} {colorize_info('│')}")
@@ -403,15 +400,22 @@ def run_shell_command(cmd, show_command_box=True):
             print()
         
         try:
-            # Use shlex.split for safer command parsing
-            try:
-                cmd_args = shlex.split(sanitized_cmd)
-            except ValueError as e:
-                print(f"Error: Invalid command syntax: {e}")
-                return False
+            # Check if command contains shell operators that require shell=True
+            has_shell_operators = any(op in sanitized_cmd for op in ['|', '>', '<', '&&', '||', ';', '&', '$(', '`'])
+            
+            if has_shell_operators:
+                # For commands with shell operators, use shell=True but validate carefully
+                result = subprocess.run(sanitized_cmd, shell=True, check=True, capture_output=True, text=True)
+            else:
+                # Use shlex.split for safer command parsing
+                try:
+                    cmd_args = shlex.split(sanitized_cmd)
+                except ValueError as e:
+                    print(f"Error: Invalid command syntax: {e}")
+                    return False
 
-            # Run the command with shell=False for better security
-            result = subprocess.run(cmd_args, check=True, capture_output=True, text=True)
+                # Run the command with shell=False for better security
+                result = subprocess.run(cmd_args, check=True, capture_output=True, text=True)
 
             # Always print the output, even if it's empty
             if result.stdout:
