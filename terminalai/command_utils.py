@@ -369,34 +369,12 @@ def run_shell_command(cmd, show_command_box=True):
     if is_informational_command(sanitized_cmd):
         # For informational commands, execute immediately with small command box
         if show_command_box:
-            # Create a properly formatted command box
+            # Create a properly formatted command box (original remote format)
             box_width = 72
-            title = "Command executed"
             
-            print(f"\n{colorize_info('┌' + '─' * (box_width - 2) + '┐')}")
-            print(f"{colorize_info('│')} {title:^{box_width - 4}} {colorize_info('│')}")
-            print(f"{colorize_info('├' + '─' * (box_width - 2) + '┤')}")
-            
-            # Wrap long commands if needed
-            if len(sanitized_cmd) > box_width - 4:
-                # Split long command into multiple lines
-                words = sanitized_cmd.split()
-                current_line = ""
-                for word in words:
-                    if len(current_line) + len(word) + 1 <= box_width - 4:
-                        if current_line:
-                            current_line += " " + word
-                        else:
-                            current_line = word
-                    else:
-                        print(f"{colorize_info('│')} {colorize_command(current_line):<{box_width - 4}} {colorize_info('│')}")
-                        current_line = word
-                if current_line:
-                    print(f"{colorize_info('│')} {colorize_command(current_line):<{box_width - 4}} {colorize_info('│')}")
-            else:
-                print(f"{colorize_info('│')} {colorize_command(sanitized_cmd):<{box_width - 4}} {colorize_info('│')}")
-            
-            print(f"{colorize_info('└' + '─' * (box_width - 2) + '┘')}")
+            print(f"\n{colorize_info('┌─ Command executed ──────────────────────────────────────────────────────┐')}")
+            print(f"{colorize_info('│')} {colorize_command(sanitized_cmd):<70} {colorize_info('│')}")
+            print(f"{colorize_info('└──────────────────────────────────────────────────────────────────────┘')}")
             print()
         
         try:
