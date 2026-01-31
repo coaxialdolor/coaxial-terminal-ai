@@ -1,6 +1,7 @@
 import subprocess
 import shlex
 import re
+from terminalai.color_utils import colorize_command, colorize_info, colorize_error, colorize_success
 
 def is_shell_command(text):
     """Check if text appears to be a shell command.
@@ -368,8 +369,9 @@ def run_shell_command(cmd, show_command_box=True):
     if is_informational_command(sanitized_cmd):
         # For informational commands, execute immediately with small command box
         if show_command_box:
-            print(f"\n[Small box showing command executed to find out]")
-            print(f"    {sanitized_cmd}")
+            print(f"\n{colorize_info('┌─ Command executed ──────────────────────────────────────────────────────┐')}")
+            print(f"{colorize_info('│')} {colorize_command(sanitized_cmd):<70} {colorize_info('│')}")
+            print(f"{colorize_info('└──────────────────────────────────────────────────────────────────────┘')}")
             print()
         
         try:
