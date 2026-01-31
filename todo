@@ -1,0 +1,12 @@
+1. create a nice engaging info test for github so people easily can understand what the apps capabilities.
+2. What would we need to make it possible to say ai --explain "filename" it should then read the file summarize its contents by following the files that the first file calls and the environment understand what the file does. Example, ai --explain "files/apps/exampleapp/settings.json" The ai should respond something like files/apps/exampleapp/settings.json contains data in json format which make up the settings for the app exampleapp.
+
+
+VAD GÖRA PÅ MÅNDAG!
+
+GÅ TILLBAKA TILL BRANCHEN eval-all eller automatictesting.
+(kolla den nyaste)
+
+Hitta en kommit där shell integrationen fungerar med interactive mode
+för kommandon som cd...
+

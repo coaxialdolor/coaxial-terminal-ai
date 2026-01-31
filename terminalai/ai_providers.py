@@ -274,6 +274,31 @@ class OllamaProvider(AIProvider):
         except (requests.RequestException, KeyError) as e:
             return f"[Ollama API error] {e}"
 
+    def list_models(self):
+        """List available models from the Ollama server.
+
+        Returns:
+            A list of available models with their details, or an error message.
+        """
+        url = f"{self.host}/api/tags"
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if "models" in data:
+                return data["models"]
+            else:
+                return []
+        except requests.RequestException as e:
+            return f"[Ollama API error] {e}"
+        except (KeyError, ValueError) as e:
+            return f"[Ollama API error] Invalid response format: {e}"
+
 def get_provider(provider_name=None):
     """Get the provider instance for the specified name or the default one.
 

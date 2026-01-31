@@ -92,8 +92,7 @@ def install_shell_integration():
         if 'function ai' in content or 'alias ai=' in content:
             print(colorize_command("Warning: An 'ai' function or alias already exists in your shell config. Please resolve this conflict before installing."))
             return False
-        shell_function = (
-"""
+        shell_function = """
 # >>> TERMINALAI SHELL INTEGRATION START
 # Added by TerminalAI (https://github.com/coaxialdolor/terminalai)
 # This shell function enables seamless stateful command execution via eval $(ai ...)
@@ -104,7 +103,7 @@ ai() {
         command ai "$@"
     else
         local output
-        output=$(command ai --eval-mode "$@")
+        output=$(command ai "$@")
         local ai_status=$?
         if [ $ai_status -eq 0 ] && [ -n "$output" ]; then
             eval "$output"
@@ -113,7 +112,6 @@ ai() {
 }
 # <<< TERMINALAI SHELL INTEGRATION END
 """
-        )
         # Ensure block is separated by newlines
         if not content.endswith("\n"):
             content += "\n"

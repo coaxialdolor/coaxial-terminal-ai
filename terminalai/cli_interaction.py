@@ -280,14 +280,57 @@ def interactive_mode(chat_mode=False):
             from terminalai.command_extraction import extract_commands_from_output
             commands = extract_commands_from_output(response)
 
+            # --- Casing enforcement post-processing ---
+            # Try to extract likely file/folder names from the user query
+            import re
+            # Simple heuristic: look for quoted or single-word folder/file names in the query
+            # (You can improve this with more advanced NLP if needed)
+            query_words = re.findall(r'"([^"]+)"|\'([^\']+)\'|\b([a-zA-Z0-9_\-]+)\b', query)
+            # Flatten and filter empty
+            query_names = [w for tup in query_words for w in tup if w]
+            # Remove common words
+            blacklist = set(['the', 'folder', 'file', 'directory', 'to', 'in', 'on', 'find', 'go', 'cd', 'show', 'list', 'and', 'of', 'with', 'for', 'named', 'called', 'a', 'an', 'is', 'as', 'from', 'by', 'at', 'into', 'this', 'that', 'it', 'my', 'your', 'their', 'our', 'his', 'her', 'its', 'which', 'where', 'how', 'do', 'does', 'can', 'i', 'you', 'we', 'they', 'he', 'she', 'or', 'not', 'be', 'are', 'was', 'were', 'will', 'would', 'should', 'could', 'has', 'have', 'had', 'use', 'using', 'make', 'create', 'delete', 'remove', 'move', 'copy', 'open', 'close', 'edit', 'run', 'execute', 'print', 'output', 'input', 'set', 'get', 'change', 'switch', 'start', 'stop', 'restart', 'install', 'uninstall', 'update', 'upgrade', 'downgrade', 'enable', 'disable', 'turn', 'off', 'on', 'up', 'down', 'left', 'right', 'back', 'forward', 'previous', 'next', 'first', 'last', 'all', 'each', 'every', 'any', 'some', 'none', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'])
+            likely_names = [n for n in query_names if n.lower() not in blacklist and len(n) > 2]
+            # For each command, replace any instance of a likely name with the exact casing from the query
+            if likely_names:
+                def enforce_casing(cmd):
+                    for name in likely_names:
+                        # Replace all case-insensitive matches with the exact casing
+                        cmd = re.sub(r'(?i)'+re.escape(name), name, cmd)
+                    return cmd
+                commands = [enforce_casing(cmd) for cmd in commands]
+            # --- End casing enforcement ---
+
             # Always prompt for execution if there are commands
             if commands:
-                handle_commands(commands, auto_confirm=False)
+                # Custom inline handler for chat mode: print only the command and exit if confirmed
+                command = commands[0]
+                is_stateful = is_stateful_command(command)
+                is_risky = is_risky_command(command)
+                confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
+                default_choice = "n" if is_risky else "y"
+                style = "yellow" if is_risky else "green"
+                console.print(Text(confirm_msg, style=style), end="")
+                choice = input().lower()
+                if not choice:
+                    choice = default_choice
+                if choice == "y":
+                    # Print ONLY the command to stdout and exit
+                    print(command)
+                    sys.exit(0)
+                else:
+                    console.print("[Cancelled]")
+                # Always exit after showing a response and handling commands, unless in chat_mode
+                if not chat_mode:
+                    sys.exit(0)
             # Always exit after showing a response and handling commands, unless in chat_mode
             if not chat_mode:
                 sys.exit(0)
 
-        except (ValueError, TypeError, OSError, KeyboardInterrupt, SystemExit) as e:
+        except SystemExit:
+            # Allow clean exit without traceback
+            raise
+        except (ValueError, TypeError, OSError, KeyboardInterrupt) as e:
             # Catch common user/AI errors, but not all exceptions
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
             import traceback
@@ -300,6 +343,27 @@ def interactive_mode(chat_mode=False):
         # If not in chat_mode, exit after one question/command
         if not chat_mode:
             sys.exit(0)
+
+def get_available_models():
+    """Get available models from the configured Ollama server.
+    
+    Returns:
+        List of model names or error message.
+    """
+    from terminalai.ai_providers import OllamaProvider
+    from terminalai.config import load_config
+    
+    config = load_config()
+    ollama_config = config.get("providers", {}).get("ollama", {})
+    host = ollama_config.get("host", "http://localhost:11434")
+    
+    provider = OllamaProvider(host)
+    models = provider.list_models()
+    
+    if isinstance(models, str) and models.startswith("[Ollama API error]"):
+        return models
+    
+    return models
 
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
@@ -336,7 +400,8 @@ def setup_wizard():
             "9. Check ai shell integration",
             "10. View quick setup guide",
             "11. About TerminalAI",
-            "12. Exit"
+            "12. List available Ollama models",
+            "13. Exit"
         ]
         menu_info = {
             '1': ("Set which AI provider (OpenRouter, Gemini, Mistral, Ollama) "
@@ -351,7 +416,8 @@ def setup_wizard():
             '9': "Check if the 'ai' shell integration is installed and highlight it in your shell config.",
             '10': "Display the quick setup guide to help you get started with TerminalAI.",
             '11': "View information about TerminalAI, including version and links.",
-            '12': "Exit the setup menu."
+            '12': "List available Ollama models and select default model.",
+            '13': "Exit the setup menu."
         }
         for opt in menu_options:
             num, desc = opt.split('.', 1)
@@ -573,6 +639,63 @@ You're now ready to use TerminalAI! Here's how:
             )
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '12':
+            # List available Ollama models
+            from rich.text import Text
+            console.print("\n[bold cyan]Fetching available Ollama models...[/bold cyan]")
+            
+            models = get_available_models()
+            
+            if isinstance(models, str) and models.startswith("[Ollama API error]"):
+                console.print(f"[red]{models}[/red]")
+                console.print("[yellow]Make sure Ollama is running and the host is correct.[/yellow]")
+            elif not models:
+                console.print("[yellow]No models found. Make sure Ollama is running and has models installed.[/yellow]")
+            else:
+                console.print(f"\n[bold green]Found {len(models)} available model(s):[/bold green]\n")
+                
+                # Display models with details
+                for i, model in enumerate(models, 1):
+                    model_name = model.get('name', 'Unknown')
+                    model_size = model.get('size', 0)
+                    model_modified = model.get('modified_at', 'Unknown')
+                    
+                    # Format size in human-readable format
+                    if model_size > 0:
+                        if model_size >= 1024**3:
+                            size_str = f"{model_size / (1024**3):.1f} GB"
+                        elif model_size >= 1024**2:
+                            size_str = f"{model_size / (1024**2):.1f} MB"
+                        elif model_size >= 1024:
+                            size_str = f"{model_size / 1024:.1f} KB"
+                        else:
+                            size_str = f"{model_size} B"
+                    else:
+                        size_str = "Unknown size"
+                    
+                    console.print(f"[bold yellow]{i}[/bold yellow]. [cyan]{model_name}[/cyan]")
+                    console.print(f"   Size: {size_str}")
+                    console.print(f"   Modified: {model_modified}")
+                    console.print("")
+                
+                # Ask if user wants to select a model
+                console.print("[bold green]Current default model:[/bold green] " + config.get("providers", {}).get("ollama", {}).get("model", "llama3"))
+                console.print(Text("Select a model as default? [y/N]: ", style="bold green"), end="")
+                choice = input().lower()
+                
+                if choice == "y":
+                    console.print(Text("Enter model number (1-{}): ".format(len(models)), style="bold green"), end="")
+                    model_choice = input().strip()
+                    
+                    if model_choice.isdigit() and 1 <= int(model_choice) <= len(models):
+                        selected_model = models[int(model_choice) - 1]['name']
+                        config['providers']['ollama']['model'] = selected_model
+                        save_config(config)
+                        console.print(f"[bold green]Default Ollama model set to: {selected_model}[/bold green]")
+                    else:
+                        console.print("[red]Invalid selection.[/red]")
+            
+            console.input("[dim]Press Enter to continue...[/dim]")
+        elif choice == '13':
             console.print(
                 "[bold cyan]Exiting setup.[/bold cyan]"
             )
