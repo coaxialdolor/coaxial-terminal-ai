@@ -1,0 +1,280 @@
+2026-02-01 06:44:45,957 - INFO - Started logging to coaxial-pip-packager_20260201_064445.log
+2026-02-01 06:44:45,957 - INFO - Writing logs to ***TOKEN***.log
+2026-02-01 06:44:45,957 - INFO - Using specified project path: .
+2026-02-01 06:44:45,958 - INFO - Changed working directory to: /Users/petter/Desktop/Egnacodinggrejer/terminalai/working-merge-pypi
+2026-02-01 06:44:45,958 - INFO - Searching for current version...
+2026-02-01 06:44:45,959 - INFO - Found version '0.3.5' in pyproject.toml
+2026-02-01 06:44:45,959 - INFO - Using specified version: 0.4.0
+2026-02-01 06:44:45,959 - INFO - 
+Updating version from '0.3.5' to '0.4.0' in project files...
+2026-02-01 06:44:45,959 - INFO - Prioritizing update in source file: pyproject.toml
+2026-02-01 06:44:45,961 - WARNING - Updating pyproject.toml
+2026-02-01 06:44:45,963 - WARNING - Updating terminalai/__init__.py
+2026-02-01 06:44:45,963 - INFO - Updated version in 2 file(s):
+2026-02-01 06:44:45,963 - INFO -   - pyproject.toml
+2026-02-01 06:44:45,963 - INFO -   - terminalai/__init__.py
+2026-02-01 06:44:45,964 - INFO - Saved run history to /Users/petter/.coaxial-pip-packager/history/last_run.json
+2026-02-01 06:44:45,964 - INFO - 
+Performing Git operations...
+2026-02-01 06:44:45,964 - INFO - 
+$ git rev-parse --is-inside-work-tree
+2026-02-01 06:44:45,985 - INFO - 
+$ git add pyproject.toml terminalai/__init__.py
+2026-02-01 06:44:46,011 - INFO - Staged changes.
+2026-02-01 06:44:46,011 - INFO - 
+$ git commit -m Bump version: 0.3.5 -> 0.4.0
+2026-02-01 06:44:46,052 - INFO - Created commit: 'Bump version: 0.3.5 -> 0.4.0'
+2026-02-01 06:44:46,052 - INFO - 
+$ git rev-parse --abbrev-ref HEAD
+2026-02-01 06:44:46,071 - INFO - Current branch: main
+2026-02-01 06:44:46,071 - INFO - 
+$ git remote get-url origin
+2026-02-01 06:44:46,091 - INFO - Original remote URL: https://github.com/coaxialdolor/coaxial-terminal-ai.git
+2026-02-01 06:44:46,091 - WARNING - Temporarily setting remote URL with token...
+2026-02-01 06:44:46,091 - INFO - 
+$ git remote set-url origin https://***:***@github.com/...
+2026-02-01 06:44:46,117 - INFO - Pushing to origin/main...
+2026-02-01 06:44:46,117 - INFO - 
+$ git push origin main
+2026-02-01 06:44:47,231 - WARNING - stderr:
+2026-02-01 06:44:47,231 - INFO - Push successful!
+2026-02-01 06:44:47,231 - WARNING - Resetting remote URL...
+2026-02-01 06:44:47,231 - INFO - 
+$ git remote set-url origin https://github.com/coaxialdolor/coaxial-terminal-ai.git
+2026-02-01 06:44:47,254 - INFO - 
+Building package (sdist and wheel)...
+2026-02-01 06:44:47,255 - WARNING - Cleaning up old build/dist directories...
+2026-02-01 06:44:47,257 - INFO - 
+$ /Users/petter/.pyenv/versions/3.12.5/bin/python3 -m build --sdist --wheel .
+2026-02-01 06:44:47,359 - INFO - * Creating isolated environment: venv+pip...
+2026-02-01 06:44:47,366 - INFO - * Installing packages in isolated environment:
+2026-02-01 06:44:48,494 - INFO - - setuptools>=42
+2026-02-01 06:44:48,494 - INFO - - wheel
+2026-02-01 06:44:48,494 - INFO - * Getting build dependencies for sdist...
+2026-02-01 06:44:48,888 - INFO - running egg_info
+2026-02-01 06:44:48,889 - INFO - creating coaxial_terminal_ai.egg-info
+2026-02-01 06:44:48,890 - INFO - writing coaxial_terminal_ai.egg-info/PKG-INFO
+2026-02-01 06:44:48,890 - INFO - writing dependency_links to coaxial_terminal_ai.egg-info/dependency_links.txt
+2026-02-01 06:44:48,890 - INFO - writing entry points to coaxial_terminal_ai.egg-info/entry_points.txt
+2026-02-01 06:44:48,891 - INFO - writing requirements to coaxial_terminal_ai.egg-info/requires.txt
+2026-02-01 06:44:48,891 - INFO - writing top-level names to coaxial_terminal_ai.egg-info/top_level.txt
+2026-02-01 06:44:48,891 - INFO - writing manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:48,894 - INFO - reading manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:48,894 - INFO - adding license file 'LICENSE'
+2026-02-01 06:44:48,895 - INFO - writing manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:48,916 - INFO - * Building sdist...
+2026-02-01 06:44:49,066 - INFO - running sdist
+2026-02-01 06:44:49,066 - INFO - running egg_info
+2026-02-01 06:44:49,068 - INFO - writing coaxial_terminal_ai.egg-info/PKG-INFO
+2026-02-01 06:44:49,069 - INFO - writing dependency_links to coaxial_terminal_ai.egg-info/dependency_links.txt
+2026-02-01 06:44:49,069 - INFO - writing entry points to coaxial_terminal_ai.egg-info/entry_points.txt
+2026-02-01 06:44:49,069 - INFO - writing requirements to coaxial_terminal_ai.egg-info/requires.txt
+2026-02-01 06:44:49,069 - INFO - writing top-level names to coaxial_terminal_ai.egg-info/top_level.txt
+2026-02-01 06:44:49,073 - INFO - reading manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:49,073 - INFO - adding license file 'LICENSE'
+2026-02-01 06:44:49,074 - INFO - writing manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:49,074 - INFO - running check
+2026-02-01 06:44:49,077 - INFO - creating coaxial_terminal_ai-0.4.0
+2026-02-01 06:44:49,077 - INFO - creating coaxial_terminal_ai-0.4.0/coaxial_terminal_ai.egg-info
+2026-02-01 06:44:49,077 - INFO - creating coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,077 - INFO - creating coaxial_terminal_ai-0.4.0/tests
+2026-02-01 06:44:49,077 - INFO - copying files to coaxial_terminal_ai-0.4.0...
+2026-02-01 06:44:49,078 - INFO - copying LICENSE -> coaxial_terminal_ai-0.4.0
+2026-02-01 06:44:49,078 - INFO - copying README.md -> coaxial_terminal_ai-0.4.0
+2026-02-01 06:44:49,078 - INFO - copying pyproject.toml -> coaxial_terminal_ai-0.4.0
+2026-02-01 06:44:49,079 - INFO - copying setup.cfg -> coaxial_terminal_ai-0.4.0
+2026-02-01 06:44:49,079 - INFO - copying setup.py -> coaxial_terminal_ai-0.4.0
+2026-02-01 06:44:49,079 - INFO - copying coaxial_terminal_ai.egg-info/PKG-INFO -> coaxial_terminal_ai-0.4.0/coaxial_terminal_ai.egg-info
+2026-02-01 06:44:49,080 - INFO - copying coaxial_terminal_ai.egg-info/SOURCES.txt -> coaxial_terminal_ai-0.4.0/coaxial_terminal_ai.egg-info
+2026-02-01 06:44:49,080 - INFO - copying coaxial_terminal_ai.egg-info/dependency_links.txt -> coaxial_terminal_ai-0.4.0/coaxial_terminal_ai.egg-info
+2026-02-01 06:44:49,080 - INFO - copying coaxial_terminal_ai.egg-info/entry_points.txt -> coaxial_terminal_ai-0.4.0/coaxial_terminal_ai.egg-info
+2026-02-01 06:44:49,080 - INFO - copying coaxial_terminal_ai.egg-info/requires.txt -> coaxial_terminal_ai-0.4.0/coaxial_terminal_ai.egg-info
+2026-02-01 06:44:49,081 - INFO - copying coaxial_terminal_ai.egg-info/top_level.txt -> coaxial_terminal_ai-0.4.0/coaxial_terminal_ai.egg-info
+2026-02-01 06:44:49,081 - INFO - copying terminalai/__init__.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,081 - INFO - copying terminalai/ai_providers.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,081 - INFO - copying terminalai/ai_test_command_extraction.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,081 - INFO - copying terminalai/cli_interaction.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,082 - INFO - copying terminalai/clipboard_utils.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,082 - INFO - copying terminalai/color_utils.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,082 - INFO - copying terminalai/command_extraction.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,082 - INFO - copying terminalai/command_utils.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,083 - INFO - copying terminalai/config.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,083 - INFO - copying terminalai/file_reader.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,083 - INFO - copying terminalai/formatting.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,083 - INFO - copying terminalai/shell_integration.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,084 - INFO - copying terminalai/terminalai_cli.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,084 - INFO - copying terminalai/test_command_extraction.py -> coaxial_terminal_ai-0.4.0/terminalai
+2026-02-01 06:44:49,084 - INFO - copying tests/test_command_extraction.py -> coaxial_terminal_ai-0.4.0/tests
+2026-02-01 06:44:49,084 - INFO - copying coaxial_terminal_ai.egg-info/SOURCES.txt -> coaxial_terminal_ai-0.4.0/coaxial_terminal_ai.egg-info
+2026-02-01 06:44:49,086 - INFO - Writing coaxial_terminal_ai-0.4.0/setup.cfg
+2026-02-01 06:44:49,086 - INFO - Creating tar archive
+2026-02-01 06:44:49,112 - INFO - removing 'coaxial_terminal_ai-0.4.0' (and everything under it)
+2026-02-01 06:44:49,189 - INFO - * Creating isolated environment: venv+pip...
+2026-02-01 06:44:49,191 - INFO - * Installing packages in isolated environment:
+2026-02-01 06:44:50,113 - INFO - - setuptools>=42
+2026-02-01 06:44:50,113 - INFO - - wheel
+2026-02-01 06:44:50,113 - INFO - * Getting build dependencies for wheel...
+2026-02-01 06:44:50,543 - INFO - running egg_info
+2026-02-01 06:44:50,544 - INFO - writing coaxial_terminal_ai.egg-info/PKG-INFO
+2026-02-01 06:44:50,545 - INFO - writing dependency_links to coaxial_terminal_ai.egg-info/dependency_links.txt
+2026-02-01 06:44:50,545 - INFO - writing entry points to coaxial_terminal_ai.egg-info/entry_points.txt
+2026-02-01 06:44:50,545 - INFO - writing requirements to coaxial_terminal_ai.egg-info/requires.txt
+2026-02-01 06:44:50,545 - INFO - writing top-level names to coaxial_terminal_ai.egg-info/top_level.txt
+2026-02-01 06:44:50,549 - INFO - reading manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:50,550 - INFO - adding license file 'LICENSE'
+2026-02-01 06:44:50,550 - INFO - writing manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:50,568 - INFO - * Building wheel...
+2026-02-01 06:44:50,717 - INFO - running bdist_wheel
+2026-02-01 06:44:50,721 - INFO - running build
+2026-02-01 06:44:50,721 - INFO - running build_py
+2026-02-01 06:44:50,723 - INFO - creating build/lib/terminalai
+2026-02-01 06:44:50,723 - INFO - copying terminalai/config.py -> build/lib/terminalai
+2026-02-01 06:44:50,723 - INFO - copying terminalai/test_command_extraction.py -> build/lib/terminalai
+2026-02-01 06:44:50,724 - INFO - copying terminalai/file_reader.py -> build/lib/terminalai
+2026-02-01 06:44:50,724 - INFO - copying terminalai/__init__.py -> build/lib/terminalai
+2026-02-01 06:44:50,724 - INFO - copying terminalai/command_utils.py -> build/lib/terminalai
+2026-02-01 06:44:50,724 - INFO - copying terminalai/formatting.py -> build/lib/terminalai
+2026-02-01 06:44:50,725 - INFO - copying terminalai/clipboard_utils.py -> build/lib/terminalai
+2026-02-01 06:44:50,725 - INFO - copying terminalai/cli_interaction.py -> build/lib/terminalai
+2026-02-01 06:44:50,725 - INFO - copying terminalai/ai_test_command_extraction.py -> build/lib/terminalai
+2026-02-01 06:44:50,725 - INFO - copying terminalai/color_utils.py -> build/lib/terminalai
+2026-02-01 06:44:50,725 - INFO - copying terminalai/ai_providers.py -> build/lib/terminalai
+2026-02-01 06:44:50,726 - INFO - copying terminalai/command_extraction.py -> build/lib/terminalai
+2026-02-01 06:44:50,726 - INFO - copying terminalai/shell_integration.py -> build/lib/terminalai
+2026-02-01 06:44:50,726 - INFO - copying terminalai/terminalai_cli.py -> build/lib/terminalai
+2026-02-01 06:44:50,726 - INFO - running egg_info
+2026-02-01 06:44:50,727 - INFO - writing coaxial_terminal_ai.egg-info/PKG-INFO
+2026-02-01 06:44:50,729 - INFO - writing dependency_links to coaxial_terminal_ai.egg-info/dependency_links.txt
+2026-02-01 06:44:50,729 - INFO - writing entry points to coaxial_terminal_ai.egg-info/entry_points.txt
+2026-02-01 06:44:50,729 - INFO - writing requirements to coaxial_terminal_ai.egg-info/requires.txt
+2026-02-01 06:44:50,729 - INFO - writing top-level names to coaxial_terminal_ai.egg-info/top_level.txt
+2026-02-01 06:44:50,731 - INFO - reading manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:50,739 - INFO - adding license file 'LICENSE'
+2026-02-01 06:44:50,739 - INFO - writing manifest file 'coaxial_terminal_ai.egg-info/SOURCES.txt'
+2026-02-01 06:44:50,746 - INFO - installing to build/bdist.macosx-26.2-arm64/wheel
+2026-02-01 06:44:50,747 - INFO - running install
+2026-02-01 06:44:50,759 - INFO - running install_lib
+2026-02-01 06:44:50,761 - INFO - creating build/bdist.macosx-26.2-arm64/wheel
+2026-02-01 06:44:50,762 - INFO - creating build/bdist.macosx-26.2-arm64/wheel/terminalai
+2026-02-01 06:44:50,763 - INFO - copying build/lib/terminalai/config.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,763 - INFO - copying build/lib/terminalai/test_command_extraction.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,763 - INFO - copying build/lib/terminalai/file_reader.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,764 - INFO - copying build/lib/terminalai/__init__.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,765 - INFO - copying build/lib/terminalai/command_utils.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,765 - INFO - copying build/lib/terminalai/formatting.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,766 - INFO - copying build/lib/terminalai/clipboard_utils.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,766 - INFO - copying build/lib/terminalai/cli_interaction.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,766 - INFO - copying build/lib/terminalai/ai_test_command_extraction.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,767 - INFO - copying build/lib/terminalai/color_utils.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,767 - INFO - copying build/lib/terminalai/ai_providers.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,767 - INFO - copying build/lib/terminalai/command_extraction.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,768 - INFO - copying build/lib/terminalai/shell_integration.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,768 - INFO - copying build/lib/terminalai/terminalai_cli.py -> build/bdist.macosx-26.2-arm64/wheel/./terminalai
+2026-02-01 06:44:50,768 - INFO - running install_egg_info
+2026-02-01 06:44:50,769 - INFO - Copying coaxial_terminal_ai.egg-info to build/bdist.macosx-26.2-arm64/wheel/./coaxial_terminal_ai-0.4.0-py3.12.egg-info
+2026-02-01 06:44:50,771 - INFO - running install_scripts
+2026-02-01 06:44:50,773 - INFO - creating build/bdist.macosx-26.2-arm64/wheel/coaxial_terminal_ai-0.4.0.dist-info/WHEEL
+2026-02-01 06:44:50,773 - INFO - creating '/Users/petter/Desktop/Egnacodinggrejer/terminalai/working-merge-pypi/dist/.tmp-n9561c9m/coaxial_terminal_ai-0.4.0-py3-none-any.whl' and adding 'build/bdist.macosx-26.2-arm64/wheel' to it
+2026-02-01 06:44:50,775 - INFO - adding 'coaxial_terminal_ai-0.4.0.dist-info/licenses/LICENSE'
+2026-02-01 06:44:50,776 - INFO - adding 'terminalai/__init__.py'
+2026-02-01 06:44:50,777 - INFO - adding 'terminalai/ai_providers.py'
+2026-02-01 06:44:50,779 - INFO - adding 'terminalai/ai_test_command_extraction.py'
+2026-02-01 06:44:50,781 - INFO - adding 'terminalai/cli_interaction.py'
+2026-02-01 06:44:50,782 - INFO - adding 'terminalai/clipboard_utils.py'
+2026-02-01 06:44:50,782 - INFO - adding 'terminalai/color_utils.py'
+2026-02-01 06:44:50,783 - INFO - adding 'terminalai/command_extraction.py'
+2026-02-01 06:44:50,783 - INFO - adding 'terminalai/command_utils.py'
+2026-02-01 06:44:50,783 - INFO - adding 'terminalai/config.py'
+2026-02-01 06:44:50,784 - INFO - adding 'terminalai/file_reader.py'
+2026-02-01 06:44:50,784 - INFO - adding 'terminalai/formatting.py'
+2026-02-01 06:44:50,785 - INFO - adding 'terminalai/shell_integration.py'
+2026-02-01 06:44:50,785 - INFO - adding 'terminalai/terminalai_cli.py'
+2026-02-01 06:44:50,786 - INFO - adding 'terminalai/test_command_extraction.py'
+2026-02-01 06:44:50,786 - INFO - adding 'coaxial_terminal_ai-0.4.0.dist-info/METADATA'
+2026-02-01 06:44:50,786 - INFO - adding 'coaxial_terminal_ai-0.4.0.dist-info/WHEEL'
+2026-02-01 06:44:50,786 - INFO - adding 'coaxial_terminal_ai-0.4.0.dist-info/entry_points.txt'
+2026-02-01 06:44:50,787 - INFO - adding 'coaxial_terminal_ai-0.4.0.dist-info/top_level.txt'
+2026-02-01 06:44:50,787 - INFO - adding 'coaxial_terminal_ai-0.4.0.dist-info/RECORD'
+2026-02-01 06:44:50,787 - INFO - removing build/bdist.macosx-26.2-arm64/wheel
+2026-02-01 06:44:50,860 - INFO - Successfully built coaxial_terminal_ai-0.4.0.tar.gz and coaxial_terminal_ai-0.4.0-py3-none-any.whl
+2026-02-01 06:44:50,895 - INFO - Package built successfully in the 'dist/' directory.
+2026-02-01 06:44:50,896 - INFO - 
+Publishing package to PyPI...
+2026-02-01 06:44:50,896 - INFO - 
+$ /Users/petter/.pyenv/versions/3.12.5/bin/python3 -m twine upload --verbose ./dist/coaxial_terminal_ai-0.4.0-py3-none-any.whl ./dist/coaxial_terminal_ai-0.4.0.tar.gz
+2026-02-01 06:44:50,896 - WARNING - Note: Verbose upload logs may contain sensitive information. Logs are being sanitized but review them before sharing.
+2026-02-01 06:44:51,230 - INFO - Uploading distributions to https://upload.pypi.org/legacy/
+2026-02-01 06:44:51,232 - INFO - [34mINFO    [0m ./dist/coaxial_terminal_ai-0.4.0-py3-none-any.whl (51.3 KB)
+2026-02-01 06:44:51,236 - INFO - [34mINFO    [0m ./dist/coaxial_terminal_ai-0.4.0.tar.gz (46.9 KB)
+2026-02-01 06:44:51,237 - INFO - [34mINFO    [0m username set by command options
+2026-02-01 06:44:51,237 - INFO - [34mINFO    [0m password set by command options
+2026-02-01 06:44:51,238 - INFO - [34mINFO    [0m username: __token__
+2026-02-01 06:44:51,238 - INFO - [34mINFO    [0m password: <hidden>
+2026-02-01 06:44:51,238 - INFO - Uploading coaxial_terminal_ai-0.4.0-py3-none-any.whl
+2026-02-01 06:44:51,240 - INFO - [?25l
+2026-02-01 06:44:51,345 - INFO - [2K[35m  0%[0m [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/62.7 kB[0m • [36m--:--[0m • [31m?[0m
+2026-02-01 06:44:51,449 - INFO - [2K[35m  0%[0m [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/62.7 kB[0m • [36m--:--[0m • [31m?[0m
+2026-02-01 06:44:51,555 - INFO - [2K[35m  0%[0m [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/62.7 kB[0m • [36m--:--[0m • [31m?[0m
+2026-02-01 06:44:51,658 - INFO - [2K[35m  0%[0m [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/62.7 kB[0m • [36m--:--[0m • [31m?[0m
+2026-02-01 06:44:51,764 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:51,866 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:51,972 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,074 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,180 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,283 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,386 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,492 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,598 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,704 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,808 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:52,910 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:53,020 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:53,124 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:53,231 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:53,252 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:53,252 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m62.7/62.7 kB[0m • [33m00:00[0m • [31m276.5 MB/s[0m
+2026-02-01 06:44:53,253 - INFO - [?25h[34mINFO    [0m Response from https://upload.pypi.org/legacy/:
+2026-02-01 06:44:53,253 - INFO - 200 OK
+2026-02-01 06:44:53,253 - INFO - [34mINFO    [0m <html>
+2026-02-01 06:44:53,253 - INFO - <head>
+2026-02-01 06:44:53,254 - INFO - <title>200 OK</title>
+2026-02-01 06:44:53,254 - INFO - </head>
+2026-02-01 06:44:53,254 - INFO - <body>
+2026-02-01 06:44:53,254 - INFO - <h1>200 OK</h1>
+2026-02-01 06:44:53,254 - INFO - <br/><br/>
+2026-02-01 06:44:53,254 - INFO - </body>
+2026-02-01 06:44:53,254 - INFO - </html>
+2026-02-01 06:44:53,254 - INFO - Uploading coaxial_terminal_ai-0.4.0.tar.gz
+2026-02-01 06:44:53,255 - INFO - [?25l
+2026-02-01 06:44:53,357 - INFO - [2K[35m  0%[0m [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/58.2 kB[0m • [36m--:--[0m • [31m?[0m
+2026-02-01 06:44:53,465 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:53,571 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:53,678 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:53,783 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:53,889 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:53,992 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:54,096 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:54,199 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:54,306 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:54,412 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:54,505 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:54,505 - INFO - [2K[35m100%[0m [38;2;114;156;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m58.2/58.2 kB[0m • [33m00:00[0m • [31m165.6 MB/s[0m
+2026-02-01 06:44:54,505 - INFO - [?25h[34mINFO    [0m Response from https://upload.pypi.org/legacy/:
+2026-02-01 06:44:54,506 - INFO - 200 OK
+2026-02-01 06:44:54,506 - INFO - [34mINFO    [0m <html>
+2026-02-01 06:44:54,506 - INFO - <head>
+2026-02-01 06:44:54,506 - INFO - <title>200 OK</title>
+2026-02-01 06:44:54,506 - INFO - </head>
+2026-02-01 06:44:54,506 - INFO - <body>
+2026-02-01 06:44:54,506 - INFO - <h1>200 OK</h1>
+2026-02-01 06:44:54,506 - INFO - <br/><br/>
+2026-02-01 06:44:54,506 - INFO - </body>
+2026-02-01 06:44:54,506 - INFO - </html>
+2026-02-01 06:44:54,506 - INFO - [32mView at:[0m
+2026-02-01 06:44:54,506 - INFO - https://pypi.org/project/coaxial-terminal-ai/0.4.0/
+2026-02-01 06:44:54,632 - INFO - Package published successfully!
+2026-02-01 06:44:54,632 - INFO - 
+Process completed successfully!
+2026-02-01 06:44:54,632 - INFO - Package version 0.4.0 built and published.
+2026-02-01 06:44:54,632 - INFO - Script execution completed
+2026-02-01 06:44:54,632 - INFO - Log file has been written to logs/***TOKEN***.log
