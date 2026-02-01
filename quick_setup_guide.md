@@ -29,15 +29,31 @@ ai setup
   * Ollama is ideal if you prefer locally hosted AI
   * You can also use OpenRouter or Gemini
 * Enter the API key for your selected provider(s)
+* After setting the API key, you'll see a list of available models for that provider
+* Select a model to use as the default for that provider
 * Press Enter to return to the setup menu
 
-## 3. Set Default Provider
+## 3. Model Selection
+
+TerminalAI now supports model selection for all providers:
+
+* **Mistral**: Choose from models like mistral-medium-2505, mistral-small-2506, codestral-2508, etc.
+* **Gemini**: Choose from available Gemini models
+* **OpenRouter**: Choose from available OpenRouter models
+* **Ollama**: Choose from locally installed models like llama3, mistral, codellama, etc.
+
+To change models later:
+* Run `ai setup` and select `5` to "Setup API Keys"
+* Select your provider and you'll see available models
+* Choose a different model if desired
+
+## 5. Set Default Provider
 
 * At the setup menu, select `1` to "Setup default provider"
 * Choose a provider that you've saved an API key for
 * Press Enter to return to the setup menu
 
-## 4. Understanding Stateful Command Execution
+## 6. Understanding Stateful Command Execution
 
 There are now two ways to handle commands that change your shell's state (like `cd` or `export`):
 
@@ -73,7 +89,7 @@ When TerminalAI suggests a stateful command, it will:
 - If you choose 'Y', the command is copied to your clipboard.
 - You can then paste and run the command directly in your terminal.
 
-## 5. Start Using TerminalAI
+## 7. Start Using TerminalAI
 
 You're now ready to use TerminalAI! Here's how:
 

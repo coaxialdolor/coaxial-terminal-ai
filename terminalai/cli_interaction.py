@@ -2,6 +2,9 @@
 import os
 import sys
 import argparse
+import requests
+import re
+import traceback
 from rich.text import Text
 from terminalai.command_utils import run_shell_command, is_shell_command
 from terminalai.command_extraction import is_stateful_command, is_risky_command
@@ -11,15 +14,22 @@ from terminalai.clipboard_utils import copy_to_clipboard
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="TerminalAI: Your command-line AI assistant.\n"
-                    "Ask questions or request commands, and AI will suggest appropriate actions.\n"
-                    "- With the latest shell integration, stateful commands (like cd, export, etc.) are now executable in all modes if the integration is installed.\n"
-                    "- Each command should be in its own code block, with no comments or explanations inside. Explanations must be outside code blocks.\n"
-                    "- If the AI puts multiple commands in a single code block, TerminalAI will still extract and show each as a separate command.\n"
-                    "\nExamples of correct formatting:\n"
-                    "```bash\nls\n```\n```bash\nls -l\n```\nExplanation: The first command lists files, the second lists them in long format.\n"
-                    "Incorrect:\n"
-                    "```bash\n# List files\nls\n# List files in long format\nls -l\n```\n(Never put comments or multiple commands in a single code block.)\n",
+        description=(
+            "TerminalAI: Your command-line AI assistant.\n"
+            "Ask questions or request commands, and AI will suggest appropriate actions.\n"
+            "- With the latest shell integration, stateful commands (like cd, export, etc.) "
+            "are now executable in all modes if the integration is installed.\n"
+            "- Each command should be in its own code block, with no comments or explanations "
+            "inside. Explanations must be outside code blocks.\n"
+            "- If the AI puts multiple commands in a single code block, TerminalAI will still "
+            "extract and show each as a separate command.\n"
+            "\nExamples of correct formatting:\n"
+            "```bash\nls\n```\n```bash\nls -l\n```\n"
+            "Explanation: The first command lists files, the second lists them in long format.\n"
+            "Incorrect:\n"
+            "```bash\n# List files\nls\n# List files in long format\nls -l\n```\n"
+            "(Never put comments or multiple commands in a single code block.)\n"
+        ),
         epilog="For more details, visit https://github.com/coaxialdolor/terminalai",
         formatter_class=ColoredDescriptionFormatter
     )
@@ -70,6 +80,30 @@ def parse_args():
         "--chat",
         action="store_true",
         help="Enter persistent AI chat mode (does not exit after one response)"
+    )
+
+    parser.add_argument(
+        "--set-default",
+        action="store_true",
+        help="Interactively set the default AI provider"
+    )
+
+    parser.add_argument(
+        "--set-ollama",
+        action="store_true",
+        help="Interactively configure Ollama host and model"
+    )
+
+    parser.add_argument(
+        "--explain",
+        type=str,
+        help="Read a file and ask AI to explain it"
+    )
+
+    parser.add_argument(
+        "--read-file",
+        type=str,
+        help="Read a file and include its content in your query"
     )
 
     return parser.parse_args()
@@ -143,16 +177,15 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
 
     # Single command logic
     command = commands[0]
-    is_stateful = is_stateful_command(command)
-    is_risky = is_risky_command(command)
+    is_risky_cmd = is_risky_command(command)
     if eval_mode or shell_integration_active:
-        if is_risky:
+        if is_risky_cmd:
             confirm_msg = "Execute? [y/N]: "
             default_choice = "n"
         else:
             confirm_msg = "Execute? [Y/n]: "
             default_choice = "y"
-        style = "yellow" if is_risky else "green"
+        style = "yellow" if is_risky_cmd else "green"
         print(confirm_msg, end="", file=sys.stderr if rich_to_stderr else sys.stdout)
         (sys.stderr if rich_to_stderr else sys.stdout).flush()
         choice = input().lower()
@@ -164,7 +197,7 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
         else:
             print("[Cancelled]", file=sys.stderr if rich_to_stderr else sys.stdout)
             return  # Never sys.exit(1) on cancel
-    if is_stateful:
+    if is_stateful_command(command):
         prompt_text = (
             f"[STATEFUL COMMAND] '{command}' changes shell state. "
             "To execute seamlessly, install the ai shell integration (see setup). "
@@ -176,13 +209,13 @@ def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stder
             copy_to_clipboard(command)
             console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
         return
-    confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
-    default_choice = "n" if is_risky else "y"
-    if auto_confirm and not is_risky:
+    confirm_msg = "Execute? [y/N]: " if is_risky_cmd else "Execute? [Y/n]: "
+    default_choice = "n" if is_risky_cmd else "y"
+    if auto_confirm and not is_risky_cmd:
         console.print(f"[green]Auto-executing: {command}[/green]")
         run_command(command)
         return
-    style = "yellow" if is_risky else "green"
+    style = "yellow" if is_risky_cmd else "green"
     console.print(Text(confirm_msg, style=style), end="")
     choice = input().lower()
     if not choice:
@@ -230,23 +263,54 @@ def interactive_mode(chat_mode=False):
     config = load_config()
     console = Console()
 
+    # Determine current provider/model for display
+    current_provider = config.get("default_provider", "Not configured")
+    
+    # Get model with fallbacks for hardcoded defaults in ai_providers.py
+    # This ensures what we show matches what is likely used
+    provider_config = config.get("providers", {}).get(current_provider, {})
+    current_model = provider_config.get("model", "")
+    
+    if not current_model:
+        if current_provider == "openrouter":
+            current_model = "openai/gpt-3.5-turbo"
+        elif current_provider == "gemini":
+            current_model = "gemini-pro"
+        elif current_provider == "mistral":
+            current_model = "mistral-tiny"
+        elif current_provider == "ollama":
+            current_model = "llama3"
+        else:
+            current_model = "default"
+
+    # Construct the display string for the panel
+    display_info = f"Provider: {current_provider} ({current_model})"
+
     if chat_mode:
         console.print(Panel.fit(
-            Text("TerminalAI AI Chat Mode: You are now chatting with the AI. Type 'exit' to quit.", style="bold magenta"),
+            Text(f"TerminalAI AI Chat Mode: You are now chatting with the AI.\nType 'exit' to quit.", style="bold magenta"),
             border_style="magenta"
         ))
         console.print("[dim]Type 'exit', 'quit', or 'q' to return to your shell.[/dim]")
     else:
         console.print(Panel.fit(
-            Text("TerminalAI: What is your question? (Type 'exit' to quit)", style="bold cyan"),
+            Text(f"TerminalAI: What is your question? (Type 'exit' to quit)", style="bold cyan"),
             border_style="cyan"
         ))
 
     while True:
         # Add visual separation between interactions
         console.print("")
-        prompt = Text("> ", style="bold green")
-        console.print(prompt, end="")
+        
+        # customized prompt with provider and model
+        prompt_text = Text()
+        prompt_text.append("[", style="bold white")
+        prompt_text.append(current_provider, style="bold blue")
+        prompt_text.append(":", style="bold white")
+        prompt_text.append(current_model, style="bold yellow")
+        prompt_text.append("] > ", style="bold green")
+        
+        console.print(prompt_text, end="")
         query = input().strip()
 
         if query.lower() in ["exit", "quit", "q"]:
@@ -334,12 +398,10 @@ def interactive_mode(chat_mode=False):
         except (ValueError, TypeError, OSError, KeyboardInterrupt) as e:
             # Catch common user/AI errors, but not all exceptions
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
-            import traceback
             traceback.print_exc()
         except RuntimeError as e:
             # Catch-all for truly unexpected errors (should be rare)
             console.print(f"[bold red]Unexpected error: {str(e)}[/bold red]")
-            import traceback
             traceback.print_exc()
         # If not in chat_mode, exit after one question/command
         if not chat_mode:
@@ -403,8 +465,8 @@ def _set_ollama_model_interactive(console):
     """Interactively sets the Ollama model and saves it to config."""
     import sys
     import os
-    DEBUG = os.environ.get("TERMINALAI_DEBUG", "0") == "1"
-    if DEBUG:
+    debug_mode = os.environ.get("TERMINALAI_DEBUG", "0") == "1"
+    if debug_mode:
         print("[DEBUG] Entered _set_ollama_model_interactive", file=sys.stderr)
     from terminalai.config import load_config, save_config
     config = load_config()
@@ -419,11 +481,11 @@ def _set_ollama_model_interactive(console):
         "Enter Ollama host (leave blank to keep current, e.g., http://localhost:11434): "
     )
     sys.stdout.flush()
-    if DEBUG:
+    if debug_mode:
         print("[DEBUG] About to prompt for Ollama host", file=sys.stderr)
     new_host_input = console.input(ollama_host_prompt).strip()
     console.print()  # Add a blank line for separation
-    if DEBUG:
+    if debug_mode:
         print(f"[DEBUG] Got Ollama host input: '{new_host_input}'", file=sys.stderr)
     host_to_use = current_host
     if new_host_input:
@@ -439,51 +501,51 @@ def _set_ollama_model_interactive(console):
         tags_url = f"{host_to_use}/api/tags"
         console.print(f"[dim]Fetching models from {tags_url}...[/dim]")
         sys.stdout.flush()
-        if DEBUG:
+        if debug_mode:
             print(f"[DEBUG] About to fetch models from {tags_url}", file=sys.stderr)
         response = requests.get(tags_url, timeout=5)
         response.raise_for_status()
         models_data = response.json().get("models", [])
-        if DEBUG:
+        if debug_mode:
             print(f"[DEBUG] Models data: {models_data}", file=sys.stderr)
         if models_data:
             available_models = [m.get("name") for m in models_data if m.get("name")]
 
-        if available_models:
-            console.print("[bold]Available Ollama models:[/bold]")
-            for i, model_name_option in enumerate(available_models, 1):
-                console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
-            if DEBUG:
-                print(f"[DEBUG] Printed {len(available_models)} models", file=sys.stderr)
-            model_choice_prompt = (
-                "[bold green]Choose a model number, or enter 'c' to cancel: [/bold green]"
-            )
-            sys.stdout.flush()
-            if DEBUG:
-                print("[DEBUG] About to prompt for model selection", file=sys.stderr)
-            while True:
-                model_sel = console.input(model_choice_prompt).strip()
-                if DEBUG:
-                    print(f"[DEBUG] Got model selection input: '{model_sel}'", file=sys.stderr)
-                if model_sel.lower() == 'c':
-                    console.print(f"[yellow]Model selection cancelled. Model remains: {current_model}[/yellow]")
-                    break
-                if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
-                    selected_model_name = available_models[int(model_sel)-1]
-                    config['providers'][pname]['model'] = selected_model_name
-                    console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
-                    break
-                else:
-                    console.print(f"[red]Invalid selection. Please enter a number between 1 and {len(available_models)}, or 'c' to cancel.[/red]")
+            if available_models:
+                console.print("[bold]Available Ollama models:[/bold]")
+                for i, model_name_option in enumerate(available_models, 1):
+                    console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
+                if debug_mode:
+                    print(f"[DEBUG] Printed {len(available_models)} models", file=sys.stderr)
+                model_choice_prompt = (
+                    "[bold green]Choose a model number, or enter 'c' to cancel: [/bold green]"
+                )
+                sys.stdout.flush()
+                if debug_mode:
+                    print("[DEBUG] About to prompt for model selection", file=sys.stderr)
+                while True:
+                    model_sel = console.input(model_choice_prompt).strip()
+                    if debug_mode:
+                        print(f"[DEBUG] Got model selection input: '{model_sel}'", file=sys.stderr)
+                    if model_sel.lower() == 'c':
+                        console.print("[yellow]Model selection cancelled. Model remains: {}[/yellow]".format(current_model))
+                        break
+                    if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
+                        selected_model_name = available_models[int(model_sel)-1]
+                        config['providers'][pname]['model'] = selected_model_name
+                        console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
+                        break
+                    else:
+                        console.print(f"[red]Invalid selection. Please enter a number between 1 and {len(available_models)}, or 'c' to cancel.[/red]")
         else:
             console.print(f"[yellow]No models found via Ollama API or API not reachable at {host_to_use}.[/yellow]")
             console.print("[yellow]You can still enter a model name manually.[/yellow]")
             manual_model_prompt = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
             sys.stdout.flush()
-            if DEBUG:
+            if debug_mode:
                 print("[DEBUG] About to prompt for manual model entry", file=sys.stderr)
             manual_model_input = console.input(manual_model_prompt).strip()
-            if DEBUG:
+            if debug_mode:
                 print(f"[DEBUG] Got manual model input: '{manual_model_input}'", file=sys.stderr)
             if manual_model_input:
                 config['providers'][pname]['model'] = manual_model_input
@@ -497,10 +559,10 @@ def _set_ollama_model_interactive(console):
         console.print("[yellow]You can enter a model name manually.[/yellow]")
         manual_model_prompt_on_error = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
         sys.stdout.flush()
-        if DEBUG:
+        if debug_mode:
             print("[DEBUG] About to prompt for manual model entry after error", file=sys.stderr)
         manual_model_input_on_error = console.input(manual_model_prompt_on_error).strip()
-        if DEBUG:
+        if debug_mode:
             print(f"[DEBUG] Got manual model input after error: '{manual_model_input_on_error}'", file=sys.stderr)
         if manual_model_input_on_error:
             config['providers'][pname]['model'] = manual_model_input_on_error
@@ -515,7 +577,7 @@ def _set_ollama_model_interactive(console):
     console.print(f"  [bold]Host:[/bold] [green]{summary_host}[/green]")
     console.print(f"  [bold]Model:[/bold] [yellow]{summary_model}[/yellow]\n")
     save_config(config)
-    if DEBUG:
+    if debug_mode:
         print("[DEBUG] Exiting _set_ollama_model_interactive", file=sys.stderr)
     return True # Assuming success unless an unhandled exception occurs
 
@@ -658,8 +720,35 @@ def setup_wizard():
                         console.print(
                             "[bold green]Ollama host updated.[/bold green]"
                         )
-                    else:
-                        console.print("[yellow]No changes made.[/yellow]")
+                    
+                    # Show available models for Ollama
+                    try:
+                        from terminalai.ai_providers import OllamaProvider
+                        host = config['providers'][pname].get('host', 'http://localhost:11434')
+                        provider = OllamaProvider(host)
+                        models = provider.list_models()
+                        if isinstance(models, list) and models:
+                            console.print(f"\n[bold]Available models for {pname}:[/bold]")
+                            for i, model in enumerate(models, 1):
+                                model_name = model.get("name", model.get("model", "Unknown"))
+                                console.print(f"[bold yellow]{i}[/bold yellow]. {model_name}")
+                            
+                            try:
+                                model_choice = int(console.input("Select model (or press Enter to skip): "))
+                                if 1 <= model_choice <= len(models):
+                                    selected_model = models[model_choice - 1].get("name", models[model_choice - 1].get("model", ""))
+                                    config['providers'][pname]['model'] = selected_model
+                                    console.print(f"[bold green]Model set to: {selected_model}[/bold green]")
+                                else:
+                                    console.print("[red]Invalid model selection.[/red]")
+                            except ValueError:
+                                console.print("[yellow]Skipping model selection.[/yellow]")
+                        else:
+                            console.print("[yellow]No models available or unable to fetch models.[/yellow]")
+                    except Exception as e:
+                        console.print(f"[red]Error fetching models: {e}[/red]")
+                    
+                    console.print("[yellow]No changes made.[/yellow]")
                 else:
                     current = config['providers'][pname].get('api_key', '')
                     if current:
@@ -672,8 +761,39 @@ def setup_wizard():
                             console.print(
                                 f"[bold green]API key for {pname} updated.[/bold green]"
                             )
-                        else:
-                            console.print("[yellow]No changes made.[/yellow]")
+                        
+                        # Show available models for API-based providers
+                        try:
+                            from terminalai.ai_providers import get_provider
+                            temp_provider = get_provider(pname)
+                            if temp_provider and hasattr(temp_provider, 'list_models'):
+                                models = temp_provider.list_models()
+                                if isinstance(models, list) and models:
+                                    console.print(f"\n[bold]Available models for {pname}:[/bold]")
+                                    for i, model in enumerate(models, 1):
+                                        model_name = model.get("id", model.get("name", "Unknown"))
+                                        model_desc = model.get("description", "")
+                                        if model_desc:
+                                            console.print(f"[bold yellow]{i}[/bold yellow]. {model_name} - {model_desc}")
+                                        else:
+                                            console.print(f"[bold yellow]{i}[/bold yellow]. {model_name}")
+                                    
+                                    try:
+                                        model_choice = int(console.input("Select model (or press Enter to skip): "))
+                                        if 1 <= model_choice <= len(models):
+                                            selected_model = models[model_choice - 1].get("id", models[model_choice - 1].get("name", ""))
+                                            config['providers'][pname]['model'] = selected_model
+                                            console.print(f"[bold green]Model set to: {selected_model}[/bold green]")
+                                        else:
+                                            console.print("[red]Invalid model selection.[/red]")
+                                    except ValueError:
+                                        console.print("[yellow]Skipping model selection.[/yellow]")
+                                else:
+                                    console.print("[yellow]No models available or unable to fetch models.[/yellow]")
+                        except Exception as e:
+                            console.print(f"[red]Error fetching models: {e}[/red]")
+                        
+                        console.print("[yellow]No changes made.[/yellow]")
                     else:
                         console.print(f"Current API key: (not set)")
                         new_key_prompt = f"Enter API key for {pname}: "
@@ -684,8 +804,39 @@ def setup_wizard():
                             console.print(
                                 f"[bold green]API key for {pname} set.[/bold green]"
                             )
-                        else:
-                            console.print("[yellow]No changes made.[/yellow]")
+                        
+                        # Show available models for API-based providers
+                        try:
+                            from terminalai.ai_providers import get_provider
+                            temp_provider = get_provider(pname)
+                            if temp_provider and hasattr(temp_provider, 'list_models'):
+                                models = temp_provider.list_models()
+                                if isinstance(models, list) and models:
+                                    console.print(f"\n[bold]Available models for {pname}:[/bold]")
+                                    for i, model in enumerate(models, 1):
+                                        model_name = model.get("id", model.get("name", "Unknown"))
+                                        model_desc = model.get("description", "")
+                                        if model_desc:
+                                            console.print(f"[bold yellow]{i}[/bold yellow]. {model_name} - {model_desc}")
+                                        else:
+                                            console.print(f"[bold yellow]{i}[/bold yellow]. {model_name}")
+                                    
+                                    try:
+                                        model_choice = int(console.input("Select model (or press Enter to skip): "))
+                                        if 1 <= model_choice <= len(models):
+                                            selected_model = models[model_choice - 1].get("id", models[model_choice - 1].get("name", ""))
+                                            config['providers'][pname]['model'] = selected_model
+                                            console.print(f"[bold green]Model set to: {selected_model}[/bold green]")
+                                        else:
+                                            console.print("[red]Invalid model selection.[/red]")
+                                    except ValueError:
+                                        console.print("[yellow]Skipping model selection.[/yellow]")
+                                else:
+                                    console.print("[yellow]No models available or unable to fetch models.[/yellow]")
+                        except Exception as e:
+                            console.print(f"[red]Error fetching models: {e}[/red]")
+                        
+                        console.print("[yellow]No changes made.[/yellow]")
             else:
                 console.print("[red]Invalid selection.[/red]")
             console.input("[dim]Press Enter to continue...[/dim]")

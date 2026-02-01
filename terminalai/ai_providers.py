@@ -50,13 +50,15 @@ class AIProvider:
 class OpenRouterProvider(AIProvider):
     """OpenRouter AI provider implementation."""
 
-    def __init__(self, api_key):
+    def __init__(self, api_key, model="openai/gpt-3.5-turbo"):
         """Initialize the OpenRouter provider.
 
         Args:
             api_key: API key for OpenRouter service.
+            model: Model to use (default: openai/gpt-3.5-turbo)
         """
         self.api_key = api_key
+        self.model = model
 
     def query(self, prompt):
         """Query OpenRouter API with the given prompt.
@@ -78,7 +80,7 @@ class OpenRouterProvider(AIProvider):
         if "\n\n" in prompt:
             system_prompt, user_prompt = prompt.split("\n\n", 1)
             data = {
-                "model": "openai/gpt-3.5-turbo",  # Default model, can be modified
+                "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -87,7 +89,7 @@ class OpenRouterProvider(AIProvider):
         else:
             # Just a user prompt without system instructions
             data = {
-                "model": "openai/gpt-3.5-turbo",
+                "model": self.model,
                 "messages": [
                     {"role": "user", "content": prompt}
                 ]
@@ -100,16 +102,45 @@ class OpenRouterProvider(AIProvider):
         except (requests.RequestException, KeyError, IndexError) as e:
             return f"[OpenRouter API error] {e}"
 
+    def list_models(self):
+        """List available models from the OpenRouter API.
+
+        Returns:
+            A list of available models with their details, or an error message.
+        """
+        url = "https://openrouter.ai/api/v1/models"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/coaxialdolor/terminalai"
+        }
+
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if "data" in data:
+                return data["data"]
+            else:
+                return []
+        except requests.RequestException as e:
+            return f"[OpenRouter API error] {e}"
+        except (KeyError, ValueError) as e:
+            return f"[OpenRouter API error] Invalid response format: {e}"
+
 class GeminiProvider(AIProvider):
     """Google Gemini AI provider implementation."""
 
-    def __init__(self, api_key):
+    def __init__(self, api_key, model="gemini-pro"):
         """Initialize the Gemini provider.
 
         Args:
             api_key: API key for Google Gemini service.
+            model: Model to use (default: gemini-pro)
         """
         self.api_key = api_key
+        self.model = model
 
     def query(self, prompt):
         """Query Google Gemini API with the given prompt.
@@ -120,7 +151,8 @@ class GeminiProvider(AIProvider):
         Returns:
             The response text from Gemini.
         """
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        # Note: Gemini API URL often includes the model name
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         headers = {
             "Content-Type": "application/json"
         }
@@ -165,16 +197,48 @@ class GeminiProvider(AIProvider):
         except (requests.RequestException, KeyError, IndexError) as e:
             return f"[Gemini API error] {e}"
 
+    def list_models(self):
+        """List available models from the Gemini API.
+
+        Returns:
+            A list of available models with their details, or an error message.
+        """
+        url = "https://generativelanguage.googleapis.com/v1beta/models"
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        try:
+            response = requests.get(
+                f"{url}?key={self.api_key}",
+                headers=headers,
+                timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            if "models" in data:
+                # Filter for generateContent supported models if possible, or just return all
+                return [m for m in data["models"] if "generateContent" in m.get("supportedGenerationMethods", [])]
+            else:
+                return []
+        except requests.RequestException as e:
+            return f"[Gemini API error] {e}"
+        except (KeyError, ValueError) as e:
+            return f"[Gemini API error] Invalid response format: {e}"
+
 class MistralProvider(AIProvider):
     """Mistral AI provider implementation."""
 
-    def __init__(self, api_key):
+    def __init__(self, api_key, model="mistral-tiny"):
         """Initialize the Mistral provider.
 
         Args:
             api_key: API key for Mistral service.
+            model: Model to use (default: mistral-tiny)
         """
         self.api_key = api_key
+        self.model = model
 
     def query(self, prompt):
         """Query Mistral API with the given prompt.
@@ -196,7 +260,7 @@ class MistralProvider(AIProvider):
         if "\n\n" in prompt:
             system_prompt, user_prompt = prompt.split("\n\n", 1)
             data = {
-                "model": "mistral-tiny",  # You can change to another model if needed
+                "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -205,7 +269,7 @@ class MistralProvider(AIProvider):
         else:
             # Just a user prompt without system instructions
             data = {
-                "model": "mistral-tiny",  # You can change to another model if needed
+                "model": self.model,
                 "messages": [
                     {"role": "user", "content": prompt}
                 ]
@@ -217,6 +281,32 @@ class MistralProvider(AIProvider):
             return response.json()["choices"][0]["message"]["content"]
         except (requests.RequestException, KeyError, IndexError) as e:
             return f"[Mistral API error] {e}"
+
+    def list_models(self):
+        """List available models from the Mistral API.
+
+        Returns:
+            A list of available models with their details, or an error message.
+        """
+        url = "https://api.mistral.ai/v1/models"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if "data" in data:
+                return data["data"]
+            else:
+                return []
+        except requests.RequestException as e:
+            return f"[Mistral API error] {e}"
+        except (KeyError, ValueError) as e:
+            return f"[Mistral API error] Invalid response format: {e}"
 
 class OllamaProvider(AIProvider):
     """Ollama local model provider implementation."""
@@ -319,17 +409,23 @@ def get_provider(provider_name=None):
 
     # Initialize the appropriate provider based on name
     if provider_name == "openrouter":
-        api_key = config.get("providers", {}).get("openrouter", {}).get("api_key", "")
+        config_data = config.get("providers", {}).get("openrouter", {})
+        api_key = config_data.get("api_key", "")
+        model = config_data.get("model", "openai/gpt-3.5-turbo")
         if api_key:
-            return OpenRouterProvider(api_key)
+            return OpenRouterProvider(api_key, model)
     elif provider_name == "gemini":
-        api_key = config.get("providers", {}).get("gemini", {}).get("api_key", "")
+        config_data = config.get("providers", {}).get("gemini", {})
+        api_key = config_data.get("api_key", "")
+        model = config_data.get("model", "gemini-pro")
         if api_key:
-            return GeminiProvider(api_key)
+            return GeminiProvider(api_key, model)
     elif provider_name == "mistral":
-        api_key = config.get("providers", {}).get("mistral", {}).get("api_key", "")
+        config_data = config.get("providers", {}).get("mistral", {})
+        api_key = config_data.get("api_key", "")
+        model = config_data.get("model", "mistral-tiny")
         if api_key:
-            return MistralProvider(api_key)
+            return MistralProvider(api_key, model)
     elif provider_name == "ollama":
         ollama_config = config.get("providers", {}).get("ollama", {})
         host = ollama_config.get("host", "http://localhost:11434")
