@@ -1,2 +1,2 @@
 # TerminalAI package
-__version__ = "0.2.2"
+__version__ = "0.4.3"

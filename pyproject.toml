@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coaxial-terminal-ai"
-version = "0.2.2"
+version = "0.4.3"
 description = "TerminalAI: Command-line AI assistant"
 readme = "README.md"
 authors = [
@@ -30,6 +30,8 @@ dependencies = [
     "requests",
     "pygments",
     "rich",
+    "pyperclip",
+    "appdirs",
 ]
 
 [project.urls]
