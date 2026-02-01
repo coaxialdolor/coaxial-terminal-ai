@@ -1,8 +1,0 @@
-2026-01-31 23:29:06,403 - INFO - Started logging to coaxial-pip-packager_20260131_232906.log
-2026-01-31 23:29:06,404 - INFO - Writing logs to ***TOKEN***.log
-2026-01-31 23:29:06,404 - INFO - Using specified project path: .
-2026-01-31 23:29:06,405 - INFO - Changed working directory to: /Users/petter/Desktop/Egnacodinggrejer/terminalai/working-merge-pypi
-2026-01-31 23:29:06,405 - INFO - Searching for current version...
-2026-01-31 23:29:06,406 - INFO - Found version '0.3.5' in pyproject.toml
-2026-01-31 23:29:06,406 - INFO - Using specified version: 0.3.5
-2026-01-31 23:29:06,406 - WARNING - New version is the same as the current version. Nothing to update in files.

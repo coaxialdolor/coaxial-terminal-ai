@@ -375,6 +375,150 @@ def get_available_models():
     
     return models
 
+def _set_default_provider_interactive(console):
+    """Interactively sets the default AI provider and saves it to config."""
+    from terminalai.config import load_config, save_config
+    config = load_config()
+    providers = list(config['providers'].keys())
+    console.print("\n[bold]Available providers:[/bold]")
+    for idx, p_item in enumerate(providers, 1):
+        is_default = ""
+        if p_item == config.get('default_provider'):
+            is_default = ' (default)'
+        console.print(f"[bold yellow]{idx}[/bold yellow]. {p_item}{is_default}")
+    sel_prompt = f"[bold green]Select provider (1-{len(providers)}): [/bold green]"
+    sel = console.input(sel_prompt).strip()
+    if sel.isdigit() and 1 <= int(sel) <= len(providers):
+        selected_provider = providers[int(sel)-1]
+        config['default_provider'] = selected_provider
+        save_config(config)
+        console.print(f"[bold green]Default provider set to "
+                      f"{selected_provider}.[/bold green]")
+        return True
+    else:
+        console.print("[red]Invalid selection.[/red]")
+        return False
+
+def _set_ollama_model_interactive(console):
+    """Interactively sets the Ollama model and saves it to config."""
+    import sys
+    import os
+    DEBUG = os.environ.get("TERMINALAI_DEBUG", "0") == "1"
+    if DEBUG:
+        print("[DEBUG] Entered _set_ollama_model_interactive", file=sys.stderr)
+    from terminalai.config import load_config, save_config
+    config = load_config()
+    pname = 'ollama' # We are specifically configuring Ollama here
+
+    if pname not in config['providers']:
+        config['providers'][pname] = {} # Ensure ollama provider entry exists
+
+    current_host = config['providers'][pname].get('host', 'http://localhost:11434')
+    console.print(f"Current Ollama host: {current_host}")
+    ollama_host_prompt = (
+        "Enter Ollama host (leave blank to keep current, e.g., http://localhost:11434): "
+    )
+    sys.stdout.flush()
+    if DEBUG:
+        print("[DEBUG] About to prompt for Ollama host", file=sys.stderr)
+    new_host_input = console.input(ollama_host_prompt).strip()
+    console.print()  # Add a blank line for separation
+    if DEBUG:
+        print(f"[DEBUG] Got Ollama host input: '{new_host_input}'", file=sys.stderr)
+    host_to_use = current_host
+    if new_host_input:
+        config['providers'][pname]['host'] = new_host_input
+        host_to_use = new_host_input
+        console.print("[bold green]Ollama host updated.[/bold green]")
+
+    current_model = config['providers'][pname].get('model', 'llama3')
+    console.print(f"Current Ollama model: {current_model}")
+
+    available_models = []
+    try:
+        tags_url = f"{host_to_use}/api/tags"
+        console.print(f"[dim]Fetching models from {tags_url}...[/dim]")
+        sys.stdout.flush()
+        if DEBUG:
+            print(f"[DEBUG] About to fetch models from {tags_url}", file=sys.stderr)
+        response = requests.get(tags_url, timeout=5)
+        response.raise_for_status()
+        models_data = response.json().get("models", [])
+        if DEBUG:
+            print(f"[DEBUG] Models data: {models_data}", file=sys.stderr)
+        if models_data:
+            available_models = [m.get("name") for m in models_data if m.get("name")]
+
+        if available_models:
+            console.print("[bold]Available Ollama models:[/bold]")
+            for i, model_name_option in enumerate(available_models, 1):
+                console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
+            if DEBUG:
+                print(f"[DEBUG] Printed {len(available_models)} models", file=sys.stderr)
+            model_choice_prompt = (
+                "[bold green]Choose a model number, or enter 'c' to cancel: [/bold green]"
+            )
+            sys.stdout.flush()
+            if DEBUG:
+                print("[DEBUG] About to prompt for model selection", file=sys.stderr)
+            while True:
+                model_sel = console.input(model_choice_prompt).strip()
+                if DEBUG:
+                    print(f"[DEBUG] Got model selection input: '{model_sel}'", file=sys.stderr)
+                if model_sel.lower() == 'c':
+                    console.print(f"[yellow]Model selection cancelled. Model remains: {current_model}[/yellow]")
+                    break
+                if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
+                    selected_model_name = available_models[int(model_sel)-1]
+                    config['providers'][pname]['model'] = selected_model_name
+                    console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
+                    break
+                else:
+                    console.print(f"[red]Invalid selection. Please enter a number between 1 and {len(available_models)}, or 'c' to cancel.[/red]")
+        else:
+            console.print(f"[yellow]No models found via Ollama API or API not reachable at {host_to_use}.[/yellow]")
+            console.print("[yellow]You can still enter a model name manually.[/yellow]")
+            manual_model_prompt = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
+            sys.stdout.flush()
+            if DEBUG:
+                print("[DEBUG] About to prompt for manual model entry", file=sys.stderr)
+            manual_model_input = console.input(manual_model_prompt).strip()
+            if DEBUG:
+                print(f"[DEBUG] Got manual model input: '{manual_model_input}'", file=sys.stderr)
+            if manual_model_input:
+                config['providers'][pname]['model'] = manual_model_input
+                console.print(f"[bold green]Ollama model set to: {manual_model_input}[/bold green]")
+            else:
+                console.print(f"[yellow]No model entered. Model remains: {current_model}[/yellow]")
+
+    except requests.exceptions.RequestException as e:
+        console.print(f"[red]Error fetching Ollama models: {e}[/red]")
+        console.print("[yellow]Please ensure Ollama is running and accessible at the specified host.[/yellow]")
+        console.print("[yellow]You can enter a model name manually.[/yellow]")
+        manual_model_prompt_on_error = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
+        sys.stdout.flush()
+        if DEBUG:
+            print("[DEBUG] About to prompt for manual model entry after error", file=sys.stderr)
+        manual_model_input_on_error = console.input(manual_model_prompt_on_error).strip()
+        if DEBUG:
+            print(f"[DEBUG] Got manual model input after error: '{manual_model_input_on_error}'", file=sys.stderr)
+        if manual_model_input_on_error:
+            config['providers'][pname]['model'] = manual_model_input_on_error
+            console.print(f"[bold green]Ollama model set to: {manual_model_input_on_error}[/bold green]")
+        else:
+            console.print(f"[yellow]No model entered. Model remains: {current_model}[/yellow]")
+
+    # Print summary of current host and model
+    summary_host = config['providers'][pname].get('host', host_to_use)
+    summary_model = config['providers'][pname].get('model', current_model)
+    console.print("\n[bold cyan]Ollama configuration summary:[/bold cyan]")
+    console.print(f"  [bold]Host:[/bold] [green]{summary_host}[/green]")
+    console.print(f"  [bold]Model:[/bold] [yellow]{summary_model}[/yellow]\n")
+    save_config(config)
+    if DEBUG:
+        print("[DEBUG] Exiting _set_ollama_model_interactive", file=sys.stderr)
+    return True # Assuming success unless an unhandled exception occurs
+
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
     from terminalai.config import (

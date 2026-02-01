@@ -1,5 +1,0 @@
-requests
-pygments
-rich
-
-pyperclip
