@@ -77,8 +77,14 @@ def main():
         provider_to_use = config.get("default_provider", "")
 
     if not provider_to_use:
-        print(colorize_command("No AI provider configured. Please run 'ai setup' to configure an AI provider."), file=sys.stderr)
-        sys.exit(1)
+        print(colorize_command("No AI provider configured. Running setup wizard..."), file=sys.stderr)
+        setup_wizard() # This will allow user to set a default
+        # After setup, try to load config again or exit if user quit setup
+        config = load_config()
+        provider_to_use = config.get("default_provider", "")
+        if not provider_to_use:
+            print(colorize_command("Setup was not completed. Exiting."), file=sys.stderr)
+            sys.exit(1)
 
     # Run in interactive mode if no query provided AND no --explain flag AND no --read-file flag, or if chat explicitly requested
     is_chat_request = getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c')

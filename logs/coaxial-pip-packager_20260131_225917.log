@@ -1,0 +1,11 @@
+2026-01-31 22:59:17,493 - INFO - Started logging to coaxial-pip-packager_20260131_225917.log
+2026-01-31 22:59:17,493 - INFO - Writing logs to ***TOKEN***.log
+2026-01-31 22:59:17,494 - WARNING - Choose the project directory:
+2026-01-31 22:59:17,494 - INFO - 1. Use the current working directory
+2026-01-31 22:59:17,494 - INFO - 2. Specify another project folder
+2026-01-31 22:59:35,325 - INFO - Using current directory: /Users/petter/Desktop/Egnacodinggrejer/terminalai
+2026-01-31 22:59:35,326 - INFO - Changed working directory to: /Users/petter/Desktop/Egnacodinggrejer/terminalai
+2026-01-31 22:59:35,326 - INFO - Searching for current version...
+2026-01-31 22:59:35,331 - INFO - Found version '0.2.2' in pyproject.toml
+2026-02-01 06:27:10,853 - INFO - Script execution completed
+2026-02-01 06:27:10,855 - INFO - Log file has been written to logs/***TOKEN***.log

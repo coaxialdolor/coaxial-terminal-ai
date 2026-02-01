@@ -1,0 +1,8 @@
+2026-02-01 07:52:53,242 - INFO - Started logging to coaxial-pip-packager_20260201_075253.log
+2026-02-01 07:52:53,242 - INFO - Writing logs to ***TOKEN***.log
+2026-02-01 07:52:53,243 - WARNING - Choose the project directory:
+2026-02-01 07:52:53,243 - INFO - 1. Use the current working directory
+2026-02-01 07:52:53,243 - INFO - 2. Specify another project folder
+2026-02-01 07:52:53,243 - WARNING - Invalid choice. Please enter 1 or 2.
+2026-02-01 07:52:53,243 - INFO - Script execution completed
+2026-02-01 07:52:53,243 - INFO - Log file has been written to logs/***TOKEN***.log

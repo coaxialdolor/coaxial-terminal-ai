@@ -1,0 +1,10 @@
+3bf8f49 Add comprehensive merge completion summary for future reference
+271990b MERGE COMPLETE: Successfully integrated remote repository changes
+dc4c188 Final polish: Complete informational command system implementation
+31577bd Add comprehensive test suite for informational commands
+5ededa0 Fix command box formatting with proper alignment and borders
+c74f386 Enhance command box with colors and improved formatting
+326c28a Modify run_shell_command() for immediate informational command execution
+629e3d7 Add is_informational_command() function for safe command detection
+741c7a3 FIX: Allow dangerous commands with extra confirmation prompts instead of blocking them
+e0e10eb FIX: Improve proc/sys filesystem regex patterns for better security validation

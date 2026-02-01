@@ -1,0 +1,5 @@
+2026-02-01 07:50:42,129 - INFO - Started logging to coaxial-pip-packager_20260201_075042.log
+2026-02-01 07:50:42,129 - INFO - Writing logs to ***TOKEN***.log
+2026-02-01 07:50:42,130 - WARNING - Choose the project directory:
+2026-02-01 07:50:42,130 - INFO - 1. Use the current working directory
+2026-02-01 07:50:42,130 - INFO - 2. Specify another project folder

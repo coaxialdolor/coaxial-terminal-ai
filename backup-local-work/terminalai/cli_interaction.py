@@ -505,7 +505,7 @@ def setup_wizard():
                     current = config['providers'][pname].get('host', '')
                     console.print(f"Current host: {current}")
                     ollama_host_prompt = (
-                        "Enter new Ollama host (e.g., http://localhost:11434) or press Enter to skip: "
+                        "Enter new Ollama host (e.g., http://localhost:11434): "
                     )
                     new_host = console.input(ollama_host_prompt).strip()
                     if new_host:
@@ -518,30 +518,18 @@ def setup_wizard():
                         console.print("[yellow]No changes made.[/yellow]")
                 else:
                     current = config['providers'][pname].get('api_key', '')
-                    if current:
-                        console.print(f"Current API key: [hidden]")
-                        new_key_prompt = f"Enter new API key for {pname} (or press Enter to skip): "
-                        new_key = console.input(new_key_prompt).strip()
-                        if new_key:
-                            config['providers'][pname]['api_key'] = new_key
-                            save_config(config)
-                            console.print(
-                                f"[bold green]API key for {pname} updated.[/bold green]"
-                            )
-                        else:
-                            console.print("[yellow]No changes made.[/yellow]")
+                    display_key = '(not set)' if not current else '[hidden]'
+                    console.print(f"Current API key: {display_key}")
+                    new_key_prompt = f"Enter new API key for {pname}: "
+                    new_key = console.input(new_key_prompt).strip()
+                    if new_key:
+                        config['providers'][pname]['api_key'] = new_key
+                        save_config(config)
+                        console.print(
+                            f"[bold green]API key for {pname} updated.[/bold green]"
+                        )
                     else:
-                        console.print(f"Current API key: (not set)")
-                        new_key_prompt = f"Enter API key for {pname}: "
-                        new_key = console.input(new_key_prompt).strip()
-                        if new_key:
-                            config['providers'][pname]['api_key'] = new_key
-                            save_config(config)
-                            console.print(
-                                f"[bold green]API key for {pname} set.[/bold green]"
-                            )
-                        else:
-                            console.print("[yellow]No changes made.[/yellow]")
+                        console.print("[yellow]No changes made.[/yellow]")
             else:
                 console.print("[red]Invalid selection.[/red]")
             console.input("[dim]Press Enter to continue...[/dim]")
