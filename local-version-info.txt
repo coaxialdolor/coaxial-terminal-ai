@@ -30,8 +30,6 @@ dependencies = [
     "requests",
     "pygments",
     "rich",
-    "pyperclip",
-    "appdirs",
 ]
 
 [project.urls]
