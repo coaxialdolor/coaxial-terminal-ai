@@ -2,72 +2,211 @@
 import os
 import sys
 import argparse
-import requests
-import re
-import traceback
-from rich.text import Text
+import time # Import time module for sleep
 from terminalai.command_utils import run_shell_command, is_shell_command
 from terminalai.command_extraction import is_stateful_command, is_risky_command
-from terminalai.formatting import ColoredDescriptionFormatter
 from terminalai.clipboard_utils import copy_to_clipboard
 
+# Imports for rich components - from HEAD, as 021offshoot was missing some
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.rule import Rule
+
+# Imports for terminalai components - from HEAD, as 021offshoot was missing some
+from terminalai.config import (
+    load_config, save_config,
+    get_system_prompt, DEFAULT_SYSTEM_PROMPT
+)
+from terminalai.shell_integration import (
+    install_shell_integration, uninstall_shell_integration,
+    check_shell_integration, get_system_context
+)
+from terminalai.ai_providers import get_provider
+from terminalai.formatting import print_ai_answer_with_rich
+# Use the more specific get_commands_interactive (alias for extract_commands) from 021offshoot
+from terminalai.command_extraction import extract_commands as get_commands_interactive
+from terminalai.__init__ import __version__
+from terminalai.color_utils import (
+    colorize_success, colorize_error, colorize_info,
+    colorize_prompt, colorize_highlight, AI_COLOR, COMMAND_COLOR, INFO_COLOR,
+    ERROR_COLOR, SUCCESS_COLOR, PROMPT_COLOR, HIGHLIGHT_COLOR, RESET, BOLD
+)
+from terminalai.query_utils import preprocess_query
+import requests # Add this import for Ollama model fetching
+import json # Add this import for parsing Ollama response
+
+# System Prompt for AI Risk Assessment (Hardcoded)
+_RISK_ASSESSMENT_SYSTEM_PROMPT = """
+You are a security analysis assistant. Your sole task is to explain the potential negative consequences and risks of executing the given shell command(s) within the specified user context.
+
+Instructions:
+- When the user query starts with the exact prefix "<RISK_CONFIRMATION>", strictly follow these rules.
+- Focus exclusively on the potential dangers: data loss, system instability, security vulnerabilities, unintended modifications, or permission changes.
+- DO NOT provide instructions on how to use the command, suggest alternatives, or offer reassurances. ONLY state the risks.
+- Be specific about the impact. Refer to the *full, absolute paths* of any files or directories that would be affected, based on the provided Current Working Directory (CWD) and the command itself.
+- If a command affects the CWD (e.g., `rm -r .`), state clearly what the full path of the CWD is and that its contents will be affected.
+- If the risks are minimal or negligible for a typically safe command, state that concisely (e.g., "Minimal risk: This command lists directory contents.").
+- Keep the explanation concise and clear. Use bullet points if there are multiple distinct risks.
+- Output *only* the risk explanation, with no conversational introduction or closing.
+"""
+
 def parse_args():
-    """Parse command line arguments."""
+    """Parse command line arguments, ignoring --eval-mode and unknown arguments for shell integration compatibility."""
+    # Remove --eval-mode if present, to avoid argparse errors from shell integration
+    filtered_argv = [arg for arg in sys.argv[1:] if arg != "--eval-mode"]
+    description_text = """TerminalAI: Your command-line AI assistant.
+Ask questions or request commands in natural language.
+
+-----------------------------------------------------------------------
+MODES OF OPERATION & EXAMPLES:
+-----------------------------------------------------------------------
+1. Direct Query: Ask a question directly, get a response, then exit.
+   Syntax: ai [flags] "query"
+   Examples:
+     ai "list files ending in .py"
+     ai -v "explain the concept of inodes"
+     ai -y "show current disk usage"
+     ai -y -v "create a new directory called 'test_project' and enter it"
+
+2. Single Interaction: Enter a prompt, get one response, then exit.
+   Syntax: ai [flags]
+   Examples:
+     ai
+       AI:(provider)> your question here
+     ai -l
+       AI:(provider)> explain git rebase in detail
+
+3. Persistent Chat: Keep conversation history until 'exit'/'q'.
+   Syntax: ai --chat [flags]  OR  ai -c [flags]
+   Examples:
+     ai --chat
+     ai -c -v  (start chat in verbose mode)
+
+-----------------------------------------------------------------------
+COMMAND HANDLING:
+-----------------------------------------------------------------------
+- Confirmation:  Commands require [Y/n] confirmation before execution.
+                 Risky commands (rm, sudo) require explicit 'y'.
+- Stateful cmds: Commands like 'cd' or 'export' that change shell state
+                 will prompt to copy to clipboard [Y/n].
+- Integration:   If Shell Integration is installed (via 'ai setup'):
+                   Stateful commands *only* in Direct Query mode (ai "...")
+                   will execute directly in the shell after confirmation.
+                   Interactive modes (ai, ai --chat) still use copy.
+
+-----------------------------------------------------------------------
+AVAILABLE FLAGS:
+-----------------------------------------------------------------------
+  [query]           Your question or request (used in Direct Query mode).
+  -h, --help        Show this help message and exit.
+  -y, --yes         Auto-confirm execution of non-risky commands.
+                     Effective in Direct Query mode or with Shell Integration.
+                     Example: ai -y "show disk usage"
+  -v, --verbose     Request a more detailed response from the AI.
+                     Example: ai -v "explain RAID levels"
+                     Example (chat): ai -c -v
+  -l, --long        Request a longer, more comprehensive response from AI.
+                     Example: ai -l "explain git rebase workflow"
+  --setup           Run the interactive setup wizard.
+  --version         Show program's version number and exit.
+  --set-default     Shortcut to set the default AI provider.
+  --set-ollama      Shortcut to configure the Ollama model.
+  --provider        Override the default AI provider for this query only.
+  --read-file <filepath>
+                    Read the specified file (any plain text file) and use its content in the prompt.
+                    The AI will be asked to explain/summarize this file based on your query.
+                    Example: ai --read-file script.py "explain this script"
+  --explain <filepath>
+                    Read and automatically explain/summarize the specified file (any plain text file) in its project context.
+                    Uses a predefined query and ignores any general query you provide.
+                    Mutually exclusive with --read-file.
+
+-----------------------------------------------------------------------
+AI FORMATTING EXPECTATIONS:
+-----------------------------------------------------------------------
+- Provide commands in separate ```bash code blocks.
+- Keep explanations outside code blocks."""
+    epilog_text = """For full configuration, run 'ai setup'.
+Project: https://github.com/coaxialdolor/terminalai"""
     parser = argparse.ArgumentParser(
-        description=(
-            "TerminalAI: Your command-line AI assistant.\n"
-            "Ask questions or request commands, and AI will suggest appropriate actions.\n"
-            "- With the latest shell integration, stateful commands (like cd, export, etc.) "
-            "are now executable in all modes if the integration is installed.\n"
-            "- Each command should be in its own code block, with no comments or explanations "
-            "inside. Explanations must be outside code blocks.\n"
-            "- If the AI puts multiple commands in a single code block, TerminalAI will still "
-            "extract and show each as a separate command.\n"
-            "\nExamples of correct formatting:\n"
-            "```bash\nls\n```\n```bash\nls -l\n```\n"
-            "Explanation: The first command lists files, the second lists them in long format.\n"
-            "Incorrect:\n"
-            "```bash\n# List files\nls\n# List files in long format\nls -l\n```\n"
-            "(Never put comments or multiple commands in a single code block.)\n"
-        ),
-        epilog="For more details, visit https://github.com/coaxialdolor/terminalai",
-        formatter_class=ColoredDescriptionFormatter
+        description=description_text,
+        epilog=epilog_text,
+        formatter_class=argparse.RawTextHelpFormatter
     )
 
     parser.add_argument(
         "query",
         nargs="?",
-        help="Your question or request"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "-y", "--yes",
         action="store_true",
-        help="Automatically confirm execution of non-risky commands"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "-v", "--verbose",
         action="store_true",
-        help="Request a more detailed response from the AI"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "-l", "--long",
         action="store_true",
-        help="Request a longer, more comprehensive response"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "--setup",
         action="store_true",
-        help="Run the setup wizard"
+        help=argparse.SUPPRESS
     )
 
     parser.add_argument(
         "--version",
         action="store_true",
-        help="Show version information"
+        help=argparse.SUPPRESS
+    )
+
+    parser.add_argument(
+        "--chat",
+        action="store_true",
+        help=argparse.SUPPRESS
+    )
+
+    parser.add_argument(
+        "--set-default",
+        action="store_true",
+        help="Shortcut to set the default AI provider."
+    )
+
+    parser.add_argument(
+        "--set-ollama",
+        action="store_true",
+        help="Shortcut to configure the Ollama model."
+    )
+
+    parser.add_argument(
+        "--provider",
+        choices=["ollama", "openrouter", "gemini", "mistral"],
+        help="Override the default AI provider for this query only."
+    )
+
+    parser.add_argument(
+        "--read-file",
+        type=str,
+        metavar="<filepath>",
+        help="Read the specified file and use its content in the prompt. Your query will then be about this file."
+    )
+
+    parser.add_argument(
+        "--explain",
+        type=str,
+        metavar="<filepath>",
+        help="Read and automatically explain/summarize the specified file in its project context. Ignores general query."
     )
 
     parser.add_argument(
@@ -76,255 +215,637 @@ def parse_args():
         help=argparse.SUPPRESS
     )
 
-    parser.add_argument(
-        "--chat",
-        action="store_true",
-        help="Enter persistent AI chat mode (does not exit after one response)"
-    )
+    # Ensure --read-file and --explain are mutually exclusive
+    args, unknown = parser.parse_known_args(filtered_argv)
+    if args.read_file and args.explain:
+        parser.error("argument --explain: not allowed with argument --read-file")
 
-    parser.add_argument(
-        "--set-default",
-        action="store_true",
-        help="Interactively set the default AI provider"
-    )
+    # Check if --eval-mode was in original args but removed for parsing
+    if "--eval-mode" in sys.argv:
+        args.eval_mode = True
 
-    parser.add_argument(
-        "--set-ollama",
-        action="store_true",
-        help="Interactively configure Ollama host and model"
-    )
+    return args
 
-    parser.add_argument(
-        "--explain",
-        type=str,
-        help="Read a file and ask AI to explain it"
-    )
+# --- Helper Function for AI Risk Assessment ---
 
-    parser.add_argument(
-        "--read-file",
-        type=str,
-        help="Read a file and include its content in your query"
-    )
+def _get_ai_risk_assessment(command, console, provider):
+    """Gets a risk assessment for a command using a secondary AI call."""
+    if not provider:
+        return "Risk assessment requires a configured AI provider."
 
-    return parser.parse_args()
+    try:
+        cwd = os.getcwd()
+        risk_query = f"<RISK_CONFIRMATION> Explain the potential consequences and dangers of running the following command(s) if my current working directory is '{cwd}':\n---\n{command}\n---"
 
-def handle_commands(commands, auto_confirm=False, eval_mode=False, rich_to_stderr=False):
+        # Increased delay for API rate limits
+        time.sleep(1.5)
+
+        risk_response = provider.generate_response(
+            risk_query,
+            system_context=None,
+            verbose=False,
+            override_system_prompt=_RISK_ASSESSMENT_SYSTEM_PROMPT
+        )
+        risk_explanation = risk_response.strip()
+        if not risk_explanation:
+             return "AI returned empty risk assessment."
+        return risk_explanation
+    except Exception as e:
+        return f"Risk assessment failed. Error: {e}"
+
+# List of safe informational commands that can be auto-executed
+SAFE_INFORMATIONAL_COMMANDS = [
+    'ls', 'wc', 'find', 'du', 'df', 'grep', 'cat', 'head', 'tail', 
+    'whoami', 'pwd', 'date', 'hostname', 'uptime', 'free', 'top', 
+    'ps', 'env', 'echo', 'which', 'whereis', 'locate', 'stat', 'file',
+    'grep', 'egrep', 'fgrep', 'sed', 'awk', 'cut', 'sort', 'uniq', 'tr'
+]
+
+# List of safe informational commands that can be auto-executed
+SAFE_INFORMATIONAL_COMMANDS = [
+    # Basic file/directory info
+    'ls', 'wc', 'find', 'du', 'df', 'grep', 'cat', 'head', 'tail', 
+    'whoami', 'pwd', 'date', 'hostname', 'uptime', 'free', 'top', 
+    'ps', 'env', 'echo', 'which', 'whereis', 'locate', 'stat', 'file',
+    'grep', 'egrep', 'fgrep', 'sed', 'awk', 'cut', 'sort', 'uniq', 'tr',
+    'diff', 'comm', 'cmp', 'md5', 'sha1sum', 'sha256sum', 'base64',
+    
+    # System info & Hardware
+    'uname', 'arch', 'sw_vers', 'system_profiler', 'sysctl', 'diskutil',
+    'lscpu', 'lsblk', 'lspci', 'lsusb', 'ifconfig', 'ip', 'netstat', 
+    'ping', 'traceroute', 'nslookup', 'dig', 'curl', 'wget',
+    
+    # Development tools (status/info only)
+    'git', 'brew', 'npm', 'node', 'python', 'python3', 'pip', 'pip3',
+    'docker', 'docker-compose', 'java', 'javac', 'go', 'rustc', 'cargo',
+    'php', 'ruby', 'perl', 'make', 'gcc', 'g++', 'clang', 'swift',
+    
+    # Package managers (info only)
+    'apt-cache', 'yum', 'dnf', 'pkg', 'dpkg', 'rpm',
+    
+    # Text processing
+    'column', 'fmt', 'fold', 'nl', 'pr', 'rev', 'tac', 'tailf'
+]
+
+def is_purely_informational(commands):
+    """Check if all commands in the list are safe and informational for the current OS."""
+    import platform
+    from terminalai.command_utils import is_informational_command
+    current_os = platform.system()
+    
+    # Filter commands that match current OS keywords if AI suggested multiple
+    os_commands = []
+    for cmd in commands:
+        parts = cmd.split()
+        if not parts: continue
+        base_cmd = parts[0].lower()
+        
+        # Simple OS-affinity check
+        is_windows_cmd = base_cmd in ['dir', 'del', 'copy', 'move', 'type', 'cls', 'rd', 'md']
+        if current_os == "Windows" and is_windows_cmd:
+            os_commands.append(cmd)
+        elif current_os != "Windows" and not is_windows_cmd:
+            os_commands.append(cmd)
+
+    if not os_commands:
+        return False, []
+
+    for cmd in os_commands:
+        if not is_informational_command(cmd):
+            return False, []
+            
+    return True, os_commands
+
+# --- Main Command Handling Logic ---
+
+def handle_commands(commands, auto_confirm=False):
     """Handle extracted commands, prompting the user and executing if confirmed."""
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.text import Text
+    console = Console()
 
-    console = Console(file=sys.stderr if rich_to_stderr else None)
+    # Check for silent auto-execution of safe informational commands
+    is_safe, filtered_commands = is_purely_informational(commands)
+    if is_safe and not auto_confirm:
+        for cmd in filtered_commands:
+            run_command(cmd, silent=True)
+        return
 
-    # Detect shell integration
-    shell_integration_active = os.environ.get("TERMINALAI_SHELL_INTEGRATION") == "1"
+    # Check if stdin is a terminal or a pipe
+    is_interactive = sys.stdin.isatty()
+
+    provider_instance = None
+    if commands:
+        try:
+            config = load_config()
+            default_provider_name = config.get("default_provider")
+            if default_provider_name:
+                provider_instance = get_provider(default_provider_name)
+        except Exception as e:
+            console.print(Text(f"[WARNING] Could not load AI provider for risk assessment: {e}", style="yellow"))
+            # provider_instance remains None
 
     if not commands:
         return
 
     n_commands = len(commands)
 
-    # Always enumerate and prompt for selection if more than one command
-    if n_commands > 1:
-        cmd_list = []
-        for i, cmd in enumerate(commands, 1):
-            is_risky_cmd = is_risky_command(cmd)
-            is_stateful_cmd = is_stateful_command(cmd)
-            cmd_text = f"[cyan]{i}[/cyan]: [white]{cmd}[/white]"
-            if is_risky_cmd:
-                cmd_text += " [bold red][RISKY][/bold red]"
+    color_reset = "\033[0m"
+    color_bold_green = "\033[1;32m"
+    color_bold_yellow = "\033[1;33m"
+
+    # Non-interactive mode with pipe input special handling
+    if not is_interactive:
+        console.print("[dim]Running in non-interactive mode (input from pipe)[/dim]")
+
+        # If auto-confirm is on, proceed as normal
+        if auto_confirm:
+            # Process continues with existing auto-confirm logic
+            pass
+        # If not auto-confirm but we have commands, execute the first one automatically
+        elif n_commands == 1:
+            command = commands[0]
+            is_stateful_cmd = is_stateful_command(command)
+            is_risky_cmd = is_risky_command(command)
+
             if is_stateful_cmd:
-                cmd_text += " [bold yellow][STATEFUL][/bold yellow]"
-            cmd_list.append(cmd_text)
+                console.print("[yellow]Stateful command detected in non-interactive mode. Command will be copied to clipboard.[/yellow]")
+                copy_to_clipboard(command)
+                console.print(f"[green]Command copied to clipboard: {command}[/green]")
+                return
+
+            if is_risky_cmd:
+                console.print("[red]Risky command detected in non-interactive mode. Command will not be executed.[/red]")
+                return
+
+            # Run first command automatically if not risky or stateful
+            console.print(f"[green]Auto-executing first command in non-interactive mode: {command}[/green]")
+            run_command(command, auto_confirm=True)
+            return
+        elif n_commands > 1:
+            # With multiple commands and no auto-confirm, just print the commands
+            console.print("[yellow]Multiple commands detected in non-interactive mode without auto-confirm.[/yellow]")
+            console.print("[yellow]First command will be executed automatically if not risky or stateful.[/yellow]")
+
+            cmd_first = commands[0]
+            is_stateful_first = is_stateful_command(cmd_first)
+            is_risky_first = is_risky_command(cmd_first)
+
+            if is_stateful_first:
+                console.print("[yellow]First command is stateful. Command will be copied to clipboard.[/yellow]")
+                copy_to_clipboard(cmd_first)
+                console.print(f"[green]Command copied to clipboard: {cmd_first}[/green]")
+                return
+
+            if is_risky_first:
+                console.print("[red]First command is risky. Command will not be executed.[/red]")
+                return
+
+            # Run first command automatically if not risky or stateful
+            console.print(f"[green]Auto-executing first command: {cmd_first}[/green]")
+            run_command(cmd_first, auto_confirm=True)
+            return
+
+    # Proceed with normal interactive handling
+    if n_commands == 1:
+        command = commands[0]
+        is_stateful_cmd = is_stateful_command(command)
+        is_risky_cmd = is_risky_command(command)
+
+        if is_risky_cmd:
+            risk_explanation = _get_ai_risk_assessment(command, console, provider_instance)
+            console.print(Panel(
+                Text(risk_explanation, style="yellow"),
+                title="[bold red]AI Risk Assessment[/bold red]",
+                border_style="red",
+                expand=False
+            ))
+
+        # Always handle stateful commands the same way, regardless of auto_confirm
+        if is_stateful_cmd:
+            prompt_text = (
+                f"[STATEFUL COMMAND] '{command}' changes shell state. "
+                "Copy to clipboard? [Y/n]: "
+            )
+            console.print(Text(prompt_text, style="yellow bold"), end="")
+            choice = input().lower() or "y" # Default to yes (copy)
+            if choice == 'y':
+                copy_to_clipboard(command)
+                console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
+            return # Done with this single stateful command
+
+        # Auto-confirm for non-stateful, non-risky commands
+        if auto_confirm and not is_risky_cmd:
+            console.print(Text("\n[Auto-executing command]", style="bold blue"))
+            console.print(Panel(Text(command, style="cyan bold"),
+                               border_style="blue",
+                               expand=False))
+            run_command(command, auto_confirm=True)
+            return
+
+        # Risky commands always require confirmation
+        if is_risky_cmd:
+            prompt_style = "red bold"
+            prompt_msg_text = Text("[RISKY] Execute '", style=prompt_style)
+            prompt_msg_text.append(command, style=prompt_style + " underline")
+            prompt_msg_text.append("'? [y/N]: ", style=prompt_style)
+            console.print(prompt_msg_text, end="")
+            choice = input().lower() or "n"  # Default to no for risky
+            if choice == "y":
+                run_command(command, auto_confirm=auto_confirm)
+            else:
+                console.print("[Cancelled]")
+            return
+
+        # Regular non-risky, non-stateful command without auto_confirm
+        prompt_style = "green"
+        prompt_msg_text = Text("Execute '", style=prompt_style)
+        prompt_msg_text.append(command, style=prompt_style + " underline")
+        prompt_msg_text.append("'? [Y/n]: ", style=prompt_style)
+        console.print(prompt_msg_text, end="")
+        choice = input().lower() or "y"  # Default to yes
+
+        if choice == "y":
+            run_command(command, auto_confirm=auto_confirm)
+        else:
+            console.print("[Cancelled]")
+        return
+
+    # Multiple commands
+    else:
+        # Auto-confirm case for multiple commands
+        if auto_confirm:
+            for cmd_item in commands:
+                is_stateful_item = is_stateful_command(cmd_item)
+                is_risky_item = is_risky_command(cmd_item)
+
+                if is_stateful_item:
+                    copy_to_clipboard(cmd_item)
+                    console.print(f"[green]Command copied to clipboard: {cmd_item}[/green]")
+                elif not is_risky_item:
+                    console.print(f"[green]Auto-executing: {cmd_item}[/green]")
+                    run_command(cmd_item, auto_confirm=True)
+                else:
+                    # For risky commands, show assessment and ask for confirmation
+                    risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
+                    console.print(Panel(
+                        Text(risk_explanation, style="yellow"),
+                        title="[bold red]AI Risk Assessment[/bold red]",
+                        border_style="red",
+                        expand=False
+                    ))
+                    prompt_style = "red bold"
+                    prompt_msg_text = Text("[RISKY] Execute '", style=prompt_style)
+                    prompt_msg_text.append(cmd_item, style=prompt_style + " underline")
+                    prompt_msg_text.append("'? [y/N]: ", style=prompt_style)
+                    console.print(prompt_msg_text, end="")
+                    choice = input().lower() or "n"  # Default to no for risky commands
+                    if choice == "y":
+                        run_command(cmd_item, auto_confirm=auto_confirm)
+                    else:
+                        console.print(f"[Skipped: {cmd_item}]")
+            return
+
+        # Display command list and prompt for selection (not auto_confirm)
+        cmd_list_display = []
+        for i, cmd_text_item in enumerate(commands, 1):
+            is_risky_item = is_risky_command(cmd_text_item)
+            is_stateful_item = is_stateful_command(cmd_text_item)
+
+            display_item = Text()
+            display_item.append(f"{i}", style="cyan")
+            display_item.append(f": {cmd_text_item}", style="white")
+            if is_risky_item:
+                display_item.append(" [RISKY]", style="bold red")
+            if is_stateful_item:
+                display_item.append(" [STATEFUL]", style="bold yellow")
+            cmd_list_display.append(display_item)
+
+        # Create a single Text object for the panel content
+        panel_content = Text("\n").join(cmd_list_display)
         console.print(Panel(
-            "\n".join(cmd_list),
+            panel_content,
             title=f"Found {n_commands} commands",
             border_style="blue"
         ))
-        console.print(Text("Enter command number, 'a' for all, or 'q' to quit: ", style="bold cyan"), end="")
-        choice = input().lower()
 
-        if choice == "q":
+        prompt_message = Text("Enter command number, 'a' for all, or 'q' to quit: ", style="bold cyan")
+        console.print(prompt_message, end="")
+        user_choice = input().lower()
+
+        if user_choice == "q":
             return
-        elif choice == "a":
-            for cmd in commands:
-                is_cmd_risky = is_risky_command(cmd)
-                if is_cmd_risky:
-                    console.print(Text(f"[RISKY] Execute risky command '{cmd}'? [y/N]: ", style="red bold"), end="")
-                    subchoice = input().lower()
-                    if subchoice != "y":
-                        continue
-                run_command(cmd)
-            return  # Always return after handling 'a'
-        elif choice.isdigit():
-            idx = int(choice) - 1
+
+        elif user_choice == "a":
+            console.print(Text("Executing all non-stateful/non-risky (unless auto-confirmed) commands:", style="magenta"))
+            for i, cmd_item in enumerate(commands):
+                console.print(f"Processing command {i+1}: {cmd_item}")
+                is_stateful_item = is_stateful_command(cmd_item)
+                is_risky_item = is_risky_command(cmd_item)
+
+                if is_risky_item:
+                    risk_explanation = _get_ai_risk_assessment(cmd_item, console, provider_instance)
+                    console.print(Panel(
+                        Text(risk_explanation, style="yellow"),
+                        title="[bold red]AI Risk Assessment[/bold red]",
+                        border_style="red",
+                        expand=False
+                    ))
+
+                if is_stateful_item:
+                    copy_prompt_text = Text(f"[STATEFUL COMMAND] '{cmd_item}'. Copy to clipboard? [Y/n]: ", style="yellow bold")
+                    console.print(copy_prompt_text, end="")
+                    sub_choice = input().lower() or "y"
+                    if sub_choice == 'y':
+                        copy_to_clipboard(cmd_item)
+                        console.print("[green]Command copied to clipboard.[/green]")
+                    continue # Move to next command in 'a'
+
+                # Non-stateful command in 'a'
+                if auto_confirm and not is_risky_item:
+                    console.print(f"[green]Auto-executing: {cmd_item}[/green]")
+                    run_command(cmd_item, auto_confirm=True)
+                elif is_risky_item: # Needs explicit confirmation even in 'a' if not auto_confirm
+                    exec_prompt_text = Text(f"[RISKY] Execute '{cmd_item}'? [y/N]: ", style="red bold")
+                    console.print(exec_prompt_text, end="")
+                    sub_choice = input().lower() or "n"
+                    if sub_choice == "y":
+                        run_command(cmd_item, auto_confirm=auto_confirm)
+                    else:
+                        console.print(f"[Skipped: {cmd_item}]")
+                else: # Not risky, not stateful, not auto_confirm - prompt for this specific one in 'a'
+                    exec_prompt_text = Text(f"Execute '{cmd_item}'? [Y/n]: ", style="green")
+                    console.print(exec_prompt_text, end="")
+                    sub_choice = input().lower() or "y"
+                    if sub_choice == "y":
+                        run_command(cmd_item, auto_confirm=auto_confirm)
+                    else:
+                        console.print(f"[Skipped: {cmd_item}]")
+            return
+
+        elif user_choice.isdigit():
+            idx = int(user_choice) - 1
             if 0 <= idx < len(commands):
-                cmd = commands[idx]
-                is_cmd_risky = is_risky_command(cmd)
-                if is_cmd_risky:
-                    console.print(Text(f"[RISKY] Execute risky command '{cmd}'? [y/N]: ", style="red bold"), end="")
-                    subchoice = input().lower()
-                    if subchoice == "y":
-                        run_command(cmd)
+                cmd_to_run = commands[idx]
+                is_stateful_cmd_num = is_stateful_command(cmd_to_run)
+                is_risky_cmd_num = is_risky_command(cmd_to_run)
+
+                if is_risky_cmd_num:
+                    risk_explanation_num = _get_ai_risk_assessment(cmd_to_run, console, provider_instance)
+                    console.print(Panel(
+                        Text(risk_explanation_num, style="yellow"),
+                        title="[bold red]AI Risk Assessment[/bold red]",
+                        border_style="red",
+                        expand=False
+                    ))
+
+                if is_stateful_cmd_num:
+                    copy_prompt_text_num = Text(f"[STATEFUL COMMAND] '{cmd_to_run}'. Copy to clipboard? [Y/n]: ", style="yellow bold")
+                    console.print(copy_prompt_text_num, end="")
+                    sub_choice_num = input().lower() or "y"
+                    if sub_choice_num == 'y':
+                        copy_to_clipboard(cmd_to_run)
+                        console.print("[green]Command copied to clipboard.[/green]")
+                elif is_risky_cmd_num: # Not stateful, but risky
+                    exec_prompt_text_num = Text(f"[RISKY] Execute '{cmd_to_run}'? [y/N]: ", style="red bold")
+                    console.print(exec_prompt_text_num, end="")
+                    sub_choice_num = input().lower() or "n"
+                    if sub_choice_num == "y":
+                        run_command(cmd_to_run, auto_confirm=auto_confirm)
                     else:
                         console.print("[Cancelled]")
-                        return
-                else:
-                    run_command(cmd)
+                else: # Not stateful, not risky - chosen by number, execute directly.
+                    console.print(f"[green]Executing selected command: {cmd_to_run}[/green]")
+                    run_command(cmd_to_run, auto_confirm=auto_confirm)
             else:
-                console.print(f"[red]Invalid choice: {choice}[/red]")
+                console.print(f"[red]Invalid choice: {user_choice}[/red]")
+            return
+        else: # Invalid choice from multi-command prompt
+            console.print(f"[red]Invalid selection: {user_choice}[/red]")
             return
 
-    # Single command logic
-    command = commands[0]
-    is_risky_cmd = is_risky_command(command)
-    if eval_mode or shell_integration_active:
-        if is_risky_cmd:
-            confirm_msg = "Execute? [y/N]: "
-            default_choice = "n"
-        else:
-            confirm_msg = "Execute? [Y/n]: "
-            default_choice = "y"
-        style = "yellow" if is_risky_cmd else "green"
-        print(confirm_msg, end="", file=sys.stderr if rich_to_stderr else sys.stdout)
-        (sys.stderr if rich_to_stderr else sys.stdout).flush()
-        choice = input().lower()
-        if not choice:
-            choice = default_choice
-        if choice == "y":
-            print(command)
-            sys.exit(0)
-        else:
-            print("[Cancelled]", file=sys.stderr if rich_to_stderr else sys.stdout)
-            return  # Never sys.exit(1) on cancel
-    if is_stateful_command(command):
-        prompt_text = (
-            f"[STATEFUL COMMAND] '{command}' changes shell state. "
-            "To execute seamlessly, install the ai shell integration (see setup). "
-            "Copy to clipboard instead? [Y/n]: "
-        )
-        console.print(Text(prompt_text, style="yellow bold"), end="")
-        choice = input().lower()
-        if choice != 'n':
-            copy_to_clipboard(command)
-            console.print("[green]Command copied to clipboard. Paste and run manually.[/green]")
-        return
-    confirm_msg = "Execute? [y/N]: " if is_risky_cmd else "Execute? [Y/n]: "
-    default_choice = "n" if is_risky_cmd else "y"
-    if auto_confirm and not is_risky_cmd:
-        console.print(f"[green]Auto-executing: {command}[/green]")
-        run_command(command)
-        return
-    style = "yellow" if is_risky_cmd else "green"
-    console.print(Text(confirm_msg, style=style), end="")
-    choice = input().lower()
-    if not choice:
-        choice = default_choice
-    if choice == "y":
-        run_command(command)
-    else:
-        console.print("[Cancelled]")
+    # Should be unreachable if all paths above return
     return
 
-def run_command(command):
-    """Execute a shell command with error handling."""
-    from rich.console import Console
-    from rich.panel import Panel
+def run_command(command, auto_confirm=False, silent=False):
+    """Execute a shell command with error handling.
 
+    Args:
+        command: The command to execute
+        auto_confirm: If True, execute without confirmation prompt
+        silent: If True, suppress 'Executing...' panels
+    """
     console = Console()
 
     if not command:
         return
 
-    if not is_shell_command(command):
+    if not is_shell_command(command) and not auto_confirm:
         console.print(f"[yellow]Warning: '{command}' doesn't look like a valid shell command.[/yellow]")
         console.print("[yellow]Execute anyway? [y/N]:[/yellow]", end=" ")
         choice = input().lower()
         if choice != "y":
             return
+    elif not is_shell_command(command) and auto_confirm:
+        console.print(f"[yellow]Warning: '{command}' doesn't look like a valid shell command. Executing anyway due to auto-confirm.[/yellow]")
 
-    console.print(Panel(f"[bold white]Executing: [/bold white][cyan]{command}[/cyan]",
-                       border_style="green",
-                       title="Command Execution",
-                       title_align="left"))
+    # Display different message based on auto-confirm
+    if not silent:
+        if auto_confirm:
+            console.print(Text("\n[Auto-executing command]", style="bold blue"))
+            console.print(Panel(Text(command, style="cyan bold"),
+                               border_style="blue",
+                               expand=False))
+        else:
+            console.print(Text("\n[Executing command]", style="bold green"))
+            console.print(Panel(Text(command, style="cyan bold"),
+                               border_style="green",
+                               expand=False))
 
-    success = run_shell_command(command)
-    if not success:
-        console.print(f"[bold red]Command failed: {command}[/bold red]")
+    # Capture the output to display it properly
+    import subprocess
+    import shlex
+    import platform
+
+    # On Windows, many commands are shell built-ins (e.g., 'dir'). Always use the shell there.
+    system_name = platform.system()
+
+    # Check if command contains shell operators (|, >, <, &&, ||, ;, etc.)
+    has_shell_operators = any(op in command for op in ['|', '>', '<', '&&', '||', ';', '$', '`', '*', '?', '{', '['])
+
+    try:
+        # Run the command and capture its output
+        if system_name == "Windows":
+            process = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        elif has_shell_operators:
+            # Use shell=True for commands with shell operators
+            process = subprocess.run(
+                command,  # Pass command as string when using shell=True
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        else:
+            # Use shlex.split for regular commands without shell operators
+            process = subprocess.run(
+                shlex.split(command),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        # Show command output with a clear label
+        if process.stdout:
+            console.print(Panel(
+                process.stdout.strip(),
+                title="[bold cyan]Command Result[/bold cyan]",
+                title_align="center",
+                border_style="cyan",
+                padding=(1, 2),
+                expand=False
+            ))
+
+        # Show any errors
+        if process.returncode != 0:
+            console.print(f"[bold red]Command failed with exit code {process.returncode}[/bold red]")
+            if process.stderr:
+                console.print(f"[red]Error: {process.stderr.strip()}[/red]")
+            return False
+
+        return True
+    except Exception as e:
+        console.print(f"[bold red]Failed to execute command: {e}[/bold red]")
+        return False
 
 def interactive_mode(chat_mode=False):
     """Run TerminalAI in interactive mode. If chat_mode is True, stay in a loop."""
-    from terminalai.config import load_config
-    from rich.console import Console
-    from rich.text import Text
-    from rich.panel import Panel
-    from rich.rule import Rule
-
-    config = load_config()
     console = Console()
 
-    # Determine current provider/model for display
-    current_provider = config.get("default_provider", "Not configured")
-    
-    # Get model with fallbacks for hardcoded defaults in ai_providers.py
-    # This ensures what we show matches what is likely used
-    provider_config = config.get("providers", {}).get(current_provider, {})
-    current_model = provider_config.get("model", "")
-    
-    if not current_model:
-        if current_provider == "openrouter":
-            current_model = "openai/gpt-3.5-turbo"
-        elif current_provider == "gemini":
-            current_model = "gemini-pro"
-        elif current_provider == "mistral":
-            current_model = "mistral-tiny"
-        elif current_provider == "ollama":
-            current_model = "llama3"
-        else:
-            current_model = "default"
-
-    # Construct the display string for the panel
-    display_info = f"Provider: {current_provider} ({current_model})"
+    # Check if stdin is a terminal or a pipe
+    is_interactive = sys.stdin.isatty()
 
     if chat_mode:
         console.print(Panel.fit(
-            Text(f"TerminalAI AI Chat Mode: You are now chatting with the AI.\nType 'exit' to quit.", style="bold magenta"),
+            Text("TerminalAI AI Chat Mode: You are now chatting with the AI. Type 'exit' to quit.", style="bold magenta"),
             border_style="magenta"
         ))
         console.print("[dim]Type 'exit', 'quit', or 'q' to return to your shell.[/dim]")
     else:
+        # Create the styled text for the panel
+        panel_text = Text()
+        panel_text.append("Terminal AI: ", style="bold cyan")
+        panel_text.append("What is your question? ", style="white")
+        panel_text.append("(Type ", style="yellow")
+        panel_text.append("exit", style="bold red")
+        panel_text.append(" or ", style="yellow")
+        panel_text.append("q", style="bold red")
+        panel_text.append(" to quit)", style="yellow")
         console.print(Panel.fit(
-            Text(f"TerminalAI: What is your question? (Type 'exit' to quit)", style="bold cyan"),
-            border_style="cyan"
+            panel_text,
+            border_style="cyan" # Keep border cyan
         ))
+
+    # Special handling for non-interactive mode (pipe input)
+    if not is_interactive:
+        console.print("[dim]Running in non-interactive mode (input from pipe)[/dim]")
+        try:
+            # Read a single line from stdin (the piped content)
+            query = sys.stdin.readline().strip()
+            console.print(f"AI:(stdin)> {query}")
+
+            if not query:
+                console.print("[yellow]No input received from pipe.[/yellow]")
+                return
+
+            # Process the query
+            system_context = get_system_context()
+            provider = get_provider(load_config().get("default_provider", ""))
+            if not provider:
+                console.print("[bold red]No AI provider configured. Please run 'ai setup' first.[/bold red]")
+                return
+
+            # Show thinking indicator
+            console.print("[dim]Thinking...[/dim]")
+
+            # Preprocess the query
+            processed_query = preprocess_query(query)
+            if processed_query != query:
+                console.print(Panel(
+                    Text(f"Note: Clarified your query to: \"{processed_query}\"", style="cyan"),
+                    border_style="cyan",
+                    expand=False
+                ))
+
+            # Get response
+            response_from_provider = provider.generate_response(processed_query, system_context, verbose=False)
+
+            # Show response
+            console.print(Rule(style="dim"))
+
+            # Clean response
+            cleaned_response = response_from_provider.strip()
+            if cleaned_response.lower().startswith("[ai]"):
+                cleaned_response = cleaned_response[4:].lstrip()
+            elif cleaned_response.lower().startswith("ai:"):
+                cleaned_response = cleaned_response[3:].lstrip()
+
+            print_ai_answer_with_rich(cleaned_response)
+
+            # Extract and handle commands with auto-execute for first non-risky command
+            commands = get_commands_interactive(cleaned_response, max_commands=3)
+            if commands:
+                # Auto-confirm in pipe mode for non-interactive use
+                handle_commands(commands, auto_confirm=True)
+
+            return
+
+        except EOFError:
+            console.print("[yellow]No input received from pipe.[/yellow]")
+            return
+        except Exception as e:
+            console.print(f"[bold red]Error processing piped input: {str(e)}[/bold red]")
+            import traceback
+            traceback.print_exc()
+            return
 
     while True:
         # Add visual separation between interactions
         console.print("")
-        
-        # customized prompt with provider and model
-        prompt_text = Text()
-        prompt_text.append("[", style="bold white")
-        prompt_text.append(current_provider, style="bold blue")
-        prompt_text.append(":", style="bold white")
-        prompt_text.append(current_model, style="bold yellow")
-        prompt_text.append("] > ", style="bold green")
-        
-        console.print(prompt_text, end="")
+        current_config = load_config() # Load config to get provider and model info
+        provider_name = current_config.get("default_provider", "Unknown")
+
+        display_provider_name = provider_name
+        if provider_name == "ollama":
+            ollama_model = current_config.get("providers", {}).get("ollama", {}).get("model", "")
+            if ollama_model:
+                display_provider_name = f"ollama-{ollama_model}"
+            else:
+                display_provider_name = "ollama (model not set)" # Fallback if model isn't in config
+
+        prompt = Text()
+        prompt.append("AI:", style="bold cyan")
+        prompt.append("(", style="bold green")
+        prompt.append(display_provider_name, style="bold green") # Use the potentially modified name
+        prompt.append(")", style="bold green")
+        prompt.append("> ", style="bold cyan")
+        console.print(prompt, end="")
         query = input().strip()
 
         if query.lower() in ["exit", "quit", "q"]:
             console.print("[bold cyan]Goodbye![/bold cyan]")
-            sys.exit(0)
+            break
 
         if not query:
             continue
 
-        from terminalai.shell_integration import get_system_context
         system_context = get_system_context()
 
-        from terminalai.ai_providers import get_provider
-        provider = get_provider(config.get("default_provider", ""))
+        provider = get_provider(load_config().get("default_provider", ""))
         if not provider:
             console.print("[bold red]No AI provider configured. Please run 'ai setup' first.[/bold red]")
             break
@@ -333,113 +854,71 @@ def interactive_mode(chat_mode=False):
             # Show a thinking indicator
             console.print("[dim]Thinking...[/dim]")
 
-            response = provider.generate_response(query, system_context, verbose=False)
+            # Preprocess query to clarify potentially ambiguous requests
+            processed_query = preprocess_query(query)
+            if processed_query != query:
+                console.print(Panel(
+                    Text(f"Note: Clarified your query to: \"{processed_query}\"", style="cyan"),
+                    border_style="cyan",
+                    expand=False
+                ))
+
+            response_from_provider = provider.generate_response(processed_query, system_context, verbose=False)
 
             # Clear the thinking indicator with a visual separator
             console.print(Rule(style="dim"))
 
-            from terminalai.formatting import print_ai_answer_with_rich
-            print_ai_answer_with_rich(response)
+            # Clean the response before printing and command extraction
+            temp_response = response_from_provider.strip() # General strip first
+            # Use a regex for more flexible prefix matching, e.g., "[AI] ", "AI: ", "[AI]", "AI:"
+            # and ensure we only strip it if it's at the very beginning of the string.
+            # common_ai_prefixes = re.compile(r"^(\[AI\]|AI:)\s*", re.IGNORECASE)
+            # match = common_ai_prefixes.match(temp_response)
+            # if match:
+            #    cleaned_response = temp_response[match.end():]
+            # else:
+            #    cleaned_response = temp_response
 
-            # Extract and handle commands from the response, no max_commands limit
-            from terminalai.command_extraction import extract_commands_from_output
-            commands = extract_commands_from_output(response)
+            # Simpler string method approach, which should be sufficient here:
+            cleaned_response = temp_response
+            if temp_response.lower().startswith("[ai]"):
+                # Strip "[ai]" and then any leading whitespace
+                cleaned_response = temp_response[4:].lstrip()
+            elif temp_response.lower().startswith("ai:"):
+                # Strip "ai:" and then any leading whitespace
+                cleaned_response = temp_response[3:].lstrip()
 
-            # --- Casing enforcement post-processing ---
-            # Try to extract likely file/folder names from the user query
-            import re
-            # Simple heuristic: look for quoted or single-word folder/file names in the query
-            # (You can improve this with more advanced NLP if needed)
-            query_words = re.findall(r'"([^"]+)"|\'([^\']+)\'|\b([a-zA-Z0-9_\-]+)\b', query)
-            # Flatten and filter empty
-            query_names = [w for tup in query_words for w in tup if w]
-            # Remove common words
-            blacklist = set(['the', 'folder', 'file', 'directory', 'to', 'in', 'on', 'find', 'go', 'cd', 'show', 'list', 'and', 'of', 'with', 'for', 'named', 'called', 'a', 'an', 'is', 'as', 'from', 'by', 'at', 'into', 'this', 'that', 'it', 'my', 'your', 'their', 'our', 'his', 'her', 'its', 'which', 'where', 'how', 'do', 'does', 'can', 'i', 'you', 'we', 'they', 'he', 'she', 'or', 'not', 'be', 'are', 'was', 'were', 'will', 'would', 'should', 'could', 'has', 'have', 'had', 'use', 'using', 'make', 'create', 'delete', 'remove', 'move', 'copy', 'open', 'close', 'edit', 'run', 'execute', 'print', 'output', 'input', 'set', 'get', 'change', 'switch', 'start', 'stop', 'restart', 'install', 'uninstall', 'update', 'upgrade', 'downgrade', 'enable', 'disable', 'turn', 'off', 'on', 'up', 'down', 'left', 'right', 'back', 'forward', 'previous', 'next', 'first', 'last', 'all', 'each', 'every', 'any', 'some', 'none', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'])
-            likely_names = [n for n in query_names if n.lower() not in blacklist and len(n) > 2]
-            # For each command, replace any instance of a likely name with the exact casing from the query
-            if likely_names:
-                def enforce_casing(cmd):
-                    for name in likely_names:
-                        # Replace all case-insensitive matches with the exact casing
-                        cmd = re.sub(r'(?i)'+re.escape(name), name, cmd)
-                    return cmd
-                commands = [enforce_casing(cmd) for cmd in commands]
-            # --- End casing enforcement ---
+            print_ai_answer_with_rich(cleaned_response) # Pass cleaned response
 
-            # Always prompt for execution if there are commands
+            # Extract and handle commands from the CLEANED response
+            commands = get_commands_interactive(cleaned_response, max_commands=3)
+
             if commands:
-                # Custom inline handler for chat mode: print only the command and exit if confirmed
-                command = commands[0]
-                is_stateful = is_stateful_command(command)
-                is_risky = is_risky_command(command)
-                confirm_msg = "Execute? [y/N]: " if is_risky else "Execute? [Y/n]: "
-                default_choice = "n" if is_risky else "y"
-                style = "yellow" if is_risky else "green"
-                console.print(Text(confirm_msg, style=style), end="")
-                choice = input().lower()
-                if not choice:
-                    choice = default_choice
-                if choice == "y":
-                    # Print ONLY the command to stdout and exit
-                    print(command)
-                    sys.exit(0)
-                else:
-                    console.print("[Cancelled]")
-                # Always exit after showing a response and handling commands, unless in chat_mode
-                if not chat_mode:
-                    sys.exit(0)
-            # Always exit after showing a response and handling commands, unless in chat_mode
-            if not chat_mode:
-                sys.exit(0)
+                handle_commands(commands, auto_confirm=False)
 
-        except SystemExit:
-            # Allow clean exit without traceback
+        except SystemExit: # Allow SystemExit from handle_commands (eval mode) to pass through
             raise
         except (ValueError, TypeError, OSError, KeyboardInterrupt) as e:
-            # Catch common user/AI errors, but not all exceptions
+            # Catch common user/AI errors
             console.print(f"[bold red]Error during processing: {str(e)}[/bold red]")
+            import traceback
             traceback.print_exc()
-        except RuntimeError as e:
+        except Exception as e:
             # Catch-all for truly unexpected errors (should be rare)
             console.print(f"[bold red]Unexpected error: {str(e)}[/bold red]")
+            import traceback
             traceback.print_exc()
-        # If not in chat_mode, exit after one question/command
+
+        # If NOT in chat_mode, exit after the first interaction (successful or error)
         if not chat_mode:
-            sys.exit(0)
+            break # Break the while loop
 
-def get_available_models():
-    """Get available models from the configured Ollama server.
-    
-    Returns:
-        List of model names or error message.
-    """
-    from terminalai.ai_providers import OllamaProvider
-    from terminalai.config import load_config
-    
-    config = load_config()
-    ollama_config = config.get("providers", {}).get("ollama", {})
-    
-    # Validate that Ollama is configured
-    if not ollama_config:
-        return "[Ollama API error] Ollama is not configured. Please run 'ai setup' and configure Ollama host."
-    
-    host = ollama_config.get("host", "http://localhost:11434")
-    
-    # Validate host format
-    if not host or not isinstance(host, str):
-        return "[Ollama API error] Invalid Ollama host configuration."
-    
-    provider = OllamaProvider(host)
-    models = provider.list_models()
-    
-    if isinstance(models, str) and models.startswith("[Ollama API error]"):
-        return models
-    
-    return models
+    # If the loop was broken (only happens if not chat_mode), exit cleanly.
+    sys.exit(0)
 
-def _set_default_provider_interactive(console):
+# New refactored function for setting default provider
+def _set_default_provider_interactive(console: Console):
     """Interactively sets the default AI provider and saves it to config."""
-    from terminalai.config import load_config, save_config
     config = load_config()
     providers = list(config['providers'].keys())
     console.print("\n[bold]Available providers:[/bold]")
@@ -461,14 +940,14 @@ def _set_default_provider_interactive(console):
         console.print("[red]Invalid selection.[/red]")
         return False
 
-def _set_ollama_model_interactive(console):
+# New refactored function for setting Ollama model
+def _set_ollama_model_interactive(console: Console):
     """Interactively sets the Ollama model and saves it to config."""
     import sys
     import os
-    debug_mode = os.environ.get("TERMINALAI_DEBUG", "0") == "1"
-    if debug_mode:
+    DEBUG = os.environ.get("TERMINALAI_DEBUG", "0") == "1"
+    if DEBUG:
         print("[DEBUG] Entered _set_ollama_model_interactive", file=sys.stderr)
-    from terminalai.config import load_config, save_config
     config = load_config()
     pname = 'ollama' # We are specifically configuring Ollama here
 
@@ -481,11 +960,11 @@ def _set_ollama_model_interactive(console):
         "Enter Ollama host (leave blank to keep current, e.g., http://localhost:11434): "
     )
     sys.stdout.flush()
-    if debug_mode:
+    if DEBUG:
         print("[DEBUG] About to prompt for Ollama host", file=sys.stderr)
     new_host_input = console.input(ollama_host_prompt).strip()
     console.print()  # Add a blank line for separation
-    if debug_mode:
+    if DEBUG:
         print(f"[DEBUG] Got Ollama host input: '{new_host_input}'", file=sys.stderr)
     host_to_use = current_host
     if new_host_input:
@@ -501,51 +980,51 @@ def _set_ollama_model_interactive(console):
         tags_url = f"{host_to_use}/api/tags"
         console.print(f"[dim]Fetching models from {tags_url}...[/dim]")
         sys.stdout.flush()
-        if debug_mode:
+        if DEBUG:
             print(f"[DEBUG] About to fetch models from {tags_url}", file=sys.stderr)
         response = requests.get(tags_url, timeout=5)
         response.raise_for_status()
         models_data = response.json().get("models", [])
-        if debug_mode:
+        if DEBUG:
             print(f"[DEBUG] Models data: {models_data}", file=sys.stderr)
         if models_data:
             available_models = [m.get("name") for m in models_data if m.get("name")]
 
-            if available_models:
-                console.print("[bold]Available Ollama models:[/bold]")
-                for i, model_name_option in enumerate(available_models, 1):
-                    console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
-                if debug_mode:
-                    print(f"[DEBUG] Printed {len(available_models)} models", file=sys.stderr)
-                model_choice_prompt = (
-                    "[bold green]Choose a model number, or enter 'c' to cancel: [/bold green]"
-                )
-                sys.stdout.flush()
-                if debug_mode:
-                    print("[DEBUG] About to prompt for model selection", file=sys.stderr)
-                while True:
-                    model_sel = console.input(model_choice_prompt).strip()
-                    if debug_mode:
-                        print(f"[DEBUG] Got model selection input: '{model_sel}'", file=sys.stderr)
-                    if model_sel.lower() == 'c':
-                        console.print("[yellow]Model selection cancelled. Model remains: {}[/yellow]".format(current_model))
-                        break
-                    if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
-                        selected_model_name = available_models[int(model_sel)-1]
-                        config['providers'][pname]['model'] = selected_model_name
-                        console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
-                        break
-                    else:
-                        console.print(f"[red]Invalid selection. Please enter a number between 1 and {len(available_models)}, or 'c' to cancel.[/red]")
+        if available_models:
+            console.print("[bold]Available Ollama models:[/bold]")
+            for i, model_name_option in enumerate(available_models, 1):
+                console.print(f"  [bold yellow]{i}[/bold yellow]. {model_name_option}")
+            if DEBUG:
+                print(f"[DEBUG] Printed {len(available_models)} models", file=sys.stderr)
+            model_choice_prompt = (
+                "[bold green]Choose a model number, or enter 'c' to cancel: [/bold green]"
+            )
+            sys.stdout.flush()
+            if DEBUG:
+                print("[DEBUG] About to prompt for model selection", file=sys.stderr)
+            while True:
+                model_sel = console.input(model_choice_prompt).strip()
+                if DEBUG:
+                    print(f"[DEBUG] Got model selection input: '{model_sel}'", file=sys.stderr)
+                if model_sel.lower() == 'c':
+                    console.print(f"[yellow]Model selection cancelled. Model remains: {current_model}[/yellow]")
+                    break
+                if model_sel.isdigit() and 1 <= int(model_sel) <= len(available_models):
+                    selected_model_name = available_models[int(model_sel)-1]
+                    config['providers'][pname]['model'] = selected_model_name
+                    console.print(f"[bold green]Ollama model set to: {selected_model_name}[/bold green]")
+                    break
+                else:
+                    console.print(f"[red]Invalid selection. Please enter a number between 1 and {len(available_models)}, or 'c' to cancel.[/red]")
         else:
             console.print(f"[yellow]No models found via Ollama API or API not reachable at {host_to_use}.[/yellow]")
             console.print("[yellow]You can still enter a model name manually.[/yellow]")
             manual_model_prompt = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
             sys.stdout.flush()
-            if debug_mode:
+            if DEBUG:
                 print("[DEBUG] About to prompt for manual model entry", file=sys.stderr)
             manual_model_input = console.input(manual_model_prompt).strip()
-            if debug_mode:
+            if DEBUG:
                 print(f"[DEBUG] Got manual model input: '{manual_model_input}'", file=sys.stderr)
             if manual_model_input:
                 config['providers'][pname]['model'] = manual_model_input
@@ -559,10 +1038,10 @@ def _set_ollama_model_interactive(console):
         console.print("[yellow]You can enter a model name manually.[/yellow]")
         manual_model_prompt_on_error = f"Enter Ollama model name (e.g., mistral:latest, current: {current_model}): "
         sys.stdout.flush()
-        if debug_mode:
+        if DEBUG:
             print("[DEBUG] About to prompt for manual model entry after error", file=sys.stderr)
         manual_model_input_on_error = console.input(manual_model_prompt_on_error).strip()
-        if debug_mode:
+        if DEBUG:
             print(f"[DEBUG] Got manual model input after error: '{manual_model_input_on_error}'", file=sys.stderr)
         if manual_model_input_on_error:
             config['providers'][pname]['model'] = manual_model_input_on_error
@@ -577,19 +1056,12 @@ def _set_ollama_model_interactive(console):
     console.print(f"  [bold]Host:[/bold] [green]{summary_host}[/green]")
     console.print(f"  [bold]Model:[/bold] [yellow]{summary_model}[/yellow]\n")
     save_config(config)
-    if debug_mode:
+    if DEBUG:
         print("[DEBUG] Exiting _set_ollama_model_interactive", file=sys.stderr)
     return True # Assuming success unless an unhandled exception occurs
 
 def setup_wizard():
     """Run the setup wizard to configure TerminalAI."""
-    from terminalai.config import (
-        load_config, save_config,
-        get_system_prompt, DEFAULT_SYSTEM_PROMPT
-    )
-    from rich.console import Console
-
-    config = load_config()
     console = Console()
 
     logo = '''
@@ -616,24 +1088,23 @@ def setup_wizard():
             "9. Check ai shell integration",
             "10. View quick setup guide",
             "11. About TerminalAI",
-            "12. List available Ollama models",
-            "13. Exit"
+            "12. Exit"
         ]
         menu_info = {
             '1': ("Set which AI provider (OpenRouter, Gemini, Mistral, Ollama) "
                   "is used by default for all queries."),
             '2': "View the current system prompt that guides the AI's behavior.",
-            '3': "Edit the system prompt to customize how the AI responds to your queries.",
+            '3': "Edit the system prompt to customize how the AI responds.",
             '4': "Reset the system prompt to the default recommended by TerminalAI.",
             '5': "Set/update API key/host for any provider.",
             '6': "List providers and their stored API key/host.",
-            '7': "Install the 'ai' shell function for seamless stateful command execution (recommended for advanced users).",
+            '7': ("Install the 'ai' shell function for seamless stateful command execution "
+                  "(Only affects ai \"...\" mode)."),
             '8': "Uninstall the 'ai' shell function from your shell config.",
-            '9': "Check if the 'ai' shell integration is installed and highlight it in your shell config.",
-            '10': "Display the quick setup guide to help you get started with TerminalAI.",
+            '9': "Check if the 'ai' shell integration is installed in your shell config.",
+            '10': "Display the quick setup guide to help you get started.",
             '11': "View information about TerminalAI, including version and links.",
-            '12': "List available Ollama models and select default model.",
-            '13': "Exit the setup menu."
+            '12': "Exit the setup menu."
         }
         for opt in menu_options:
             num, desc = opt.split('.', 1)
@@ -642,7 +1113,7 @@ def setup_wizard():
                        "for more info about an option.")
         console.print(f"[dim]{info_prompt}[/dim]")
         choice = console.input("[bold green]Choose an action (1-12): [/bold green]").strip()
-        config = load_config()
+
         if choice.startswith('i') and choice[1:].isdigit():
             info_num = choice[1:]
             if info_num in menu_info:
@@ -653,29 +1124,15 @@ def setup_wizard():
                 console.print("[red]No info available for that option.[/red]")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '1':
-            providers = list(config['providers'].keys())
-            console.print("\n[bold]Available providers:[/bold]")
-            for idx, p_item in enumerate(providers, 1):
-                is_default = ""
-                if p_item == config.get('default_provider'):
-                    is_default = ' (default)'
-                console.print(f"[bold yellow]{idx}[/bold yellow]. {p_item}{is_default}")
-            sel_prompt = f"[bold green]Select provider (1-{len(providers)}): [/bold green]"
-            sel = console.input(sel_prompt).strip()
-            if sel.isdigit() and 1 <= int(sel) <= len(providers):
-                selected_provider = providers[int(sel)-1]
-                config['default_provider'] = selected_provider
-                save_config(config)
-                console.print(f"[bold green]Default provider set to "
-                              f"{selected_provider}.[/bold green]")
-            else:
-                console.print("[red]Invalid selection.[/red]")
+            _set_default_provider_interactive(console)
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '2':
+            config = load_config() # Ensure config is loaded if not through other paths
             console.print("\n[bold]Current system prompt:[/bold]\n")
             console.print(get_system_prompt())
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '3':
+            config = load_config()
             console.print("\n[bold]Current system prompt:[/bold]\n")
             console.print(config.get('system_prompt', ''))
             new_prompt_input = (
@@ -693,11 +1150,13 @@ def setup_wizard():
                 console.print("[yellow]No changes made.[/yellow]")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '4':
+            config = load_config()
             config['system_prompt'] = DEFAULT_SYSTEM_PROMPT
             save_config(config)
             console.print("[bold green]System prompt reset to default.[/bold green]")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '5':
+            config = load_config()
             providers = list(config['providers'].keys())
             console.print("\n[bold]Providers:[/bold]")
             for idx, p_item in enumerate(providers, 1):
@@ -706,141 +1165,28 @@ def setup_wizard():
                           f"(1-{len(providers)}): [/bold green]")
             sel = console.input(sel_prompt).strip()
             if sel.isdigit() and 1 <= int(sel) <= len(providers):
-                pname = providers[int(sel)-1]
-                if pname == 'ollama':
-                    current = config['providers'][pname].get('host', '')
-                    console.print(f"Current host: {current}")
-                    ollama_host_prompt = (
-                        "Enter new Ollama host (e.g., http://localhost:11434) or press Enter to skip: "
-                    )
-                    new_host = console.input(ollama_host_prompt).strip()
-                    if new_host:
-                        config['providers'][pname]['host'] = new_host
+                pname_selected = providers[int(sel)-1]
+                if pname_selected == 'ollama':
+                    _set_ollama_model_interactive(console) # Call the refactored function for Ollama
+                else: # For other providers (OpenRouter, Gemini, Mistral)
+                    current_api_key = config['providers'][pname_selected].get('api_key', '')
+                    display_key = '(not set)' if not current_api_key else '[hidden]'
+                    console.print(f"Current API key: {display_key}")
+                    new_key_prompt = f"Enter new API key for {pname_selected}: "
+                    new_key = console.input(new_key_prompt).strip()
+                    if new_key:
+                        config['providers'][pname_selected]['api_key'] = new_key
                         save_config(config)
                         console.print(
-                            "[bold green]Ollama host updated.[/bold green]"
+                            f"[bold green]API key for {pname_selected} updated.[/bold green]"
                         )
-                    
-                    # Show available models for Ollama
-                    try:
-                        from terminalai.ai_providers import OllamaProvider
-                        host = config['providers'][pname].get('host', 'http://localhost:11434')
-                        provider = OllamaProvider(host)
-                        models = provider.list_models()
-                        if isinstance(models, list) and models:
-                            console.print(f"\n[bold]Available models for {pname}:[/bold]")
-                            for i, model in enumerate(models, 1):
-                                model_name = model.get("name", model.get("model", "Unknown"))
-                                console.print(f"[bold yellow]{i}[/bold yellow]. {model_name}")
-                            
-                            try:
-                                model_choice = int(console.input("Select model (or press Enter to skip): "))
-                                if 1 <= model_choice <= len(models):
-                                    selected_model = models[model_choice - 1].get("name", models[model_choice - 1].get("model", ""))
-                                    config['providers'][pname]['model'] = selected_model
-                                    console.print(f"[bold green]Model set to: {selected_model}[/bold green]")
-                                else:
-                                    console.print("[red]Invalid model selection.[/red]")
-                            except ValueError:
-                                console.print("[yellow]Skipping model selection.[/yellow]")
-                        else:
-                            console.print("[yellow]No models available or unable to fetch models.[/yellow]")
-                    except Exception as e:
-                        console.print(f"[red]Error fetching models: {e}[/red]")
-                    
-                    console.print("[yellow]No changes made.[/yellow]")
-                else:
-                    current = config['providers'][pname].get('api_key', '')
-                    if current:
-                        console.print(f"Current API key: [hidden]")
-                        new_key_prompt = f"Enter new API key for {pname} (or press Enter to skip): "
-                        new_key = console.input(new_key_prompt).strip()
-                        if new_key:
-                            config['providers'][pname]['api_key'] = new_key
-                            save_config(config)
-                            console.print(
-                                f"[bold green]API key for {pname} updated.[/bold green]"
-                            )
-                        
-                        # Show available models for API-based providers
-                        try:
-                            from terminalai.ai_providers import get_provider
-                            temp_provider = get_provider(pname)
-                            if temp_provider and hasattr(temp_provider, 'list_models'):
-                                models = temp_provider.list_models()
-                                if isinstance(models, list) and models:
-                                    console.print(f"\n[bold]Available models for {pname}:[/bold]")
-                                    for i, model in enumerate(models, 1):
-                                        model_name = model.get("id", model.get("name", "Unknown"))
-                                        model_desc = model.get("description", "")
-                                        if model_desc:
-                                            console.print(f"[bold yellow]{i}[/bold yellow]. {model_name} - {model_desc}")
-                                        else:
-                                            console.print(f"[bold yellow]{i}[/bold yellow]. {model_name}")
-                                    
-                                    try:
-                                        model_choice = int(console.input("Select model (or press Enter to skip): "))
-                                        if 1 <= model_choice <= len(models):
-                                            selected_model = models[model_choice - 1].get("id", models[model_choice - 1].get("name", ""))
-                                            config['providers'][pname]['model'] = selected_model
-                                            console.print(f"[bold green]Model set to: {selected_model}[/bold green]")
-                                        else:
-                                            console.print("[red]Invalid model selection.[/red]")
-                                    except ValueError:
-                                        console.print("[yellow]Skipping model selection.[/yellow]")
-                                else:
-                                    console.print("[yellow]No models available or unable to fetch models.[/yellow]")
-                        except Exception as e:
-                            console.print(f"[red]Error fetching models: {e}[/red]")
-                        
-                        console.print("[yellow]No changes made.[/yellow]")
                     else:
-                        console.print(f"Current API key: (not set)")
-                        new_key_prompt = f"Enter API key for {pname}: "
-                        new_key = console.input(new_key_prompt).strip()
-                        if new_key:
-                            config['providers'][pname]['api_key'] = new_key
-                            save_config(config)
-                            console.print(
-                                f"[bold green]API key for {pname} set.[/bold green]"
-                            )
-                        
-                        # Show available models for API-based providers
-                        try:
-                            from terminalai.ai_providers import get_provider
-                            temp_provider = get_provider(pname)
-                            if temp_provider and hasattr(temp_provider, 'list_models'):
-                                models = temp_provider.list_models()
-                                if isinstance(models, list) and models:
-                                    console.print(f"\n[bold]Available models for {pname}:[/bold]")
-                                    for i, model in enumerate(models, 1):
-                                        model_name = model.get("id", model.get("name", "Unknown"))
-                                        model_desc = model.get("description", "")
-                                        if model_desc:
-                                            console.print(f"[bold yellow]{i}[/bold yellow]. {model_name} - {model_desc}")
-                                        else:
-                                            console.print(f"[bold yellow]{i}[/bold yellow]. {model_name}")
-                                    
-                                    try:
-                                        model_choice = int(console.input("Select model (or press Enter to skip): "))
-                                        if 1 <= model_choice <= len(models):
-                                            selected_model = models[model_choice - 1].get("id", models[model_choice - 1].get("name", ""))
-                                            config['providers'][pname]['model'] = selected_model
-                                            console.print(f"[bold green]Model set to: {selected_model}[/bold green]")
-                                        else:
-                                            console.print("[red]Invalid model selection.[/red]")
-                                    except ValueError:
-                                        console.print("[yellow]Skipping model selection.[/yellow]")
-                                else:
-                                    console.print("[yellow]No models available or unable to fetch models.[/yellow]")
-                        except Exception as e:
-                            console.print(f"[red]Error fetching models: {e}[/red]")
-                        
                         console.print("[yellow]No changes made.[/yellow]")
             else:
                 console.print("[red]Invalid selection.[/red]")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '6':
+            config = load_config()
             providers = list(config['providers'].keys())
             console.print("\n[bold]Current API keys / hosts:[/bold]")
             for p_item in providers:
@@ -853,15 +1199,12 @@ def setup_wizard():
                 console.print(f"[bold yellow]{p_item}:[/bold yellow] {shown}")
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '7':
-            from terminalai.shell_integration import install_shell_integration
             install_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '8':
-            from terminalai.shell_integration import uninstall_shell_integration
             uninstall_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '9':
-            from terminalai.shell_integration import check_shell_integration
             check_shell_integration()
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '10':
@@ -929,7 +1272,6 @@ You're now ready to use TerminalAI! Here's how:
             console.print(guide)
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '11':
-            from terminalai.__init__ import __version__
             console.print("\n[bold cyan]About TerminalAI:[/bold cyan]\n")
             console.print(f"[bold]Version:[/bold] {__version__}")
             console.print("[bold]GitHub:[/bold] https://github.com/coaxialdolor/terminalai")
@@ -956,62 +1298,6 @@ You're now ready to use TerminalAI! Here's how:
             )
             console.input("[dim]Press Enter to continue...[/dim]")
         elif choice == '12':
-            # List available Ollama models
-            console.print("\n[bold cyan]Fetching available Ollama models...[/bold cyan]")
-            
-            models = get_available_models()
-            
-            if isinstance(models, str) and models.startswith("[Ollama API error]"):
-                console.print(f"[red]{models}[/red]")
-                console.print("[yellow]Make sure Ollama is running and the host is correct.[/yellow]")
-            elif not models:
-                console.print("[yellow]No models found. Make sure Ollama is running and has models installed.[/yellow]")
-            else:
-                console.print(f"\n[bold green]Found {len(models)} available model(s):[/bold green]\n")
-                
-                # Display models with details
-                for i, model in enumerate(models, 1):
-                    model_name = model.get('name', 'Unknown')
-                    model_size = model.get('size', 0)
-                    model_modified = model.get('modified_at', 'Unknown')
-                    
-                    # Format size in human-readable format
-                    if model_size > 0:
-                        if model_size >= 1024**3:
-                            size_str = f"{model_size / (1024**3):.1f} GB"
-                        elif model_size >= 1024**2:
-                            size_str = f"{model_size / (1024**2):.1f} MB"
-                        elif model_size >= 1024:
-                            size_str = f"{model_size / 1024:.1f} KB"
-                        else:
-                            size_str = f"{model_size} B"
-                    else:
-                        size_str = "Unknown size"
-                    
-                    console.print(f"[bold yellow]{i}[/bold yellow]. [cyan]{model_name}[/cyan]")
-                    console.print(f"   Size: {size_str}")
-                    console.print(f"   Modified: {model_modified}")
-                    console.print("")
-                
-                # Ask if user wants to select a model
-                console.print("[bold green]Current default model:[/bold green] " + config.get("providers", {}).get("ollama", {}).get("model", "llama3"))
-                console.print(Text("Select a model as default? [y/N]: ", style="bold green"), end="")
-                choice = input().lower()
-                
-                if choice == "y":
-                    console.print(Text("Enter model number (1-{}): ".format(len(models)), style="bold green"), end="")
-                    model_choice = input().strip()
-                    
-                    if model_choice.isdigit() and 1 <= int(model_choice) <= len(models):
-                        selected_model = models[int(model_choice) - 1]['name']
-                        config['providers']['ollama']['model'] = selected_model
-                        save_config(config)
-                        console.print(f"[bold green]Default Ollama model set to: {selected_model}[/bold green]")
-                    else:
-                        console.print("[red]Invalid selection.[/red]")
-            
-            console.input("[dim]Press Enter to continue...[/dim]")
-        elif choice == '13':
             console.print(
                 "[bold cyan]Exiting setup.[/bold cyan]"
             )

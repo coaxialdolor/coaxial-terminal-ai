@@ -1,113 +1,63 @@
 import subprocess
-import shlex
+import platform # Import platform module to check OS
+import os # Import os for path manipulation
 import re
-from terminalai.color_utils import colorize_command, colorize_info, colorize_error, colorize_success
+import shlex
+import tempfile
 
-def is_shell_command(text):
-    """Check if text appears to be a shell command.
-    
-    Args:
-        text (str): Text to check
-        
-    Returns:
-        bool: True if text appears to be a shell command
-    """
-    if not text or not isinstance(text, str):
-        return False
-    
-    text = text.strip()
-    if not text:
-        return False
-    
-    # Check for common shell commands
-    shell_keywords = ['ls', 'cd', 'cat', 'echo', 'grep', 'find', 'head', 'tail', 'cp', 'mv', 'rm', 'mkdir', 'touch', 'pwd', 'whoami', 'date', 'ps', 'kill', 'git', 'npm', 'pip', 'python', 'node']
-    
-    # Check if it starts with a known command or contains shell operators
-    has_shell_operator = any(op in text for op in ['|', '>', '<', '&&', '||', ';', '&', '$(', '`'])
-    starts_with_command = any(text.startswith(cmd) for cmd in shell_keywords)
-    
-    return starts_with_command or has_shell_operator
+COMMON_POWERSHELL_CMDLET_STARTS = [
+    "remove-item", "get-childitem", "copy-item", "move-item", "new-item", "set-location",
+    "select-string", "get-content", "set-content", "clear-content", "start-process",
+    "stop-process", "get-process", "get-service", "start-service", "stop-service",
+    "invoke-webrequest", "invoke-restmethod", "get-command", "get-help", "test-path",
+    "resolve-path", "get-date", "measure-object", "write-output", "write-host"
+] # Add more as needed, ensure lowercase
 
-def sanitize_command(cmd):
-    """Sanitize and validate a shell command for security.
-    
-    Args:
-        cmd (str): Command to sanitize
-        
-    Returns:
-        str: Sanitized command
-    """
-    if not cmd or not isinstance(cmd, str):
-        return None
-    
-    cmd = cmd.strip()
-    if not cmd:
-        return None
-    
-    # Remove leading/trailing whitespace and normalize
-    cmd = ' '.join(cmd.split())
-    
-    return cmd
-
-def is_dangerous_command(cmd):
-    """Check if a command is potentially dangerous.
-    
-    Args:
-        cmd (str): Command to check
-        
-    Returns:
-        bool: True if command is potentially dangerous
-    """
-    if not cmd:
+def is_shell_command(command):
+    """Check if a string looks like a shell command."""
+    # Empty string or None is not a command
+    if not command:
         return False
-    
-    # Check for dangerous patterns that could lead to command injection
-    dangerous_patterns = [
-        r'\.\./',  # Directory traversal
-        r'rm\s+[-/]',  # Dangerous rm commands
-        r'chmod\s+777',  # Overly permissive chmod
-        r'chown\s+root',  # Changing ownership to root
-        r'sudo\s+.*passwd',  # Password changes
-        r'passwd\s+',  # Password changes
-        r'userdel\s+',  # User deletion
-        r'groupdel\s+',  # Group deletion
-        r'format\s+',  # Disk formatting
-        r'dd\s+.*of=',  # Disk writing
-        r'fdisk\s+',  # Disk partitioning
-        r'mkfs\s+',  # Filesystem creation
-        r'cryptsetup\s+',  # Disk encryption
-        r'iptables\s+.*-F',  # Firewall flushing
-        r'netstat\s+.*-p',  # Network process info
-        r'kill\s+-9\s+1',  # Killing init process
-        r'echo\s+.*>\s*/proc/',  # Writing to proc filesystem
-        r'echo\s+.*>\s*/sys/',  # Writing to sys filesystem
+
+    # Split the command on whitespace
+    parts = command.strip().split()
+    if not parts:
+        return False
+
+    # Get the command name (first part before any spaces)
+    cmd_name = parts[0]
+
+    # Check if it starts with a shell built-in
+    builtins = [
+        "cd", "export", "source", "alias", "unalias", "set", "unset",
+        "echo", "read", "eval", "exec", "pwd", "exit", "while", "for",
+        "if", "then", "fi", "return", "function", "break", "continue",
+        "pushd", "popd", "ls", "mv", "cp", "rm", "grep", "find", "cat",
+        "mkdir", "rmdir", "touch", "chmod", "chown", "curl", "wget",
+        "git", "python", "python3", "node", "npm", "yarn", "docker",
+        "make", "gcc", "go", "cargo", "rustc", "java", "javac", "mvn",
+        "sudo", "apt", "apt-get", "yum", "brew", "pip", "pip3", "gem",
+        "sh", "bash", "zsh",
     ]
-    
-    for pattern in dangerous_patterns:
-        if re.search(pattern, cmd, re.IGNORECASE):
-            return True  # Command is potentially dangerous
-    
-    # Check for command injection attempts
-    injection_patterns = [
-        r';\s*rm\s+',  # Command chaining with rm
-        r';\s*sudo\s+',  # Command chaining with sudo
-        r';\s*passwd\s+',  # Command chaining with passwd
-        r'\|\s*rm\s+',  # Pipe to rm
-        r'\|\s*sudo\s+',  # Pipe to sudo
-        r'\|\s*passwd\s+',  # Pipe to passwd
-        r'\$\(\s*rm\s+',  # Command substitution with rm
-        r'\$\(\s*sudo\s+',  # Command substitution with sudo
-        r'\$\(\s*passwd\s+',  # Command substitution with passwd
-        r'`rm\s+',  # Backtick command substitution with rm
-        r'`sudo\s+',  # Backtick command substitution with sudo
-        r'`passwd\s+',  # Backtick command substitution with passwd
-    ]
-    
-    for pattern in injection_patterns:
-        if re.search(pattern, cmd, re.IGNORECASE):
-            return True  # Command is potentially dangerous
-    
-    return False
+
+    # Add macOS specific commands
+    if platform.system() == "Darwin":
+        builtins.extend(["open", "pbcopy", "pbpaste", "defaults", "softwareupdate", "xcode-select", "pkgutil", "osascript", "networksetup"])
+
+    # Add Linux specific commands
+    if platform.system() == "Linux":
+        builtins.extend(["systemctl", "journalctl", "apt", "apt-get", "yum", "dnf", "pacman"])
+
+    # Add Windows specific commands (with or without .exe extension)
+    if platform.system() == "Windows":
+        builtins.extend(["dir", "powershell", "cmd", "ipconfig", "ping", "netstat", "tasklist", "taskkill", "fc", "type"])
+        # Handle potential .exe extension in Windows
+        windows_cmd = re.sub(r'\.exe$', '', cmd_name)
+        if windows_cmd in builtins:
+            return True
+
+    # Looks like a valid shell command if the first word is in our builtins list
+    return cmd_name in builtins
 
 def is_informational_command(cmd):
     """Check if a command is purely informational and safe to execute without confirmation.
@@ -120,6 +70,8 @@ def is_informational_command(cmd):
     """
     if not cmd:
         return False
+    
+    import re
     
     # List of safe informational commands that should execute immediately
     informational_patterns = [
@@ -180,65 +132,6 @@ def is_informational_command(cmd):
         r'^code\s+--version|code\s+-v',  # vscode version
         r'^subl\s+--version|subl\s+-v',  # sublime version
         r'^atom\s+--version|atom\s+-v',  # atom version
-        r'^git\s+status',  # git status
-        r'^git\s+log',  # git log
-        r'^git\s+diff',  # git diff
-        r'^git\s+show',  # git show
-        r'^git\s+branch',  # git branch
-        r'^git\s+remote',  # git remote
-        r'^git\s+config',  # git config
-        r'^npm\s+list',  # npm list
-        r'^npm\s+ls',  # npm ls
-        r'^npm\s+info',  # npm info
-        r'^npm\s+show',  # npm show
-        r'^npm\s+view',  # npm view
-        r'^pip\s+list',  # pip list
-        r'^pip\s+show',  # pip show
-        r'^pip\s+freeze',  # pip freeze
-        r'^docker\s+version',  # docker version
-        r'^docker\s+info',  # docker info
-        r'^docker\s+ps',  # docker ps
-        r'^docker\s+images',  # docker images
-        r'^docker\s+logs',  # docker logs
-        r'^kubectl\s+version',  # kubectl version
-        r'^kubectl\s+get',  # kubectl get
-        r'^kubectl\s+describe',  # kubectl describe
-        r'^kubectl\s+logs',  # kubectl logs
-        r'^aws\s+help',  # aws help
-        r'^aws\s+version',  # aws version
-        r'^gcloud\s+help',  # gcloud help
-        r'^gcloud\s+version',  # gcloud version
-        r'^curl\s+--version',  # curl version
-        r'^curl\s+-V',  # curl version
-        r'^wget\s+--version',  # wget version
-        r'^wget\s+-V',  # wget version
-        r'^ssh\s+-V',  # ssh version
-        r'^rsync\s+--version',  # rsync version
-        r'^rsync\s+-V',  # rsync version
-        r'^tar\s+--version',  # tar version
-        r'^tar\s+-V',  # tar version
-        r'^zip\s+--version',  # zip version
-        r'^zip\s+-v',  # zip version
-        r'^unzip\s+--version',  # unzip version
-        r'^unzip\s+-v',  # unzip version
-        r'^gzip\s+--version',  # gzip version
-        r'^gzip\s+-V',  # gzip version
-        r'^bzip2\s+--version',  # bzip2 version
-        r'^bzip2\s+-V',  # bzip2 version
-        r'^xz\s+--version',  # xz version
-        r'^xz\s+-V',  # xz version
-        r'^vim\s+--version',  # vim version
-        r'^vim\s+-v',  # vim version
-        r'^nano\s+--version',  # nano version
-        r'^nano\s+-V',  # nano version
-        r'^emacs\s+--version',  # emacs version
-        r'^emacs\s+-version',  # emacs version
-        r'^code\s+--version',  # vscode version
-        r'^code\s+-v',  # vscode version
-        r'^subl\s+--version',  # sublime version
-        r'^subl\s+-v',  # sublime version
-        r'^atom\s+--version',  # atom version
-        r'^atom\s+-v',  # atom version
     ]
     
     for pattern in informational_patterns:
@@ -345,122 +238,55 @@ def is_informational_command(cmd):
     
     return False
 
-def run_shell_command(cmd, show_command_box=True):
-    """Execute a shell command with security validation and print its output.
-
-    Args:
-        cmd (str): Command to execute
-        show_command_box (bool): Whether to show the command in a small box format
-        
-    Returns:
-        bool: True if the command succeeded, False otherwise.
-    """
-    if not cmd:
-        print("Error: No command provided")
-        return False
-    
-    # Sanitize the command
-    sanitized_cmd = sanitize_command(cmd)
-    if sanitized_cmd is None:
-        print("Error: Invalid command")
-        return False
-    
-    # Check if command is informational and should execute immediately
-    if is_informational_command(sanitized_cmd):
-        # For informational commands, execute immediately with small command box
-        if show_command_box:
-            # Create a properly formatted command box (original remote format)
-            box_width = 72
-            
-            print(f"\n{colorize_info('┌─ Command executed ──────────────────────────────────────────────────────┐')}")
-            print(f"{colorize_info('│')} {colorize_command(sanitized_cmd):<70} {colorize_info('│')}")
-            print(f"{colorize_info('└──────────────────────────────────────────────────────────────────────┘')}")
-            print()
-        
-        try:
-            # Check if command contains shell operators that require shell=True
-            has_shell_operators = any(op in sanitized_cmd for op in ['|', '>', '<', '&&', '||', ';', '&', '$(', '`'])
-            
-            if has_shell_operators:
-                # For commands with shell operators, use shell=True but validate carefully
-                result = subprocess.run(sanitized_cmd, shell=True, check=True, capture_output=True, text=True)
-            else:
-                # Use shlex.split for safer command parsing
-                try:
-                    cmd_args = shlex.split(sanitized_cmd)
-                except ValueError as e:
-                    print(f"Error: Invalid command syntax: {e}")
-                    return False
-
-                # Run the command with shell=False for better security
-                result = subprocess.run(cmd_args, check=True, capture_output=True, text=True)
-
-            # Always print the output, even if it's empty
-            if result.stdout:
-                print(result.stdout.rstrip())
-            else:
-                print("Command executed successfully. No output.")
-            
-            return True
-        except subprocess.CalledProcessError as e:
-            if e.stderr:
-                print(f"Error: {e.stderr.strip()}")
-            else:
-                print(f"Command failed with exit code {e.returncode}")
-            return False
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            return False
-    
-    # Check if command is potentially dangerous
-    if is_dangerous_command(sanitized_cmd):
-        print(f"⚠️  WARNING: This command appears to be potentially dangerous:")
-        print(f"   {sanitized_cmd}")
-        print("This command could:")
-        print("- Delete files or directories")
-        print("- Modify system settings")
-        print("- Change user permissions")
-        print("- Affect system security")
-        print()
-        confirm = input("Are you sure you want to execute this command? [y/N]: ").lower().strip()
-        if confirm != 'y':
-            print("Command execution cancelled.")
-            return False
-        print("Proceeding with command execution...")
-    
+def run_shell_command(command):
+    """Execute a shell command and return whether it was successful."""
     try:
-        # Show what's being executed
-        print(f"\nExecuting: {sanitized_cmd}")
-        print("-" * 80)  # Separator line for clarity
+        system_name = platform.system()
 
-        # Use shlex.split for safer command parsing
-        try:
-            cmd_args = shlex.split(sanitized_cmd)
-        except ValueError as e:
-            print(f"Error: Invalid command syntax: {e}")
-            return False
+        # On Windows, many commands are shell built-ins (e.g., 'dir') and redirection
+        # is processed by the shell. Use shell=True so built-ins and operators work.
+        if system_name == "Windows":
+            result = subprocess.run(
+                command,
+                shell=True,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            # On POSIX, decide based on presence of shell operators
+            has_shell_ops = bool(re.search(r"[|&;><]", command))
+            if has_shell_ops:
+                # Let the shell handle pipelines/redirection. Prefer bash if available.
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    executable=os.environ.get("SHELL", "/bin/bash"),
+                )
+            else:
+                # Execute direct binary without a shell
+                args = shlex.split(command)
+                result = subprocess.run(
+                    args,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
 
-        # Run the command with shell=False for better security
-        result = subprocess.run(cmd_args, check=True, capture_output=True, text=True)
-
-        # Always print the output, even if it's empty
+        # Print the stdout
         if result.stdout:
-            print(result.stdout.rstrip())
-        else:
-            print("Command executed successfully. No output.")
+            print(result.stdout.strip())
 
-        print("-" * 80)  # Separator line for clarity
-        return True
-    except subprocess.CalledProcessError as e:
-        print("-" * 80)  # Separator line for clarity
-        if e.stderr:
-            print(f"Error: {e.stderr.strip()}")
-        else:
-            print(f"Command failed with exit code {e.returncode}")
-        print("-" * 80)  # Separator line for clarity
-        return False
+        # Print the stderr (if any)
+        if result.stderr:
+            print(result.stderr.strip())
+
+        # Return True if command succeeded, False otherwise
+        return result.returncode == 0
+
     except Exception as e:
-        print("-" * 80)  # Separator line for clarity
-        print(f"Unexpected error: {e}")
-        print("-" * 80)  # Separator line for clarity
+        print(f"Error executing command: {e}")
         return False

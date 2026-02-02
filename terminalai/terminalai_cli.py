@@ -10,26 +10,21 @@ import requests
 from terminalai.__init__ import __version__
 from terminalai.config import load_config
 from terminalai.ai_providers import get_provider
-from terminalai.command_extraction import (
-    extract_commands_from_output, 
-    is_stateful_command, 
-    is_risky_command
-)
+from terminalai.command_extraction import extract_commands_from_output, is_stateful_command, is_risky_command
 from terminalai.formatting import print_ai_answer_with_rich
 from terminalai.shell_integration import get_system_context
 from terminalai.cli_interaction import (
-    parse_args, 
-    handle_commands, 
-    interactive_mode, 
-    setup_wizard,
+    parse_args, handle_commands, interactive_mode, setup_wizard,
     _set_default_provider_interactive,
     _set_ollama_model_interactive
 )
+from terminalai.query_utils import preprocess_query
+from terminalai.color_utils import colorize_command
 from rich.console import Console
 from rich.text import Text
-from rich.panel import Panel
-from terminalai.color_utils import colorize_command
 from terminalai.file_reader import read_project_file
+from rich.panel import Panel
+import re
 
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     print("[WARNING] It is recommended to run this script as a module:")
@@ -78,19 +73,22 @@ def main():
 
     # Determine provider: override > config > setup prompt
     provider_to_use = None
-    if hasattr(args, 'provider') and args.provider:  # Check for command-line override first
+    if args.provider: # Check for command-line override first
         provider_to_use = args.provider
     else:
         provider_to_use = config.get("default_provider", "")
 
     if not provider_to_use:
-        print(colorize_command(
-            "No AI provider configured. Please run 'ai setup' to configure an AI provider."
-        ), file=sys.stderr)
-        sys.exit(1)
+        print(colorize_command("No AI provider configured. Running setup wizard..."), file=sys.stderr)
+        setup_wizard() # This will allow user to set a default
+        # After setup, try to load config again or exit if user quit setup
+        config = load_config()
+        provider_to_use = config.get("default_provider", "")
+        if not provider_to_use:
+            print(colorize_command("Setup was not completed. Exiting."), file=sys.stderr)
+            sys.exit(1)
 
-    # Run in interactive mode if no query provided AND no --explain flag AND no --read-file flag, 
-    # or if chat explicitly requested
+    # Run in interactive mode if no query provided AND no --explain flag AND no --read-file flag, or if chat explicitly requested
     is_chat_request = getattr(args, 'chat', False) or sys.argv[0].endswith('ai-c')
     if (not args.query and not args.explain and not args.read_file) or is_chat_request:
         interactive_mode(chat_mode=is_chat_request)
@@ -101,24 +99,20 @@ def main():
     # Do NOT call interactive_mode after handling a direct query.
 
     # Get AI provider instance
-    provider = get_provider(provider_to_use)  # Use the determined provider_to_use
+    provider = get_provider(provider_to_use) # Use the determined provider_to_use
     if not provider:
-        print(colorize_command(
-            f"Error: Provider '{provider_to_use}' is not configured properly or is unknown."
-        ), file=sys.stderr)
-        print(colorize_command(
-            "Please run 'ai setup' to configure an AI provider, or check the provider name."
-        ), file=sys.stderr)
+        print(colorize_command(f"Error: Provider '{provider_to_use}' is not configured properly or is unknown."), file=sys.stderr)
+        print(colorize_command("Please run 'ai setup' to configure an AI provider, or check the provider name."), file=sys.stderr)
         sys.exit(1)
 
     # Get system context
     system_context = get_system_context()
     # Add current working directory to context
     cwd = os.getcwd()
-    final_system_context = system_context  # Start with base system context
-    user_query = args.query  # Initialize user_query from args
+    final_system_context = system_context # Start with base system context
+    user_query = args.query # Initialize user_query from args
 
-    file_content_for_prompt = None  # Initialize
+    file_content_for_prompt = None # Initialize
 
     if hasattr(args, 'explain') and args.explain:
         file_path_to_read = args.explain
@@ -127,9 +121,7 @@ def main():
             print(colorize_command(error), file=sys.stderr)
             sys.exit(1)
         if content is None:
-            print(colorize_command(
-                f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."
-            ), file=sys.stderr)
+            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."), file=sys.stderr)
             sys.exit(1)
 
         file_content_for_prompt = content
@@ -173,9 +165,7 @@ Please process the request which is to summarize this file, explain its likely p
             print(colorize_command(error), file=sys.stderr)
             sys.exit(1)
         if content is None:
-            print(colorize_command(
-                f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."
-            ), file=sys.stderr)
+            print(colorize_command(f"Error: Could not read file '{file_path_to_read}'. An unknown issue occurred."), file=sys.stderr)
             sys.exit(1)
 
         file_content_for_prompt = content
@@ -225,21 +215,29 @@ File Location and Context:
     try:
         # Ensure user_query is a string before passing to provider.generate_response
         if user_query is None:
-            user_query = ""  # Default to empty string if None (e.g. if only --explain was used and no actual query text)
+            user_query = "" # Default to empty string if None (e.g. if only --explain was used and no actual query text)
+
+        # Preprocess query to clarify potentially ambiguous requests
+        processed_query = preprocess_query(user_query)
+
+        # Format and print response
+        console_for_direct = Console(file=sys.stderr if rich_output_to_stderr else None, force_terminal=True if rich_output_to_stderr else False)
+        console_for_direct.print()
+
+        # Show clarification message if query was modified
+        if processed_query != user_query:
+            console_for_direct.print(Panel(
+                Text(f"Note: Clarified your query to: \"{processed_query}\"", style="cyan"),
+                border_style="cyan",
+                expand=False
+            ))
 
         response = provider.generate_response(
-            user_query, final_system_context, verbose=args.verbose or args.long
+            processed_query, final_system_context, verbose=args.verbose or args.long
         )
     except (ValueError, TypeError, ConnectionError, requests.RequestException) as e:
         print(colorize_command(f"Error from AI provider: {str(e)}"), file=sys.stderr)
         sys.exit(1)
-
-    # Format and print response
-    console_for_direct = Console(
-        file=sys.stderr if rich_output_to_stderr else None, 
-        force_terminal=True if rich_output_to_stderr else False
-    )
-    console_for_direct.print()
 
     # Construct and print the display prompt for direct queries
     display_provider_for_direct_query = provider_to_use
@@ -249,7 +247,6 @@ File Location and Context:
             display_provider_for_direct_query = f"ollama-{ollama_model_for_direct}"
         else:
             display_provider_for_direct_query = "ollama (model not set)"
-    
     direct_query_prompt_text = Text()
     direct_query_prompt_text.append("AI:", style="bold cyan")
     direct_query_prompt_text.append("(", style="bold green")
@@ -260,7 +257,7 @@ File Location and Context:
     # The original response from the AI provider might start with "[AI] "
     cleaned_response = response
     if response.startswith("[AI] "):
-        cleaned_response = response[len("[AI] "):]
+        cleaned_response = response[len("[AI] ") :]
 
     # Check if we need to output to stderr (in eval mode)
     print_ai_answer_with_rich(cleaned_response, to_stderr=rich_output_to_stderr)
@@ -331,19 +328,14 @@ def handle_eval_mode_commands(commands, auto_confirm=False):
 
         # For stateful commands, always copy to clipboard (shell integration handles this)
         if is_stateful:
-            console.print(
-                "[bold yellow]This command changes shell state and will be executed in your shell.[/bold yellow]"
-            )
+            console.print("[bold yellow]This command changes shell state and will be executed in your shell.[/bold yellow]")
 
         # Prompt with appropriate default based on command type
         default_choice = "n" if is_risky else "y"
         prompt_style = "red bold" if is_risky else "green"
         prompt_text = "[RISKY] " if is_risky else ""
 
-        console.print(
-            f"[{prompt_style}]{prompt_text}Execute this command? [{default_choice.upper() if default_choice == 'y' else 'y'}/{default_choice.upper() if default_choice == 'n' else 'n'}]:[/{prompt_style}] ",
-            end=""
-        )
+        console.print(f"[{prompt_style}]{prompt_text}Execute this command? [{default_choice.upper() if default_choice == 'y' else 'y'}/{default_choice.upper() if default_choice == 'n' else 'n'}]:[/{prompt_style}] ", end="")
 
         # Read from stdin (terminal input)
         try:
@@ -376,9 +368,7 @@ def handle_eval_mode_commands(commands, auto_confirm=False):
             cmd_list_display.append(display_item)
 
         panel_content = Text("\n").join(cmd_list_display)
-        console.print(
-            Panel(panel_content, title=f"Found {len(commands)} commands", border_style="blue")
-        )
+        console.print(Panel(panel_content, title=f"Found {len(commands)} commands", border_style="blue"))
 
         # Prompt for which command to execute
         console.print(Text("Enter command number, 'a' for all, or 'q' to quit: ", style="bold cyan"), end="")
@@ -402,22 +392,15 @@ def handle_eval_mode_commands(commands, auto_confirm=False):
 
                 # Show selected command
                 console.print(f"\n[Executing command {user_choice}]", style="bold green")
-                console.print(
-                    Panel(Text(cmd_to_run, style="cyan bold"), border_style="green", expand=False)
-                )
+                console.print(Panel(Text(cmd_to_run, style="cyan bold"), border_style="green", expand=False))
 
                 # For stateful commands in shell integration
                 if is_stateful_item:
-                    console.print(
-                        "[bold yellow]This command changes shell state and will be executed in your shell.[/bold yellow]"
-                    )
+                    console.print("[bold yellow]This command changes shell state and will be executed in your shell.[/bold yellow]")
 
                 # Confirm execution for risky commands
                 if is_risky_item:
-                    console.print(
-                        Text("[RISKY] Execute this command? [y/N]: ", style="red bold"), 
-                        end=""
-                    )
+                    console.print(Text(f"[RISKY] Execute this command? [y/N]: ", style="red bold"), end="")
                     try:
                         confirm = input().lower() or "n"
                     except (KeyboardInterrupt, EOFError):
@@ -433,9 +416,7 @@ def handle_eval_mode_commands(commands, auto_confirm=False):
             else:
                 console.print(f"[red]Invalid command number: {user_choice}[/red]")
         elif user_choice == "a":
-            console.print(
-                "[yellow]All commands mode not supported in shell integration. Please select one command.[/yellow]"
-            )
+            console.print("[yellow]All commands mode not supported in shell integration. Please select one command.[/yellow]")
         else:
             console.print(f"[red]Invalid choice: {user_choice}[/red]")
 
